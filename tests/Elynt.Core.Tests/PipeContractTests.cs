@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text.Json;
+using Elynt.Core.Bios;
 using Elynt.Core.Ipc;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
@@ -42,10 +43,18 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public async Task Apply_arrives_unchanged()
     {
-        var result = await _client.ApplyAsync("some.tweak", TestContext.Current.CancellationToken);
+        var result = await _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken);
 
         Assert.Equal("Apply some.tweak", _engine.LastCall);
         AssertSameJson(_engine.Apply("some.tweak"), result);
+    }
+
+    [Fact]
+    public async Task Apply_carries_the_destructive_confirmation_and_advanced_mode()
+    {
+        await _client.ApplyAsync("some.tweak", new ApplyOptions(ConfirmDestructive: true, Advanced: true), TestContext.Current.CancellationToken);
+
+        Assert.Equal(new ApplyOptions(ConfirmDestructive: true, Advanced: true), _engine.LastOptions);
     }
 
     [Fact]
@@ -98,13 +107,21 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetBiosReport_arrives_unchanged()
+    {
+        var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetBiosReport(), report);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
-        await Assert.ThrowsAsync<EngineServiceException>(() => _client.ApplyAsync("some.tweak", TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<EngineServiceException>(() => _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken));
 
         _engine.Throw = false;
-        Assert.True((await _client.ApplyAsync("some.tweak", TestContext.Current.CancellationToken)).Succeeded);
+        Assert.True((await _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken)).Succeeded);
     }
 
     [Fact]
@@ -122,22 +139,39 @@ public sealed class PipeContractTests : IAsyncLifetime
     private sealed class StubEngine : IEngine
     {
         public string? LastCall { get; private set; }
+        public ApplyOptions? LastOptions { get; private set; }
         public bool Throw { get; set; }
 
         private static readonly TweakView View = new(
             "some.tweak", Sections.Gaming, "Some tweak", "Does a thing.", "Measured.",
             [new Source("A source", "https://example.com")], EvidenceTier.Situational,
-            [@"Set HKCU\Some\Value to ""1"" (REG_SZ)"], "Puts it back.", SessionRefresh.MouseSettings, TweakState.On, CanUndo: true);
+            [@"Set HKCU\Some\Value to ""1"" (REG_SZ)"], "Puts it back.", SessionRefresh.MouseSettings, TweakState.On, CanUndo: true)
+        {
+            Reversibility = Reversibility.Destructive,
+            DestructiveWarning = "Gone for good.",
+            Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,
+            AntiCheat = [new AntiCheatConflict(AntiCheat.FaceIt, AntiCheatSeverity.WontLaunch, "VBS required")],
+            PendingReboot = true,
+            NotApplicableReason = "Needs an AMD CPU.",
+            ProfileEligible = true,
+        };
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
 
-        public CommandResult Apply(string tweakId)
+        public CommandResult Apply(string tweakId, ApplyOptions? options = null)
         {
             if (Throw)
                 throw new InvalidOperationException("Boom.");
             LastCall = $"Apply {tweakId}";
+            LastOptions = options;
             return new CommandResult(true, "Turned on.", View);
         }
+
+        public BiosReport GetBiosReport() => new(
+            "ASUS ROG STRIX B650E-F, AMD Ryzen 7 7800X3D",
+            [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
+            [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
+            [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
 
         public CommandResult Revert(string tweakId)
         {

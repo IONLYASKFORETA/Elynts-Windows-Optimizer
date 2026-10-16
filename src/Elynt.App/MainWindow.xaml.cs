@@ -4,15 +4,17 @@ using System.Windows;
 using Elynt.Core.Diagnostics;
 using System.Windows.Navigation;
 using Elynt.App.ViewModels;
+using Elynt.Core;
 
 namespace Elynt.App;
 
 public partial class MainWindow : Window
 {
-    private readonly MainViewModel _model = new();
+    private readonly MainViewModel _model;
 
     public MainWindow()
     {
+        _model = new MainViewModel(ConfirmDestructive);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) => await _model.ConnectAsync();
@@ -66,6 +68,16 @@ public partial class MainWindow : Window
         Clipboard.SetText(report);
         AppLogStatus.Text = "Copied. Paste it into a message to Aden.";
     }
+
+    /// <summary>The separate confirmation a destructive tweak needs. "No" is the default button.</summary>
+    private bool ConfirmDestructive(TweakView tweak) =>
+        MessageBox.Show(
+            this,
+            $"{tweak.Name}\n\nThis can't be undone. {tweak.DestructiveWarning}\n\nDo it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
 
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {

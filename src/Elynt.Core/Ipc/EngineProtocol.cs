@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Repair;
+using Elynt.Core.Bios;
 
 namespace Elynt.Core.Ipc;
 
@@ -11,11 +12,12 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RevertRequest), "revert")]
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
+[JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
 
-public sealed record ApplyRequest(string TweakId) : EngineRequest;
+public sealed record ApplyRequest(string TweakId, ApplyOptions? Options = null) : EngineRequest;
 
 public sealed record RevertRequest(string TweakId) : EngineRequest;
 
@@ -23,6 +25,8 @@ public sealed record ListRepairToolsRequest : EngineRequest;
 
 /// <summary>Long-running: the service answers with any number of <see cref="EngineResponse.RepairProgress"/> lines, then the result.</summary>
 public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineRequest;
+
+public sealed record GetBiosReportRequest : EngineRequest;
 
 /// <summary>
 /// The reply to one request. <see cref="Error"/> is set only when the service itself failed. A response carrying
@@ -34,7 +38,8 @@ public sealed record EngineResponse(
     string? Error = null,
     IReadOnlyList<RepairToolView>? RepairTools = null,
     RepairResult? RepairResult = null,
-    RepairProgress? RepairProgress = null);
+    RepairProgress? RepairProgress = null,
+    BiosReport? Bios = null);
 
 /// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
 public static class EngineProtocol
@@ -56,11 +61,12 @@ public static class EngineProtocol
         IEngine engine, EngineRequest request, Action<EngineResponse> sendInterim, CancellationToken cancellation) => request switch
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
-        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId)),
+        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
         ListRepairToolsRequest => new(RepairTools: engine.ListRepairTools()),
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, new Relay(p => sendInterim(new(RepairProgress: p))), cancellation)),
+        GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

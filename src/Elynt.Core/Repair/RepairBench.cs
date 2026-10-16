@@ -15,12 +15,14 @@ internal sealed partial class RepairBench(
     TimeProvider clock,
     ILogger log)
 {
-    private IRepairSystem Pc => system.Repair;
+    private IRepairSystem Pc => system.Repair ?? throw new InvalidOperationException("Repair tools aren't available here.");
 
-    public IReadOnlyList<RepairToolView> List() => catalogue.Tools.Select(Describe).ToList();
+    public IReadOnlyList<RepairToolView> List() => system.Repair is null ? [] : catalogue.Tools.Select(Describe).ToList();
 
     public async Task<RepairResult> RunAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress, CancellationToken cancellation)
     {
+        if (system.Repair is null)
+            return Refused(toolId, "Repair tools aren't available here. Nothing was changed.");
         if (!catalogue.TryGet(toolId, out var tool))
             return Refused(toolId, $"There is no repair tool called '{toolId}'.");
         if (!confirmed && tool.Confirmation is { } warning)

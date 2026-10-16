@@ -175,9 +175,24 @@ public class EngineTests
             view.ExactChange);
         Assert.Equal(EvidenceTier.Proven, view.Tier);
         Assert.NotEmpty(view.Sources);
+        Assert.Equal(Reversibility.Reversible, view.Reversibility);
+        Assert.Equal(RiskFlags.None, view.Risks);
+        Assert.True(view.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo(), new FakeRepairSystem());
+    [Fact]
+    public void A_tweak_that_needs_no_reboot_is_never_pending_one_and_fits_any_Windows_11_PC()
+    {
+        var engine = NewEngine();
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+
+        var applied = engine.Apply(tweak.Id);
+
+        Assert.False(applied.Tweak!.PendingReboot);
+        Assert.True(applied.Tweak.Applicable);
+    }
+
+    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 

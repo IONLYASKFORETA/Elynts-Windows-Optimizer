@@ -7,7 +7,10 @@ using Serilog;
 
 namespace Elynt.App.ViewModels;
 
-public sealed class MainViewModel : ObservableObject
+/// <param name="confirmDestructive">
+/// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
+/// </param>
+public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
@@ -23,6 +26,7 @@ public sealed class MainViewModel : ObservableObject
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
     private bool _isConnecting;
+    private BiosPageViewModel? _bios;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -70,7 +74,20 @@ public sealed class MainViewModel : ObservableObject
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0;
+    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage;
+
+    /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
+    public BiosPageViewModel? Bios
+    {
+        get => _bios;
+        private set
+        {
+            if (Set(ref _bios, value))
+                OnPropertyChanged(nameof(IsBiosPage));
+        }
+    }
+
+    public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
 
     public string Status
     {
@@ -104,6 +121,7 @@ public sealed class MainViewModel : ObservableObject
             var views = await _client.ListTweaksAsync();
             _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
+            Bios = await LoadBiosAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -117,6 +135,19 @@ public sealed class MainViewModel : ObservableObject
         finally
         {
             _isConnecting = false;
+        }
+    }
+
+    private static async Task<BiosPageViewModel?> LoadBiosAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new BiosPageViewModel(await client.GetBiosReportAsync());
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't build the BIOS report");
+            return null;
         }
     }
 
@@ -136,7 +167,8 @@ public sealed class MainViewModel : ObservableObject
     private void ShowPage()
     {
         Tweaks.Clear();
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage))
+        // Tweaks that fit this PC first; not-applicable ones sink to the bottom.
+        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
 
@@ -154,6 +186,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
+        OnPropertyChanged(nameof(IsBiosPage));
     }
 
     /// <summary>Runs a repair tool (or the follow-up its last result offered), showing progress on <paramref name="item"/>.</summary>
@@ -193,7 +226,21 @@ public sealed class MainViewModel : ObservableObject
         item.IsBusy = true;
         try
         {
-            var result = turnOn ? await _client.ApplyAsync(item.View.Id) : await _client.RevertAsync(item.View.Id);
+            // The service refuses a destructive apply without this flag; the app only sets it after the user confirms.
+            var confirmed = false;
+            if (turnOn && item.View.Reversibility == Reversibility.Destructive)
+            {
+                confirmed = confirmDestructive(item.View);
+                if (!confirmed)
+                {
+                    item.Message = "Not changed.";
+                    return;
+                }
+            }
+
+            var result = turnOn
+                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed))
+                : await _client.RevertAsync(item.View.Id);
             Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)
                 item.View = result.Tweak;

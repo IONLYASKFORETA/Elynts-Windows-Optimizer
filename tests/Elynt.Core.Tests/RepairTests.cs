@@ -12,7 +12,7 @@ public class RepairTests
 
     private Engine NewEngine() => new(
         Catalogue.Default,
-        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), _pc),
+        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), Repair: _pc),
         new ChangeJournal(new InMemoryJournalStore()),
         "S-1-5-21-test",
         repairLogs: _logs);
@@ -315,7 +315,7 @@ public class RepairTests
     {
         var engine = new Engine(
             Catalogue.Default,
-            new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), _pc),
+            new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), Repair: _pc),
             new ChangeJournal(new InMemoryJournalStore()),
             "S-1-5-21-test",
             repairLogs: new FailingLogStore());
