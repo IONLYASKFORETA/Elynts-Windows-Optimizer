@@ -17,3 +17,5 @@
 **Startup item**: anything that launches at sign-in (Run keys, Startup folders, sign-in tasks, Store app startup). Turning one off is reversible; deleting it is destructive.
 
 **Protected service**: a service the app never changes, even in Advanced (anti-cheat, Windows Update core, boot drivers).
+
+**Drift**: a change the app made that something else (usually a Windows update) has since undone, or a removed app that came back.
