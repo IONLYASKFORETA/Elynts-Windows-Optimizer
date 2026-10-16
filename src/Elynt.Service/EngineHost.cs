@@ -16,6 +16,7 @@ internal sealed class EngineHost(
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
+    private readonly WindowsHardwareInfo _hardware = new();
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,7 +67,7 @@ internal sealed class EngineHost(
 
         return new Engine(
             catalogue,
-            new SystemAdapters(new WindowsRegistry(sid), _systemInfo),
+            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware),
             journal,
             sid,
             logger: loggers.CreateLogger<Engine>());

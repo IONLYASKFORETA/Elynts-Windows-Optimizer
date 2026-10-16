@@ -1,3 +1,4 @@
+using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -66,6 +67,7 @@ public interface IEngine
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
+    BiosReport GetBiosReport();
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -172,6 +174,21 @@ public sealed class Engine(
             _log.LogError(ex, "Reverting {Tweak} failed", tweak.Id);
             return Failed(tweak, $"Couldn't undo this: {ex.Message}");
         }
+    }
+
+    public BiosReport GetBiosReport()
+    {
+        HardwareSnapshot? hardware = null;
+        try
+        {
+            hardware = system.Hardware?.Read();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
+        }
+
+        return BiosAdvisor.Build(hardware);
     }
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
