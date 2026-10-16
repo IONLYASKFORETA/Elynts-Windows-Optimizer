@@ -1,5 +1,6 @@
 using Elynt.Core.Bios;
 using Elynt.Core.Journal;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -68,6 +69,22 @@ public interface IEngine
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
     BiosReport GetBiosReport();
+
+    /// <summary>Every tunable GPU with its SDK-reported sliders, current values and any change waiting to be kept.</summary>
+    GpuTuningReport GetGpuTuning();
+
+    /// <summary>Sets manual GPU values. The change reverts after 15 s unless <see cref="ConfirmGpuTuning"/> keeps it.</summary>
+    TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values);
+
+    /// <summary>Runs the vendor's auto overclock or undervolt, on the same 15 s probation.</summary>
+    TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind);
+
+    TuningResult ConfirmGpuTuning(string deviceId);
+
+    /// <summary>Puts a waiting GPU change back now.</summary>
+    TuningResult RevertGpuTuning(string deviceId);
+
+    TuningResult ResetGpuTuning(string deviceId);
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -77,7 +94,8 @@ public sealed class Engine(
     ChangeJournal journal,
     string user,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    GpuTuning? gpuTuning = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -190,6 +208,23 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public GpuTuningReport GetGpuTuning() =>
+        gpuTuning?.Describe() ?? new GpuTuningReport([], "No GPU on this PC can be tuned from Windows.");
+
+    public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values) =>
+        gpuTuning?.Set(deviceId, values) ?? NoGpuTuning;
+
+    public TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind) =>
+        gpuTuning?.AutoTune(deviceId, kind) ?? NoGpuTuning;
+
+    public TuningResult ConfirmGpuTuning(string deviceId) => gpuTuning?.Confirm(deviceId) ?? NoGpuTuning;
+
+    public TuningResult RevertGpuTuning(string deviceId) => gpuTuning?.Revert(deviceId) ?? NoGpuTuning;
+
+    public TuningResult ResetGpuTuning(string deviceId) => gpuTuning?.ResetToDefaults(deviceId) ?? NoGpuTuning;
+
+    private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {
