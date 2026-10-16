@@ -1,3 +1,4 @@
+using Elynt.Core.Apps;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,7 @@ public interface IEngine
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId);
     CommandResult Revert(string tweakId);
+    IReadOnlyList<AppView> ListApps();
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -46,10 +48,14 @@ public sealed class Engine(
     ChangeJournal journal,
     string user,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    AppCatalogue? apps = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
+    private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default);
+
+    public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
 
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks.Select(Describe).ToList();
 

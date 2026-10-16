@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using Elynt.Core.Apps;
 
 namespace Elynt.Core.Ipc;
 
@@ -43,6 +44,9 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<CommandResult> RevertAsync(string tweakId, CancellationToken cancellation = default) =>
         (await SendAsync(new RevertRequest(tweakId), cancellation)).Result ?? throw Missing("result");
+
+    public async Task<IReadOnlyList<AppView>> ListAppsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListAppsRequest(), cancellation)).Apps ?? throw Missing("apps");
 
     public async ValueTask DisposeAsync()
     {

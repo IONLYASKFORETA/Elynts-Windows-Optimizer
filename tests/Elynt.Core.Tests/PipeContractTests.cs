@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text.Json;
+using Elynt.Core.Apps;
 using Elynt.Core.Ipc;
 using Elynt.Core.Tweaks;
 
@@ -36,6 +37,14 @@ public sealed class PipeContractTests : IAsyncLifetime
         var tweaks = await _client.ListTweaksAsync(TestContext.Current.CancellationToken);
 
         AssertSameJson(_engine.ListTweaks(), tweaks);
+    }
+
+    [Fact]
+    public async Task ListApps_arrives_unchanged()
+    {
+        var apps = await _client.ListAppsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListApps(), apps);
     }
 
     [Fact]
@@ -89,6 +98,9 @@ public sealed class PipeContractTests : IAsyncLifetime
             [@"Set HKCU\Some\Value to ""1"" (REG_SZ)"], "Puts it back.", SessionRefresh.MouseSettings, TweakState.On, CanUndo: true);
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
+
+        public IReadOnlyList<AppView> ListApps() =>
+            [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];
 
         public CommandResult Apply(string tweakId)
         {

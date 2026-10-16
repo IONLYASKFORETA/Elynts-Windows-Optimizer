@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elynt.Core.Apps;
 using System.Text.Json.Serialization;
 
 namespace Elynt.Core.Ipc;
@@ -8,6 +9,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListTweaksRequest), "listTweaks")]
 [JsonDerivedType(typeof(ApplyRequest), "apply")]
 [JsonDerivedType(typeof(RevertRequest), "revert")]
+[JsonDerivedType(typeof(ListAppsRequest), "listApps")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -16,8 +18,14 @@ public sealed record ApplyRequest(string TweakId) : EngineRequest;
 
 public sealed record RevertRequest(string TweakId) : EngineRequest;
 
+public sealed record ListAppsRequest : EngineRequest;
+
 /// <summary>The reply to one request. <see cref="Error"/> is set only when the service itself failed.</summary>
-public sealed record EngineResponse(IReadOnlyList<TweakView>? Tweaks = null, CommandResult? Result = null, string? Error = null);
+public sealed record EngineResponse(
+    IReadOnlyList<TweakView>? Tweaks = null,
+    CommandResult? Result = null,
+    string? Error = null,
+    IReadOnlyList<AppView>? Apps = null);
 
 /// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
 public static class EngineProtocol
@@ -39,6 +47,7 @@ public static class EngineProtocol
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
         ApplyRequest apply => new(Result: engine.Apply(apply.TweakId)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
+        ListAppsRequest => new(Apps: engine.ListApps()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 }
