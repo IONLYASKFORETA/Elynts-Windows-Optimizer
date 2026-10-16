@@ -30,7 +30,7 @@
         </DockPanel>
 
         <!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
-        <DockPanel Grid.Column="1" Margin="8">
+        <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}">
             <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
             <Grid>
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
@@ -132,7 +132,53 @@
         </DockPanel>
 
         <!-- Detail pane: what the selected tweak does, the evidence, the exact change and how to undo it. -->
+        <!-- Undo history: every change, newest first, with undo for any one and restore everything. -->
+        <DockPanel Grid.Column="1" Grid.ColumnSpan="2" Margin="8"
+                   Visibility="{Binding IsHistoryPage, Converter={StaticResource Visible}}">
+            <DockPanel DockPanel.Dock="Top" Margin="4,4,4,8">
+                <Button DockPanel.Dock="Right" Content="Restore everything" Padding="16,6" Click="RestoreEverything"
+                        IsEnabled="{Binding CanRestoreEverything}"
+                        ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed." />
+                <TextBlock Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock DockPanel.Dock="Top" Margin="4,0,4,8" TextWrapping="Wrap" Opacity="0.8"
+                       Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+            <TextBlock DockPanel.Dock="Top" Text="{Binding HistoryMessage}" Margin="4,0,4,8" TextWrapping="Wrap" FontWeight="SemiBold" />
+            <Grid>
+                <ListView ItemsSource="{Binding History}" BorderThickness="0" HorizontalContentAlignment="Stretch">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="When" Width="150" DisplayMemberBinding="{Binding When}" />
+                            <GridViewColumn Header="Tweak" Width="300">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding TweakName}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="State" Width="190" DisplayMemberBinding="{Binding StateText}" />
+                            <GridViewColumn Width="90">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
+                                        <Button Content="Undo" Padding="12,2" Click="UndoChange" IsEnabled="{Binding CanUndo}"
+                                                AutomationProperties.Name="{Binding TweakName, StringFormat='Undo {0}'}" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                <TextBlock Text="No changes yet. Everything you switch on shows up here."
+                           Visibility="{Binding IsHistoryEmpty, Converter={StaticResource Visible}}"
+                           Opacity="0.7" Margin="8,32,8,8" TextWrapping="Wrap" />
+            </Grid>
+        </DockPanel>
+
         <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
+                Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource Visible}}"

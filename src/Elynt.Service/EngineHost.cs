@@ -4,6 +4,7 @@ using System.Security.Principal;
 using Elynt.Core;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Elynt.Windows;
 
@@ -13,6 +14,7 @@ namespace Elynt.Service;
 internal sealed class EngineHost(
     Catalogue catalogue,
     ChangeJournal journal,
+    SafetyNet safetyNet,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -70,6 +72,7 @@ internal sealed class EngineHost(
             new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware),
             journal,
             sid,
+            safetyNet,
             logger: loggers.CreateLogger<Engine>());
     }
 }

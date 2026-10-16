@@ -1,4 +1,6 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Safety;
+using Elynt.Windows;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
 using Serilog;
@@ -22,6 +24,10 @@ try
     builder.Services.AddSerilog();
     builder.Services.AddSingleton(Catalogue.Default);
     builder.Services.AddSingleton(new ChangeJournal(new JsonFileJournalStore(ServicePaths.Journal)));
+    builder.Services.AddSingleton(services => new SafetyNet(
+        new WindowsRestorePoints(),
+        new WindowsStoreBackups(ServicePaths.Backups),
+        logger: services.GetRequiredService<ILogger<SafetyNet>>()));
     builder.Services.AddHostedService<EngineHost>();
 
     builder.Build().Run();

@@ -48,5 +48,14 @@ To remove it: `sc.exe stop ElyntOptimizer` then `sc.exe delete ElyntOptimizer`.
 - Service log: `%ProgramData%\ElyntOptimizer\logs\service-*.log`
 - App log: `%LocalAppData%\ElyntOptimizer\logs\app-*.log`
 - Change journal: `%ProgramData%\ElyntOptimizer\journal\journal.json`
+- Whole-store backups (BCD, firewall, power plans, scheduled tasks, drivers, hosts), taken before the first change
+  of each kind after the service starts: `%ProgramData%\ElyntOptimizer\backups\<time>-<store>`
+
+## Undo
+
+Every change is journaled with the exact prior state before it is made. The Undo history page lists every change
+(time, tweak, state) and can undo any one of them or restore everything, newest first. Undo refuses to overwrite a
+value that something else changed since, and says which one. Before changes the service also attempts a System
+Restore point (at most once a day; Windows skips more anyway) and tells you when Windows skipped it.
 
 Logs roll daily and keep 14 days.

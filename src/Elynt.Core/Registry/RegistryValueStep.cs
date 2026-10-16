@@ -41,6 +41,16 @@ public sealed record RegistryValueRecord(
     RegistryValue After,
     IReadOnlyList<string> CreatedKeys) : StepRecord
 {
+    public override string? FindConflict(SystemAdapters system)
+    {
+        var now = system.Registry.GetValue(Location);
+        if (After.Equals(now) || Equals(Before, now))
+            return null;
+
+        var shown = now?.ToString() ?? "deleted";
+        return $"Something else changed {Location} since the app set it to {After}. It is now {shown}.";
+    }
+
     public override void Revert(SystemAdapters system)
     {
         // A value that did not exist is deleted, never set to zero.
