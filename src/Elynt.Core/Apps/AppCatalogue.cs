@@ -122,7 +122,6 @@ public sealed class AppCatalogue
         new("Klocman.BulkCrapUninstaller", "Bulk Crap Uninstaller", AppGroups.Utilities, "Removes many programs at once, including leftovers."),
         new("Microsoft.Sysinternals.Autoruns", "Autoruns", AppGroups.Utilities, "Microsoft's complete list of everything that starts with Windows."),
         new("Microsoft.Sysinternals.ProcessExplorer", "Process Explorer", AppGroups.Utilities, "Microsoft's detailed Task Manager replacement."),
-        new("RustDesk.RustDesk", "RustDesk", AppGroups.Utilities, "Open-source remote desktop for helping friends."),
         new("Proton.ProtonVPN", "Proton VPN", AppGroups.Utilities, "VPN with an unlimited free tier and a no-logs policy."),
 
         // Developer tools.
@@ -159,7 +158,6 @@ public sealed class AppCatalogue
         new("Microsoft.DotNet.DesktopRuntime.9", ".NET 9 Desktop Runtime", AppGroups.Runtimes, "Runtime for Windows apps built on .NET 9.", InAllRuntimes: true),
         new("Microsoft.DotNet.DesktopRuntime.10", ".NET 10 Desktop Runtime", AppGroups.Runtimes, "Runtime for Windows apps built on .NET 10.", InAllRuntimes: true),
         new("Microsoft.XNARedist", "XNA Framework 4.0", AppGroups.Runtimes, "Runtime for older indie games made with XNA (Terraria, Stardew Valley's first releases)."),
-        new("OpenAL.OpenAL", "OpenAL", AppGroups.Runtimes, "3D audio runtime some older games need."),
         new("EclipseAdoptium.Temurin.21.JRE", "Java 21 (Temurin JRE)", AppGroups.Runtimes, "Open-source Java runtime for Java apps and modded Minecraft servers."),
     ]);
 }
