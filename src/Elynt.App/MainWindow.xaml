@@ -38,6 +38,18 @@
         <!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
         <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
             <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
+            <!-- Windows Update: install quality updates now, even while paused, with live progress. -->
+            <StackPanel DockPanel.Dock="Top" Margin="4,0,4,12" DataContext="{Binding WindowsUpdate}"
+                        Visibility="{Binding DataContext.IsWindowsUpdatePage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Check and install now" Padding="16,6" Click="CheckAndInstallWindowsUpdates"
+                            IsEnabled="{Binding CanStart}" />
+                    <ProgressBar Width="200" Height="8" Margin="12,0,0,0" Minimum="0" Maximum="100"
+                                 Value="{Binding Percent, Mode=OneWay}"
+                                 Visibility="{Binding IsRunning, Converter={StaticResource Visible}}" />
+                </StackPanel>
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Opacity="0.8" Margin="0,6,0,0" />
+            </StackPanel>
 
             <!-- One cell for every section page; each part shows only on its own page. -->
             <Grid>

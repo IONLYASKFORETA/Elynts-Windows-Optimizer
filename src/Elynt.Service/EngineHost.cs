@@ -10,6 +10,7 @@ using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Elynt.Windows;
 
 namespace Elynt.Service;
@@ -38,6 +39,9 @@ internal sealed class EngineHost(
     private readonly WindowsBootConfig _boot = new();
     private readonly WindowsPowerPlans _power = new();
     private bool _firstPipe = true;
+
+    // One "check and install now" for the whole PC, so any app window can follow its progress.
+    private readonly ManualUpdate _windowsUpdate = new(new WindowsUpdateAgent(), logger: loggers.CreateLogger<ManualUpdate>());
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -101,6 +105,7 @@ internal sealed class EngineHost(
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
             gameStore: _gameStore,
-            gpuTuning: gpuTuning);
+            gpuTuning: gpuTuning,
+            windowsUpdate: _windowsUpdate);
     }
 }

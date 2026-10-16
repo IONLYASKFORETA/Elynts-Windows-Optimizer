@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
+using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Tuning;
 
@@ -87,6 +88,12 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
+
+    public async Task<UpdateRunStatus> GetWindowsUpdateStatusAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetWindowsUpdateStatusRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
 
     public async Task<DriverReport> GetDriversAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetDriversRequest(), cancellation)).Drivers ?? throw Missing("driver report");

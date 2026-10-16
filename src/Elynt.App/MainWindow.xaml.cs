@@ -162,6 +162,9 @@ public partial class MainWindow : Window
             await _model.RestoreEverythingAsync();
     }
 
+    private async void CheckAndInstallWindowsUpdates(object sender, RoutedEventArgs e) =>
+        await _model.WindowsUpdate.StartAsync();
+
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {
         Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });

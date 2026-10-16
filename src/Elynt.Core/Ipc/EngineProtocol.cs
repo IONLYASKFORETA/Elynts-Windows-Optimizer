@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Repair;
@@ -22,6 +23,8 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
+[JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
 [JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
 [JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
@@ -59,6 +62,10 @@ public sealed record ListRepairToolsRequest : EngineRequest;
 public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineRequest;
 
 public sealed record GetBiosReportRequest : EngineRequest;
+
+public sealed record StartWindowsUpdateRequest : EngineRequest;
+
+public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
 
 public sealed record GetDriversRequest : EngineRequest;
 
@@ -123,6 +130,7 @@ public sealed record EngineResponse(
     GameCommandResult? GameResult = null,
     GpuTuningReport? GpuTuning = null,
     TuningResult? Tuning = null,
+    UpdateRunStatus? WindowsUpdate = null,
     EngineEvent? Event = null)
 {
     [JsonIgnore]
@@ -166,6 +174,8 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
+        GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         GetDriversRequest => new(Drivers: engine.GetDrivers()),
         CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
         InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(

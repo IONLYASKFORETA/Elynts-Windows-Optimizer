@@ -41,6 +41,7 @@ public sealed class MainViewModel(
     private bool _isInstalling;
     private string? _installStatus;
     private BiosPageViewModel? _bios;
+    private WindowsUpdatePageViewModel? _windowsUpdate;
     private DriversPageViewModel? _drivers;
     private GpuTuningPageViewModel? _gpu;
 
@@ -183,6 +184,11 @@ public sealed class MainViewModel(
 
     public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
 
+    /// <summary>"Check and install now" with its progress, shown above the Windows Update tweaks.</summary>
+    public WindowsUpdatePageViewModel WindowsUpdate => _windowsUpdate ??= new(() => _client);
+
+    public bool IsWindowsUpdatePage => IsConnected && SelectedPage == Sections.WindowsUpdate;
+
     /// <summary>The detected GPUs with driver lookup and install, shown on the Drivers page. Null until the service sends them.</summary>
     public DriversPageViewModel? Drivers
     {
@@ -226,6 +232,7 @@ public sealed class MainViewModel(
             {
                 OnPropertyChanged(nameof(IsDisconnected));
                 OnPropertyChanged(nameof(IsGamesPage));
+                OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
                 OnPropertyChanged(nameof(CanInstall));
             }
@@ -541,6 +548,9 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsWindowsUpdatePage));
+        if (IsWindowsUpdatePage)
+            _ = WindowsUpdate.RefreshAsync();
         OnPropertyChanged(nameof(IsDriversPage));
         OnPropertyChanged(nameof(IsGamesPage));
         OnPropertyChanged(nameof(IsGpuPage));

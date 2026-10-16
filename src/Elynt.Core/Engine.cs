@@ -7,6 +7,7 @@ using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -139,6 +140,15 @@ public interface IEngine
 
     BiosReport GetBiosReport();
 
+    /// <summary>
+    /// "Check and install now": starts searching for and installing quality updates in the background, even while
+    /// updates are paused, or shows the run already in progress.
+    /// </summary>
+    UpdateRunStatus StartWindowsUpdate();
+
+    /// <summary>Progress of the latest "check and install now".</summary>
+    UpdateRunStatus GetWindowsUpdateStatus();
+
     /// <summary>The detected GPUs and their installed driver versions.</summary>
     DriverReport GetDrivers();
 
@@ -196,7 +206,8 @@ public sealed class Engine(
     IRepairLogStore? repairLogs = null,
     RepairCatalogue? repairs = null,
     IGameStore? gameStore = null,
-    GpuTuning? gpuTuning = null) : IEngine
+    GpuTuning? gpuTuning = null,
+    ManualUpdate? windowsUpdate = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -430,6 +441,11 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public UpdateRunStatus StartWindowsUpdate() =>
+        windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
+
+    public UpdateRunStatus GetWindowsUpdateStatus() => windowsUpdate?.Status ?? UpdateRunStatus.Idle;
 
     public DriverReport GetDrivers() => DriverFlow.Report();
 
