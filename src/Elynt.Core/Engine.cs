@@ -107,10 +107,27 @@ public interface IEngine
     IReadOnlyList<AppView> ListApps();
 
     /// <summary>
-    /// Installs the ticked catalogue apps silently, one at a time, from winget's community source.
+    /// Installs the ticked apps silently, one at a time, from winget's community source.
     /// <paramref name="allRuntimes"/> adds every Visual C++, DirectX legacy and .NET runtime to the queue.
+    /// Apps outside the catalogue install only with <paramref name="allowNotReviewed"/>, which the UI sets once
+    /// the user has seen them marked "not reviewed".
     /// </summary>
-    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
+    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null, bool allowNotReviewed = false);
+
+    /// <summary>Searches all of winget's community source. Results outside the catalogue are marked not reviewed.</summary>
+    AppSearchReport SearchApps(string query);
+
+    /// <summary>Every app installed on the PC, with the updates waiting in winget's community source.</summary>
+    InstalledAppsReport ListInstalledApps();
+
+    /// <summary>Updates the named installed apps, one at a time, from winget's community source.</summary>
+    InstallReport UpdateApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null);
+
+    /// <summary>Updates every installed app with an update waiting, one at a time.</summary>
+    InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null);
+
+    /// <summary>Uninstalls the named installed apps silently, one at a time.</summary>
+    InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null);
 
     /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
     IReadOnlyList<RepairToolView> ListRepairTools();
@@ -143,6 +160,7 @@ public sealed class Engine(
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+    private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
     private readonly RepairBench _repair = new(
         repairs ?? RepairCatalogue.Default,
         system,
@@ -153,8 +171,20 @@ public sealed class Engine(
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
 
-    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null) =>
-        _apps.Install(appIds, allRuntimes, progress);
+    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null, bool allowNotReviewed = false) =>
+        _apps.Install(appIds, allRuntimes, progress, allowNotReviewed);
+
+    public AppSearchReport SearchApps(string query) => _appManager.Search(query);
+
+    public InstalledAppsReport ListInstalledApps() => _appManager.ListInstalled();
+
+    public InstallReport UpdateApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null) =>
+        _appManager.Update(appIds, progress);
+
+    public InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null) => _appManager.UpdateAll(progress);
+
+    public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null) =>
+        _appManager.Uninstall(appIds, progress);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
