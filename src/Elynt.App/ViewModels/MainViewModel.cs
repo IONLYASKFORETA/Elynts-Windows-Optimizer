@@ -22,6 +22,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     private bool _isConnected;
     private bool _isConnecting;
     private BiosPageViewModel? _bios;
+    private GpuTuningPageViewModel? _gpu;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -50,7 +51,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool HasSelection => SelectedTweak is not null;
 
-    public bool IsEmpty => Tweaks.Count == 0 && !IsBiosPage;
+    public bool IsEmpty => Tweaks.Count == 0 && !IsBiosPage && !IsGpuPage;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
     public BiosPageViewModel? Bios
@@ -64,6 +65,22 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     }
 
     public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
+
+    /// <summary>GPU tuning, shown on the Overclocking page. Null until the service sends it.</summary>
+    public GpuTuningPageViewModel? Gpu
+    {
+        get => _gpu;
+        private set
+        {
+            _gpu?.Stop();
+            if (Set(ref _gpu, value))
+                OnPropertyChanged(nameof(IsGpuPage));
+        }
+    }
+
+    public bool IsGpuPage => Gpu is not null && SelectedPage == Sections.Overclocking;
+
+    public bool IsOverclockingPage => IsBiosPage || IsGpuPage;
 
     public string Status
     {
@@ -97,6 +114,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             var views = await _client.ListTweaksAsync();
             _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
             Bios = await LoadBiosAsync(_client);
+            Gpu = await LoadGpuAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -126,9 +144,23 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         }
     }
 
+    private static async Task<GpuTuningPageViewModel?> LoadGpuAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new GpuTuningPageViewModel(client, await client.GetGpuTuningAsync());
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't read GPU tuning");
+            return null;
+        }
+    }
+
     private async Task DisconnectAsync()
     {
         IsConnected = false;
+        Gpu = null;
         var client = _client;
         _client = null;
         if (client is not null)
@@ -144,6 +176,8 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         SelectedTweak = Tweaks.FirstOrDefault();
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsGpuPage));
+        OnPropertyChanged(nameof(IsOverclockingPage));
     }
 
     private async Task FlipAsync(TweakItemViewModel item, bool turnOn)

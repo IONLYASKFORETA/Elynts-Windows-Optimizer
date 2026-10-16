@@ -11,6 +11,9 @@ internal static class ServicePaths
 
     public static string Journal { get; } = Path.Combine(Root, "journal", "journal.json");
 
+    /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
+    public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
+
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
     /// <summary>
@@ -37,6 +40,7 @@ internal static class ServicePaths
             root.SetAccessControl(security);
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(Tuning)!);
         Directory.CreateDirectory(Logs);
     }
 }
