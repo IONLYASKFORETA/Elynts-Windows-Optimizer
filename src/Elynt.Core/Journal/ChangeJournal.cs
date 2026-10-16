@@ -8,6 +8,12 @@ namespace Elynt.Core.Journal;
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
 public abstract record StepRecord
 {
+    /// <summary>
+    /// Says what something else changed since the app made this change, or null when the target still holds
+    /// what the app wrote (or was never changed, if the change was interrupted). Undo refuses to overwrite it.
+    /// </summary>
+    public abstract string? FindConflict(SystemAdapters system);
+
     public abstract void Revert(SystemAdapters system);
 }
 
@@ -126,6 +132,15 @@ public sealed class ChangeJournal
                     _ => null,
                 })
                 .Max();
+        }
+    }
+
+    /// <summary>Every change made for this user, oldest first.</summary>
+    public IReadOnlyList<JournalEntry> EntriesFor(string user)
+    {
+        lock (_gate)
+        {
+            return _entries.Where(e => e.User == user).ToList();
         }
     }
 

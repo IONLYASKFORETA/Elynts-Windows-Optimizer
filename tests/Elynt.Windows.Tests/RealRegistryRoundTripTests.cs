@@ -61,6 +61,22 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         Assert.Equal(RegistryValue.DWord(7), _registry.GetValue(location));
     }
 
+    [Fact]
+    public void Undo_leaves_a_value_alone_that_something_else_changed_since()
+    {
+        var tweak = ScratchTweak();
+        var location = ((RegistryValueStep)tweak.Steps[0]).Location;
+        var engine = NewEngine(new Catalogue([tweak]));
+        Assert.True(engine.Apply(tweak.Id).Succeeded);
+        _registry.SetValue(location, RegistryValue.String("changed elsewhere"));
+
+        var result = engine.Revert(tweak.Id);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(location.ToString(), result.Message);
+        Assert.Equal(RegistryValue.String("changed elsewhere"), _registry.GetValue(location));
+    }
+
     public void Dispose()
     {
         if (!OperatingSystem.IsWindows())
