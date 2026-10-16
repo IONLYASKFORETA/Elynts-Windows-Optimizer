@@ -24,8 +24,14 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 
     [Theory]
     [MemberData(nameof(CatalogueTweaks))]
-    public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId) =>
-        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), _registry, Catalogue.Default.Get(tweakId));
+    public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
+    {
+        var tweak = Catalogue.Default.Get(tweakId);
+        // CI runners are Windows Server, so tweaks for Windows 11 editions or builds don't apply there.
+        if (tweak.Applicability.WhyNot(new WindowsSystemInfo()) is { } whyNot)
+            Assert.Skip($"Doesn't apply to this PC: {whyNot}");
+        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), _registry, tweak);
+    }
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()

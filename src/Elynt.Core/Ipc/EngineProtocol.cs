@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Bios;
+using Elynt.Core.UpdateControl;
 
 namespace Elynt.Core.Ipc;
 
@@ -13,6 +14,8 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(UndoChangeRequest), "undoChange")]
 [JsonDerivedType(typeof(RestoreEverythingRequest), "restoreEverything")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
+[JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -28,6 +31,10 @@ public sealed record UndoChangeRequest(Guid ChangeId) : EngineRequest;
 public sealed record RestoreEverythingRequest : EngineRequest;
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record StartWindowsUpdateRequest : EngineRequest;
+
+public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
+
 /// <summary>The reply to one request. <see cref="Error"/> is set only when the service itself failed.</summary>
 public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
@@ -35,7 +42,8 @@ public sealed record EngineResponse(
     string? Error = null,
     IReadOnlyList<ChangeView>? History = null,
     RestoreResult? Restore = null,
-    BiosReport? Bios = null);
+    BiosReport? Bios = null,
+    UpdateRunStatus? WindowsUpdate = null);
 
 /// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
 public static class EngineProtocol
@@ -61,6 +69,8 @@ public static class EngineProtocol
         UndoChangeRequest undo => new(Result: engine.UndoChange(undo.ChangeId)),
         RestoreEverythingRequest => new(Restore: engine.RestoreEverything()),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
+        GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 }

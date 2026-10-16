@@ -28,6 +28,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     private readonly AppUpdater _updater = new();
     private string? _updateReady;
     private BiosPageViewModel? _bios;
+    private WindowsUpdatePageViewModel? _windowsUpdate;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -103,6 +104,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
 
+    /// <summary>"Check and install now" with its progress, shown above the Windows Update tweaks.</summary>
+    public WindowsUpdatePageViewModel WindowsUpdate => _windowsUpdate ??= new(() => _client);
+
+    public bool IsWindowsUpdatePage => IsConnected && SelectedPage == Sections.WindowsUpdate;
+
     public string Status
     {
         get => _status;
@@ -117,6 +123,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             if (Set(ref _isConnected, value))
             {
                 OnPropertyChanged(nameof(IsDisconnected));
+                OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
             }
         }
@@ -378,6 +385,9 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         SelectedTweak = Tweaks.FirstOrDefault();
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsWindowsUpdatePage));
+        if (IsWindowsUpdatePage)
+            _ = WindowsUpdate.RefreshAsync();
     }
 
     private async Task FlipAsync(TweakItemViewModel item, bool turnOn)

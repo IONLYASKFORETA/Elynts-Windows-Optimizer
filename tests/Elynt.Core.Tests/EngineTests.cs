@@ -9,6 +9,7 @@ public class EngineTests
 {
     private readonly FakeRegistry _registry = new();
     private readonly InMemoryJournalStore _store = new();
+    private FakeSystemInfo _system = new();
 
     private Engine NewEngine() => NewEngineWith(_store);
 
@@ -26,6 +27,7 @@ public class EngineTests
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId, StartingState start)
     {
         var tweak = Catalogue.Default.Get(tweakId);
+        _system = FakeSystemInfo.Fitting(tweak.Applicability);
         Seed(tweak, start);
 
         CatalogueRoundTrip.Run(NewEngine(), _registry, tweak);
@@ -192,7 +194,7 @@ public class EngineTests
         Assert.True(applied.Tweak.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
+    private SystemAdapters Adapters() => new(_registry, _system);
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 

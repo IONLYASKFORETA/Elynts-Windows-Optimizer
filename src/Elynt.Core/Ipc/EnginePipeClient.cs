@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using Elynt.Core.Bios;
+using Elynt.Core.UpdateControl;
 
 namespace Elynt.Core.Ipc;
 
@@ -55,6 +56,12 @@ public sealed class EnginePipeClient : IAsyncDisposable
         (await SendAsync(new RestoreEverythingRequest(), cancellation)).Restore ?? throw Missing("restore result");
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
+
+    public async Task<UpdateRunStatus> GetWindowsUpdateStatusAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetWindowsUpdateStatusRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
 
     public async ValueTask DisposeAsync()
     {

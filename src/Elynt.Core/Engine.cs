@@ -2,6 +2,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -102,6 +103,15 @@ public interface IEngine
     /// </summary>
     RestoreResult RestoreEverything();
     BiosReport GetBiosReport();
+
+    /// <summary>
+    /// "Check and install now": starts searching for and installing quality updates in the background, even while
+    /// updates are paused, or shows the run already in progress.
+    /// </summary>
+    UpdateRunStatus StartWindowsUpdate();
+
+    /// <summary>Progress of the latest "check and install now".</summary>
+    UpdateRunStatus GetWindowsUpdateStatus();
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -117,7 +127,8 @@ public sealed class Engine(
     string user,
     SafetyNet? safetyNet = null,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    ManualUpdate? windowsUpdate = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -319,6 +330,11 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public UpdateRunStatus StartWindowsUpdate() =>
+        windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
+
+    public UpdateRunStatus GetWindowsUpdateStatus() => windowsUpdate?.Status ?? UpdateRunStatus.Idle;
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

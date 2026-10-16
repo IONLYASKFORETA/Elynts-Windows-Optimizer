@@ -6,6 +6,7 @@ using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Elynt.Windows;
 
 namespace Elynt.Service;
@@ -20,6 +21,9 @@ internal sealed class EngineHost(
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
     private bool _firstPipe = true;
+
+    // One "check and install now" for the whole PC, so any app window can follow its progress.
+    private readonly ManualUpdate _windowsUpdate = new(new WindowsUpdateAgent(), logger: loggers.CreateLogger<ManualUpdate>());
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -73,6 +77,7 @@ internal sealed class EngineHost(
             journal,
             sid,
             safetyNet,
-            logger: loggers.CreateLogger<Engine>());
+            logger: loggers.CreateLogger<Engine>(),
+            windowsUpdate: _windowsUpdate);
     }
 }

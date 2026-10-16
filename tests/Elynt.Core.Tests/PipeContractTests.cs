@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elynt.Core.Bios;
 using Elynt.Core.Ipc;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 
 namespace Elynt.Core.Tests;
 
@@ -100,6 +101,23 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task StartWindowsUpdate_arrives_unchanged()
+    {
+        var status = await _client.StartWindowsUpdateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("StartWindowsUpdate", _engine.LastCall);
+        AssertSameJson(_engine.StartWindowsUpdate(), status);
+    }
+
+    [Fact]
+    public async Task GetWindowsUpdateStatus_arrives_unchanged()
+    {
+        var status = await _client.GetWindowsUpdateStatusAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetWindowsUpdateStatus(), status);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -181,6 +199,18 @@ public sealed class PipeContractTests : IAsyncLifetime
                 new(Guid.Empty, "Other tweak", false, "Something else changed it since."),
             ]);
         }
+
+        private static readonly UpdateRunStatus UpdateStatus = new(
+            UpdatePhase.Finished, "Installed 1 of 2 updates. Restart to finish installing.", 1, 2, null, RebootRequired: true,
+            Installed: ["2026-10 Cumulative Update"], NotInstalled: ["Defender update"], Skipped: ["NVIDIA - Display"]);
+
+        public UpdateRunStatus StartWindowsUpdate()
+        {
+            LastCall = "StartWindowsUpdate";
+            return UpdateStatus with { Phase = UpdatePhase.Installing, Current = "2026-10 Cumulative Update" };
+        }
+
+        public UpdateRunStatus GetWindowsUpdateStatus() => UpdateStatus;
 
         public IReadOnlyList<ChangeView> ListHistory() =>
         [
