@@ -15,8 +15,14 @@ public partial class MainWindow : Window
         _model = new MainViewModel(ConfirmDestructive);
         InitializeComponent();
         DataContext = _model;
-        Loaded += async (_, _) => await _model.ConnectAsync();
+        Loaded += async (_, _) =>
+        {
+            await _model.ConnectAsync();
+            await _model.CheckForUpdatesAsync();
+        };
     }
+
+    private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();
 
     private async void Retry(object sender, RoutedEventArgs e) => await _model.ConnectAsync();
 

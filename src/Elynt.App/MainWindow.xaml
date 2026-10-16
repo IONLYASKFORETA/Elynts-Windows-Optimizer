@@ -250,8 +250,20 @@
 
         <!-- Connection status. -->
         <DockPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="16,4,16,10">
-            <Button DockPanel.Dock="Right" Content="Retry" Click="Retry" Padding="16,4"
-                    Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+            <!-- Updates: the channel, and a restart button once a newer build has downloaded. -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Retry" Click="Retry" Padding="16,4" Margin="0,0,16,0"
+                        Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+                <Button Click="RestartIntoUpdate" Padding="16,4" Margin="0,0,16,0"
+                        Visibility="{Binding HasUpdateReady, Converter={StaticResource Visible}}">
+                    <TextBlock>
+                        <Run Text="Restart to update to" /> <Run Text="{Binding UpdateReady, Mode=OneWay}" />
+                    </TextBlock>
+                </Button>
+                <TextBlock Text="Updates:" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.8" />
+                <ComboBox ItemsSource="{Binding Channels}" SelectedItem="{Binding Channel}" MinWidth="90"
+                          AutomationProperties.Name="Update channel" />
+            </StackPanel>
             <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.8" />
         </DockPanel>
     </Grid>
