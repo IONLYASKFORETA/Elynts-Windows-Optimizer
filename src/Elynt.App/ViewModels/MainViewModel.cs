@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Elynt.Core;
 using Elynt.Core.Apps;
+using Elynt.Core.Drivers;
 using Elynt.Core.Ipc;
 using Elynt.Core.Repair;
 using Elynt.Core.Setup;
@@ -13,7 +14,8 @@ namespace Elynt.App.ViewModels;
 /// <param name="confirmDestructive">
 /// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
 /// </param>
-public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : ObservableObject
+/// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
+public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
@@ -37,6 +39,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     private bool _isInstalling;
     private string? _installStatus;
     private BiosPageViewModel? _bios;
+    private DriversPageViewModel? _drivers;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -151,7 +154,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage;
+    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
     public BiosPageViewModel? Bios
@@ -165,6 +168,19 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     }
 
     public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
+
+    /// <summary>The detected GPUs with driver lookup and install, shown on the Drivers page. Null until the service sends them.</summary>
+    public DriversPageViewModel? Drivers
+    {
+        get => _drivers;
+        private set
+        {
+            if (Set(ref _drivers, value))
+                OnPropertyChanged(nameof(IsDriversPage));
+        }
+    }
+
+    public bool IsDriversPage => Drivers is not null && SelectedPage == Sections.Drivers;
 
     public string Status
     {
@@ -254,6 +270,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            Drivers = await LoadDriversAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -303,6 +320,19 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         catch (EngineServiceException ex)
         {
             Log.Warning(ex, "The service couldn't build the BIOS report");
+            return null;
+        }
+    }
+
+    private async Task<DriversPageViewModel?> LoadDriversAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new DriversPageViewModel(await client.GetDriversAsync(), () => _client, askToReboot);
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't detect the GPUs");
             return null;
         }
     }
@@ -465,6 +495,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsDriversPage));
     }
 
     /// <summary>Installs the ticked apps one at a time, showing each app's progress as the service reports it.</summary>

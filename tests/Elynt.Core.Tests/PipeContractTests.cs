@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 using Elynt.Core.Ipc;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
@@ -203,6 +204,58 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetDrivers_arrives_unchanged()
+    {
+        var report = await _client.GetDriversAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetDrivers(), report);
+    }
+
+    [Fact]
+    public async Task CheckDriver_arrives_unchanged()
+    {
+        var request = new DriverRequest(@"PCI\VEN_10DE&DEV_2786", DriverBranch.Studio, CleanInstall: true);
+
+        var check = await _client.CheckDriverAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastDriverRequest);
+        AssertSameJson(_engine.CheckDriver(request), check);
+    }
+
+    [Fact]
+    public async Task InstallDriver_arrives_unchanged()
+    {
+        var request = new DriverRequest(@"PCI\VEN_10DE&DEV_2786", DriverBranch.GameReady, CleanInstall: true);
+
+        var progress = new List<DriverInstallProgress>();
+
+        var result = await _client.InstallDriverAsync(
+            request, new SyncCollect<DriverInstallProgress>(progress), TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastDriverRequest);
+        AssertSameJson(StubEngine.DriverSteps, progress);
+        AssertSameJson(_engine.InstallDriver(request), result);
+    }
+
+    [Fact]
+    public void A_driver_install_runs_in_the_long_running_lane()
+    {
+        var install = new InstallDriverRequest(new DriverRequest(@"PCI\VEN_10DE&DEV_2786"));
+
+        Assert.True(EngineProtocol.IsLongRunning(install));
+        Assert.False(EngineProtocol.IsExclusive(install));
+        var line = EngineProtocol.Serialize(new EngineResponse(Event: new DriverInstallProgressEvent(StubEngine.DriverSteps[0])));
+        Assert.Contains("\"event\":\"driverInstallProgress\"", line);
+        AssertSameJson(StubEngine.DriverSteps[0],
+            Assert.IsType<DriverInstallProgressEvent>(EngineProtocol.Deserialize<EngineResponse>(line).Event).Progress);
+    }
+
+    private sealed class SyncCollect<T>(List<T> into) : IProgress<T>
+    {
+        public void Report(T value) => into.Add(value);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -292,6 +345,36 @@ public sealed class PipeContractTests : IAsyncLifetime
             [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
             [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
             [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
+
+        public DriverReport GetDrivers() => new(
+            [new InstalledGpu("NVIDIA GeForce RTX 4070", @"PCI\VEN_10DE&DEV_2786", GpuVendor.Nvidia, "591.74", "32.0.15.9174")],
+            "A problem.");
+
+        public DriverRequest? LastDriverRequest { get; private set; }
+
+        private static readonly DriverOffer Offer = new(
+            "617.42", DriverBranch.Studio, new Uri("https://us.download.nvidia.com/Windows/617.42/x.exe"),
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), "ab12");
+
+        public DriverCheck CheckDriver(DriverRequest request)
+        {
+            LastDriverRequest = request;
+            return new DriverCheck(true, "Newer.", GetDrivers().Gpus[0], Offer, true, "https://www.nvidia.com/en-us/drivers/");
+        }
+
+        public static readonly IReadOnlyList<DriverInstallProgress> DriverSteps =
+        [
+            new(DriverInstallStage.Downloading, "Downloading driver 617.42…"),
+            new(DriverInstallStage.Installing, "Installing driver 617.42…"),
+        ];
+
+        public DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null)
+        {
+            LastDriverRequest = request;
+            foreach (var step in DriverSteps)
+                progress?.Report(step);
+            return new DriverInstallResult(true, RebootNeeded: true, "Restart to finish.", "617.42", "https://www.nvidia.com/en-us/drivers/");
+        }
 
         public CommandResult Revert(string tweakId)
         {

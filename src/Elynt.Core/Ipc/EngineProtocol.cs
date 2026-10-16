@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 using Elynt.Core.Repair;
 
 namespace Elynt.Core.Ipc;
@@ -19,6 +20,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
+[JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
+[JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -45,6 +49,13 @@ public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineReq
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record GetDriversRequest : EngineRequest;
+
+public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
+public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -52,11 +63,14 @@ public sealed record GetBiosReportRequest : EngineRequest;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
 [JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
 [JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(DriverInstallProgressEvent), "driverInstallProgress")]
 public abstract record EngineEvent;
 
 public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEvent;
 
 public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
+
+public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) : EngineEvent;
 
 /// <summary>
 /// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
@@ -73,6 +87,9 @@ public sealed record EngineResponse(
     InstallReport? Install = null,
     IReadOnlyList<RepairToolView>? RepairTools = null,
     RepairResult? RepairResult = null,
+    DriverReport? Drivers = null,
+    DriverCheck? DriverCheck = null,
+    DriverInstallResult? DriverInstall = null,
     EngineEvent? Event = null)
 {
     [JsonIgnore]
@@ -116,11 +133,15 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        GetDriversRequest => new(Drivers: engine.GetDrivers()),
+        CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
+        InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
+            install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest;
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install queue).</summary>
     public static bool IsExclusive(EngineRequest request) => request is InstallAppsRequest;

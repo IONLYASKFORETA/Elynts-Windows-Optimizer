@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 
 namespace Elynt.Core.Ipc;
 
@@ -84,6 +85,18 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    public async Task<DriverReport> GetDriversAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetDriversRequest(), cancellation)).Drivers ?? throw Missing("driver report");
+
+    public async Task<DriverCheck> CheckDriverAsync(DriverRequest request, CancellationToken cancellation = default) =>
+        (await SendAsync(new CheckDriverRequest(request), cancellation)).DriverCheck ?? throw Missing("driver check");
+
+    public async Task<DriverInstallResult> InstallDriverAsync(
+        DriverRequest request, IProgress<DriverInstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new InstallDriverRequest(request), cancellation,
+            e => { if (e is DriverInstallProgressEvent p) progress?.Report(p.Progress); })).DriverInstall
+            ?? throw Missing("driver install result");
 
     public async ValueTask DisposeAsync()
     {

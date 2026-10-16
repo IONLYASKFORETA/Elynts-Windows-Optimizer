@@ -142,6 +142,44 @@
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />
 
+                <!-- Drivers page: each GPU's installed driver, the latest from the vendor, and a silent install. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsDriversPage, Converter={StaticResource Visible}}">
+                    <StackPanel DataContext="{Binding Drivers}" Margin="4">
+                        <TextBlock Text="{Binding Problem}" TextWrapping="Wrap" Opacity="0.8"
+                                   Visibility="{Binding HasProblem, Converter={StaticResource Visible}}" />
+                        <ItemsControl ItemsSource="{Binding Gpus}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:GpuItemViewModel}">
+                                    <StackPanel Margin="0,4,0,16">
+                                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding InstalledVersion}" Opacity="0.8" Margin="0,2,0,6" />
+                                        <CheckBox Content="Studio driver instead of Game Ready" IsChecked="{Binding UseStudio}"
+                                                  IsEnabled="{Binding IsIdle}"
+                                                  Visibility="{Binding HasBranches, Converter={StaticResource Visible}}" />
+                                        <CheckBox Content="Clean install (resets the driver's own settings)" IsChecked="{Binding CleanInstall}"
+                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                            <Button Content="Check for a newer driver" Click="CheckDriver" Padding="12,4"
+                                                    IsEnabled="{Binding IsIdle}" />
+                                            <Button Content="Download and install" Click="InstallDriver" Padding="12,4" Margin="8,0,0,0"
+                                                    IsEnabled="{Binding IsIdle}" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,8,0,0" FontWeight="SemiBold" />
+                                        <TextBlock Margin="0,4,0,0" Visibility="{Binding HasVendorPage, Converter={StaticResource Visible}}">
+                                            <Hyperlink NavigateUri="{Binding VendorPage}" RequestNavigate="OpenLink">
+                                                <Run Text="Open the vendor's driver page" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock TextWrapping="Wrap" Opacity="0.7" Margin="0,8,0,0"
+                                   Text="Every download is checked for the vendor's signature before it runs; anything unsigned or tampered with is deleted." />
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- BIOS page: settings only the BIOS can change, read from Windows, with guides for this board and CPU. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding IsBiosPage, Converter={StaticResource Visible}}">

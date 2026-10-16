@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Drivers;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
@@ -21,6 +22,14 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+
+    private readonly DriverAdapters _drivers = new(
+        new WindowsDriverInventory(),
+        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        ServicePaths.Downloads,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
+        new WinTrustSignatureVerifier(),
+        new ProcessInstallerRunner());
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,7 +85,8 @@ internal sealed class EngineHost(
                 _systemInfo,
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
-                new WindowsRepairSystem(sid)),
+                new WindowsRepairSystem(sid),
+                _drivers),
             journal,
             sid,
             safetyNet,

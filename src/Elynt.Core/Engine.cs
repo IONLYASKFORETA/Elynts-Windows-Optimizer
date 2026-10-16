@@ -1,5 +1,6 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
@@ -120,6 +121,19 @@ public interface IEngine
     Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
 
     BiosReport GetBiosReport();
+
+    /// <summary>The detected GPUs and their installed driver versions.</summary>
+    DriverReport GetDrivers();
+
+    /// <summary>Looks up the latest driver for one detected GPU, falling back to the vendor's page.</summary>
+    DriverCheck CheckDriver(DriverRequest request);
+
+    /// <summary>
+    /// Looks up, downloads, signature-checks and silently installs the latest driver for one detected GPU. A download
+    /// that isn't signed by the vendor, or doesn't match the vendor's published hash, is deleted and never run.
+    /// </summary>
+    /// <param name="progress">Told as each step (lookup, download, signature check, install) starts.</param>
+    DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -358,6 +372,15 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public DriverReport GetDrivers() => DriverFlow.Report();
+
+    public DriverCheck CheckDriver(DriverRequest request) => DriverFlow.Check(request);
+
+    public DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null) =>
+        DriverFlow.Install(request, progress);
+
+    private DriverFlow DriverFlow => new(system, _log);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {
