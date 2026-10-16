@@ -1,0 +1,249 @@
+<title>Optimizer Layout Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* PROTOTYPE, throwaway. Three structurally different layouts for the same tweak data, switched with the bottom bar or the arrow keys. */
+/* Layout concept: a desktop app window framed on the page; each variant fills the window body differently. */
+:root{
+  --bg:#eef1f5; --win:#ffffff; --panel:#f6f8fb; --line:#d9dfe8; --fg:#1b2230; --muted:#5d6879;
+  --accent:#0d7f86; --accent-ink:#ffffff; --accent-soft:#d8f0f1;
+  --proven:#1f7a46; --proven-bg:#dff3e7; --situ:#8a5a00; --situ-bg:#fbefd4; --placebo:#6b5b95; --placebo-bg:#ebe6f6;
+  --danger:#b3261e; --danger-bg:#fbe3e1; --bar:#1b2230; --bar-ink:#f4f6fa;
+  --display:"Rajdhani","Segoe UI",system-ui,sans-serif; --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1218; --win:#161c25; --panel:#1b222d; --line:#2b3442; --fg:#e4e9f1; --muted:#9aa5b5;
+  --accent:#3fc6c9; --accent-ink:#0b1416; --accent-soft:#163a3d;
+  --proven:#6fd39a; --proven-bg:#163322; --situ:#f0c060; --situ-bg:#3a2e12; --placebo:#b9a8ea; --placebo-bg:#2b2440;
+  --danger:#ff8a80; --danger-bg:#3d1a18; --bar:#e4e9f1; --bar-ink:#0e1218; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1218; --win:#161c25; --panel:#1b222d; --line:#2b3442; --fg:#e4e9f1; --muted:#9aa5b5;
+  --accent:#3fc6c9; --accent-ink:#0b1416; --accent-soft:#163a3d;
+  --proven:#6fd39a; --proven-bg:#163322; --situ:#f0c060; --situ-bg:#3a2e12; --placebo:#b9a8ea; --placebo-bg:#2b2440;
+  --danger:#ff8a80; --danger-bg:#3d1a18; --bar:#e4e9f1; --bar-ink:#0e1218; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 96px}
+.note{max-width:1180px;margin:0 auto 12px;color:var(--muted);font-size:13px}
+.note b{color:var(--fg)}
+.win{max-width:1180px;margin:0 auto;background:var(--win);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgb(0 0 0 / .08)}
+.titlebar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.titlebar .name{font:700 17px/1 var(--display);letter-spacing:.04em}
+.titlebar .sub{color:var(--muted);font-size:12px}
+.titlebar .dots{margin-left:auto;display:flex;gap:6px}.titlebar .dots i{width:11px;height:11px;border-radius:2px;border:1px solid var(--line);display:block}
+h2,h3{font-family:var(--display);letter-spacing:.02em;margin:0;text-wrap:balance}
+h2{font-size:22px}h3{font-size:17px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.t-proven{color:var(--proven);background:var(--proven-bg)}.t-situational{color:var(--situ);background:var(--situ-bg)}.t-placebo{color:var(--placebo);background:var(--placebo-bg)}
+.c-risk{color:var(--danger);background:var(--danger-bg)}
+.c-undo{color:var(--muted);border:1px solid var(--line)}
+.mono{font-family:var(--mono);font-size:12px}
+.toggle{width:38px;height:22px;border-radius:999px;border:1px solid var(--line);background:var(--panel);position:relative;flex:none}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:left .15s}
+.toggle[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.toggle[aria-pressed="true"]::after{left:18px;background:var(--accent-ink)}
+.btn{border:1px solid var(--line);background:var(--win);padding:6px 12px;border-radius:6px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.warnbox{border-left:3px solid var(--danger);background:var(--danger-bg);padding:8px 10px;border-radius:4px;font-size:13px}
+.detail dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:10px 0}
+.detail dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding-top:2px}
+.detail dd{margin:0;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Variant A: sidebar + list + detail pane */
+.A{display:grid;grid-template-columns:210px minmax(0,1fr) minmax(0,340px);min-height:620px}
+.A nav{border-right:1px solid var(--line);background:var(--panel);padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.A nav button{border:0;background:none;text-align:left;padding:7px 10px;border-radius:6px;display:flex;justify-content:space-between}
+.A nav button[aria-current="true"]{background:var(--accent-soft);color:var(--fg);font-weight:600}
+.A nav .sep{border-top:1px solid var(--line);margin:8px 4px}
+.A nav small{color:var(--muted)}
+.A .list{padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.A .row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid transparent;border-radius:8px;cursor:pointer}
+.A .row:hover{background:var(--panel)}
+.A .row[aria-selected="true"]{border-color:var(--accent);background:var(--panel)}
+.A .row .txt{flex:1;min-width:0}
+.A .row .txt div{color:var(--muted);font-size:12.5px}
+.A details{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px}
+.A summary{cursor:pointer;color:var(--placebo);font-weight:600}
+.A aside{border-left:1px solid var(--line);padding:16px;background:var(--win);min-width:0}
+
+/* Variant B: one long checklist + staged changes rail */
+.B{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:620px}
+.B .doc{padding:18px 22px;min-width:0}
+.B .search{display:flex;gap:8px;margin-bottom:12px}
+.B .search input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);font:inherit}
+.B .jump{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.B .jump button{border:1px solid var(--line);background:none;padding:3px 9px;border-radius:999px;font-size:12.5px}
+.B section{margin-bottom:22px}
+.B section h3{border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline}
+.B section h3 small{font:400 12px var(--body);color:var(--muted)}
+.B .item{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.B .item p{margin:3px 0 6px;color:var(--muted);font-size:13px;max-width:70ch}
+.B .item .head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.B .item .head strong{font-weight:600}
+.B .item .why{font-size:12.5px}
+.B .item .why a{color:var(--accent)}
+.B .sub{font:600 12px var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--placebo);margin:12px 0 0}
+.B .rail{border-left:1px solid var(--line);background:var(--panel);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative}
+.B .rail ol{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.B .rail .empty{color:var(--muted);font-size:13px}
+
+/* Variant C: scan dashboard + evidence-tier tabs + timeline */
+.C{padding:18px 20px;display:flex;flex-direction:column;gap:18px}
+.C .top{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.C .stat{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--panel)}
+.C .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.C .stat .v{font:700 26px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.C .stat .s{font-size:12.5px;color:var(--muted)}
+.C .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.C .tabs button{border:0;background:none;padding:8px 14px;border-bottom:2px solid transparent;font-weight:500}
+.C .tabs button[aria-selected="true"]{border-color:var(--accent);color:var(--accent)}
+.C .main{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px}
+.C .rec{display:flex;flex-direction:column;gap:10px}
+.C .card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.C .card .head{display:flex;align-items:center;gap:10px}
+.C .card .head strong{flex:1}
+.C .card p{margin:0;color:var(--muted);font-size:13px}
+.C .card .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.C .timeline{border-left:2px solid var(--line);padding-left:14px;display:flex;flex-direction:column;gap:12px;font-size:13px}
+.C .timeline div{position:relative}
+.C .timeline div::before{content:"";position:absolute;left:-20px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.C .timeline small{display:block;color:var(--muted)}
+
+/* switcher */
+.switch{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:6px;background:var(--bar);color:var(--bar-ink);border-radius:999px;padding:6px;box-shadow:0 6px 20px rgb(0 0 0 / .3);z-index:20;max-width:calc(100% - 32px)}
+.switch button{border:0;background:transparent;color:inherit;width:34px;height:34px;border-radius:50%;font-size:18px}
+.switch button:hover{background:rgb(127 127 127 / .25)}
+.switch span{font-weight:600;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media (max-width:900px){
+  .A{grid-template-columns:1fr}.A nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}.A nav .sep{display:none}.A nav button{white-space:nowrap}.A aside{border-left:0;border-top:1px solid var(--line)}
+  .B{grid-template-columns:1fr}.B .rail{border-left:0;border-top:1px solid var(--line)}
+  .C .top{grid-template-columns:1fr}.C .main{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.toggle::after{transition:none}}
+</style>
+
+<p class="note"><b>Prototype, throwaway.</b> Three layouts for the same app, filled with example tweaks from the research and an <b>example PC</b> (Ryzen 7 7800X3D, RTX 4070, Valorant and CS2 installed). Nothing here changes anything. Flip layouts with the bar at the bottom or the ← → keys.</p>
+
+<div class="win">
+  <div class="titlebar"><span class="name">ELYNT'S OPTIMIZER</span><span class="sub" id="vname"></span><span class="dots"><i></i><i></i><i></i></span></div>
+  <div id="app"></div>
+</div>
+
+<div class="switch" role="toolbar" aria-label="Prototype layout switcher">
+  <button id="prev" aria-label="Previous layout">‹</button>
+  <span id="label"></span>
+  <button id="next" aria-label="Next layout">›</button>
+</div>
+
+<script>
+const CATS=["Gaming","Debloat & Privacy","Security","Apps","Windows Update","Startup & Services","Cleanup","Repair","Drivers","Overclocking"];
+const T=[
+ {id:"hvci",cat:"Gaming",name:"Turn off Memory Integrity (VBS/HVCI)",tier:"proven",undo:"Reversible",risk:["Security risk","Anti-cheat"],
+  what:"Turns off Windows' virtualization-based security so the CPU stops paying its overhead. Needs a restart.",
+  evidence:"About 4–6% higher average FPS in CPU-bound games, up to about 12% in some titles (Tom's Hardware, ComputerBase).",
+  change:"HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity → Enabled = 0",
+  warn:"Valorant and League of Legends (Vanguard) will not launch with this off. FACEIT may refuse too. Both are installed on this PC."},
+ {id:"wgo",cat:"Gaming",name:"Keep optimizations for windowed games on",tier:"proven",undo:"Reversible",risk:[],
+  what:"Makes windowed and borderless games use the modern flip presentation model.",
+  evidence:"Lower frame latency, and enables VRR and Auto HDR in windowed games (Microsoft DirectX blog).",change:"Settings → Display → Graphics → Optimizations for windowed games"},
+ {id:"epp",cat:"Gaming",name:"Turn off Enhance pointer precision",tier:"proven",undo:"Reversible",risk:[],
+  what:"Removes mouse acceleration so the same hand movement always turns the same distance.",
+  evidence:"Gives consistent 1:1 aim in games that don't use raw input. Doesn't change FPS.",change:"HKCU\\Control Panel\\Mouse → MouseSpeed = 0"},
+ {id:"hpet",cat:"Gaming",name:"Remove forced platform clock (useplatformclock)",tier:"proven",undo:"Reversible",risk:[],
+  what:"Deletes a boot setting that forces Windows to use the slower HPET timer.",
+  evidence:"Microsoft documents slower timing calls when HPET is forced. Removing it restores the default.",change:"bcdedit /deletevalue useplatformclock"},
+ {id:"hags",cat:"Gaming",name:"Hardware-accelerated GPU scheduling",tier:"situational",undo:"Reversible",risk:[],
+  what:"Lets the GPU manage its own memory queue.",
+  evidence:"No FPS change in GamersNexus tests, but NVIDIA DLSS Frame Generation requires it. Your RTX 4070 supports it.",change:"HKLM\\...\\GraphicsDrivers → HwSchMode = 2"},
+ {id:"plan",cat:"Gaming",name:"High Performance power plan",tier:"situational",undo:"Reversible",risk:[],
+  what:"Keeps the CPU at higher clocks instead of the Balanced plan.",
+  evidence:"Small gains on some Intel CPUs. <b>Not recommended for this PC:</b> 7800X3D-class chips are tuned for Balanced.",change:"powercfg /setactive SCHEME_MIN"},
+ {id:"nagle",cat:"Gaming",name:"Disable Nagle's algorithm (TCPNoDelay)",tier:"placebo",undo:"Reversible",risk:[],
+  what:"Stops Windows from batching small network packets.",
+  evidence:"Most games already set this on their own sockets. There are no reproducible measurements of a gain.",change:"HKLM\\...\\Tcpip\\Parameters\\Interfaces\\{id} → TCPNoDelay = 1"},
+ {id:"sysresp",cat:"Gaming",name:"SystemResponsiveness = 0",tier:"placebo",undo:"Reversible",risk:[],
+  what:"Popular tweak meant to reserve less CPU for background audio and media.",
+  evidence:"Microsoft documents that values below 10 are treated as 20, so 0 does nothing.",change:"HKLM\\...\\Multimedia\\SystemProfile → SystemResponsiveness"},
+ {id:"park",cat:"Gaming",name:"Disable CPU core parking",tier:"placebo",undo:"Reversible",risk:[],
+  what:"Keeps every core awake.",
+  evidence:"Only forum anecdotes. It can hurt X3D CPUs, which rely on parking to keep games on the cache die.",change:"powercfg CPMINCORES = 100"},
+ {id:"tele",cat:"Debloat & Privacy",name:"Cut diagnostic data to the minimum",tier:"proven",undo:"Reversible",risk:[],
+  what:"Turns off the DiagTrack service, feedback prompts and tailored experiences.",evidence:"Documented Windows policies.",change:"AllowTelemetry = 0, DiagTrack service disabled"},
+ {id:"bing",cat:"Debloat & Privacy",name:"Remove Bing results from Start search",tier:"proven",undo:"Reversible",risk:[],
+  what:"Start menu search only shows local apps and files.",evidence:"Documented policy.",change:"DisableSearchBoxSuggestions = 1"},
+ {id:"copilot",cat:"Debloat & Privacy",name:"Remove the Copilot app",tier:"proven",undo:"Needs download",risk:[],
+  what:"Uninstalls Copilot for your account.",evidence:"Reinstalls from the Store.",change:"Remove-AppxPackage Microsoft.Copilot"},
+ {id:"store",cat:"Debloat & Privacy",name:"Remove the Microsoft Store",tier:"proven",undo:"Needs download",risk:["Breaks things"],
+  what:"Uninstalls the Store.",evidence:"Undo reinstalls it with wsreset -i.",change:"Remove-AppxPackage Microsoft.WindowsStore",
+  warn:"Game Pass, the Xbox app and winget's Store source stop working until the Store is back."},
+ {id:"def",cat:"Security",name:"Turn off Microsoft Defender",tier:"proven",undo:"Reversible",risk:["Security risk"],
+  what:"Applies Defender-off policies and stops its services, dControl-style. You turn off Tamper Protection in Windows Security first; the app walks you through it.",
+  evidence:"Manual only. Never part of a per-game profile.",change:"Policies + WinDefend, WdNisSvc services",
+  warn:"Your PC has no antivirus while this is on. Windows updates can switch Defender back on; the app re-checks after each update."},
+ {id:"excl",cat:"Security",name:"Exclude game folders from scanning",tier:"situational",undo:"Reversible",risk:["Security risk"],
+  what:"Defender skips your Steam and Battle.net library folders.",evidence:"Can shorten load times on slow drives.",change:"Add-MpPreference -ExclusionPath"},
+];
+let state={on:new Set(["epp","wgo","tele"]),sel:"hvci",cat:"Gaming",tab:"proven",q:""};
+const tierName={proven:"Proven",situational:"Situational",placebo:"Possible placebo"};
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const chips=t=>`<span class="chip t-${t.tier}">${tierName[t.tier]}</span><span class="chip c-undo">${t.undo}</span>${t.risk.map(r=>`<span class="chip c-risk">⚠ ${r}</span>`).join("")}`;
+const tog=t=>`<button class="toggle" aria-pressed="${state.on.has(t.id)}" aria-label="${esc(t.name)}" data-tog="${t.id}"></button>`;
+const detail=t=>`<div class="detail"><h3>${esc(t.name)}</h3><div class="chips" style="margin-top:8px">${chips(t)}</div>
+ <dl><dt>What it does</dt><dd>${t.what}</dd><dt>Evidence</dt><dd>${t.evidence}</dd><dt>Change</dt><dd class="mono">${esc(t.change)}</dd><dt>Undo</dt><dd>${t.undo==="Reversible"?"One click restores the exact previous value.":"Undo reinstalls it from the Store or winget."}</dd></dl>
+ ${t.warn?`<div class="warnbox">${t.warn}</div>`:""}
+ <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" data-tog="${t.id}">${state.on.has(t.id)?"Undo this tweak":"Apply this tweak"}</button></div></div>`;
+
+const V={
+ A:{name:"Sidebar, list and detail pane",render(){
+  const cats=CATS.map(c=>{const n=T.filter(t=>t.cat===c).length;return `<button data-cat="${c}" aria-current="${state.cat===c}">${c}<small>${n||""}</small></button>`}).join("");
+  const items=T.filter(t=>t.cat===state.cat);const main=items.filter(t=>t.tier!=="placebo"),pl=items.filter(t=>t.tier==="placebo");
+  const row=t=>`<div class="row" role="option" tabindex="0" aria-selected="${state.sel===t.id}" data-sel="${t.id}">${tog(t)}<div class="txt"><strong>${esc(t.name)}</strong><div>${t.what}</div></div><div class="chips">${t.risk.length?`<span class="chip c-risk">⚠</span>`:""}<span class="chip t-${t.tier}">${tierName[t.tier]}</span></div></div>`;
+  const sel=T.find(t=>t.id===state.sel&&t.cat===state.cat)||items[0];
+  return `<div class="A"><nav aria-label="Sections">${cats}<div class="sep"></div><button>Per-game profiles</button><button>Undo history <small>3</small></button></nav>
+  <div class="list"><h2>${state.cat}</h2>${main.length?main.map(row).join(""):`<p style="color:var(--muted)">This section has no example tweaks yet. The real app would list them here.</p>`}
+  ${pl.length?`<details open><summary>Possible placebo (${pl.length})</summary><p style="color:var(--muted);font-size:13px;margin:6px 0">These are popular, but there's no solid evidence they help. They're kept here so you can try them.</p>${pl.map(row).join("")}</details>`:""}</div>
+  <aside>${sel?detail(sel):""}</aside></div>`}},
+ B:{name:"One checklist with an apply queue",render(){
+  const q=state.q.toLowerCase();const match=t=>!q||(t.name+t.what).toLowerCase().includes(q);
+  const queued=T.filter(t=>state.on.has(t.id)&&!["epp","wgo","tele"].includes(t.id));
+  const sec=c=>{const it=T.filter(t=>t.cat===c&&match(t));if(!it.length)return"";const m=it.filter(t=>t.tier!=="placebo"),p=it.filter(t=>t.tier==="placebo");
+   const item=t=>`<div class="item">${tog(t)}<div><div class="head"><strong>${esc(t.name)}</strong>${chips(t)}</div><p>${t.what}</p><div class="why"><b>Evidence:</b> ${t.evidence}</div>${t.warn?`<div class="warnbox" style="margin-top:6px">${t.warn}</div>`:""}</div></div>`;
+   return `<section id="s-${c.replace(/\W/g,"")}"><h3>${c}<small>${it.length} tweaks</small></h3>${m.map(item).join("")}${p.length?`<div class="sub">Possible placebo</div>${p.map(item).join("")}`:""}</section>`};
+  return `<div class="B"><div class="doc"><div class="search"><input id="q" type="search" placeholder="Search tweaks, e.g. mouse, Defender, timer" value="${esc(state.q)}"></div>
+  <div class="jump">${CATS.filter(c=>T.some(t=>t.cat===c)).map(c=>`<button data-jump="${c.replace(/\W/g,"")}">${c}</button>`).join("")}</div>${CATS.map(sec).join("")}</div>
+  <div class="rail"><h3>Changes to apply</h3>${queued.length?`<ol>${queued.map(t=>`<li>${esc(t.name)} ${t.risk.length?`<span class="chip c-risk">⚠</span>`:""}</li>`).join("")}</ol><p style="font-size:12.5px;color:var(--muted);margin:0">A restore point is taken first. Each change is saved to your undo history.</p><button class="btn primary">Apply ${queued.length} change${queued.length>1?"s":""}</button>`:`<p class="empty">Turn on tweaks on the left. They queue here so you can review them and apply them together.</p>`}
+  <h3 style="margin-top:12px">Already applied</h3><ol>${["Turn off Enhance pointer precision","Keep optimizations for windowed games on","Cut diagnostic data to the minimum"].map(n=>`<li>${n}</li>`).join("")}</ol></div></div>`}},
+ C:{name:"Scan dashboard with evidence tabs",render(){
+  const it=T.filter(t=>t.tier===state.tab);
+  return `<div class="C"><div class="top">
+   <div class="stat"><div class="k">This PC (example)</div><div class="v">7800X3D · RTX 4070</div><div class="s">Windows 11 24H2 · 32 GB · NVMe</div></div>
+   <div class="stat"><div class="k">Tweaks applied</div><div class="v">3 of ${T.length}</div><div class="s">All reversible · last change today 21:14</div></div>
+   <div class="stat"><div class="k">Anti-cheat on this PC</div><div class="v">Vanguard · VAC</div><div class="s">Tweaks that would block these games are flagged</div></div></div>
+   <div class="tabs" role="tablist">${["proven","situational","placebo"].map(k=>`<button role="tab" aria-selected="${state.tab===k}" data-tab="${k}">${tierName[k]} <small>(${T.filter(t=>t.tier===k).length})</small></button>`).join("")}</div>
+   <div class="main"><div class="rec">${state.tab==="placebo"?`<p style="margin:0;color:var(--muted)">Popular tweaks with no solid evidence. Try them if you like; each one undoes in one click.</p>`:""}
+   ${it.map(t=>`<div class="card"><div class="head">${tog(t)}<strong>${esc(t.name)}</strong><span class="chip c-undo">${t.cat}</span></div><p>${t.what} ${t.evidence}</p><div class="meta"><span class="chip c-undo">${t.undo}</span>${t.risk.map(r=>`<span class="chip c-risk">⚠ ${r}</span>`).join("")}</div>${t.warn?`<div class="warnbox">${t.warn}</div>`:""}</div>`).join("")}</div>
+   <div><h3 style="margin-bottom:10px">Undo history</h3><div class="timeline">
+    <div>Cut diagnostic data to the minimum<small>Today 21:14 · Undo</small></div>
+    <div>Keep optimizations for windowed games on<small>Today 21:12 · Undo</small></div>
+    <div>Turn off Enhance pointer precision<small>Today 21:12 · Undo</small></div>
+    <div>Restore point created<small>Today 21:11</small></div></div></div></div></div>`}},
+};
+const keys=Object.keys(V);
+let cur=keys.includes(location.hash.slice(1))?location.hash.slice(1):"A";
+function render(){document.getElementById("app").innerHTML=V[cur].render();document.getElementById("label").textContent=`${cur} · ${V[cur].name}`;document.getElementById("vname").textContent=`Layout ${cur}`;
+ const q=document.getElementById("q");if(q)q.oninput=e=>{state.q=e.target.value;render();const n=document.getElementById("q");n.focus();n.setSelectionRange(n.value.length,n.value.length)}}
+function go(d){cur=keys[(keys.indexOf(cur)+d+keys.length)%keys.length];try{history.replaceState(null,"","#"+cur)}catch(e){}render()}
+document.getElementById("prev").onclick=()=>go(-1);document.getElementById("next").onclick=()=>go(1);
+document.addEventListener("keydown",e=>{if(e.target.closest("input,textarea,[contenteditable]"))return;if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});
+document.getElementById("app").addEventListener("click",e=>{const b=e.target.closest("[data-tog],[data-sel],[data-cat],[data-tab],[data-jump]");if(!b)return;const d=b.dataset;
+ if(d.tog){e.stopPropagation();state.on.has(d.tog)?state.on.delete(d.tog):state.on.add(d.tog)}
+ else if(d.sel)state.sel=d.sel;else if(d.cat){state.cat=d.cat;state.sel=(T.find(t=>t.cat===d.cat)||{}).id}else if(d.tab)state.tab=d.tab;
+ else if(d.jump){document.getElementById("s-"+d.jump)?.scrollIntoView({behavior:"smooth"});return}
+ render()});
+document.getElementById("app").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.sel){state.sel=e.target.dataset.sel;render()}});
+render();
+</script>
