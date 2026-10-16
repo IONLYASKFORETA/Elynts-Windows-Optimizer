@@ -1,3 +1,4 @@
+using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
@@ -101,6 +102,15 @@ public interface IEngine
     /// the rest still go ahead.
     /// </summary>
     RestoreResult RestoreEverything();
+
+    IReadOnlyList<AppView> ListApps();
+
+    /// <summary>
+    /// Installs the ticked catalogue apps silently, one at a time, from winget's community source.
+    /// <paramref name="allRuntimes"/> adds every Visual C++, DirectX legacy and .NET runtime to the queue.
+    /// </summary>
+    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
+
     BiosReport GetBiosReport();
 }
 
@@ -117,10 +127,17 @@ public sealed class Engine(
     string user,
     SafetyNet? safetyNet = null,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    AppCatalogue? apps = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
+    private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+
+    public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
+
+    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null) =>
+        _apps.Install(appIds, allRuntimes, progress);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
