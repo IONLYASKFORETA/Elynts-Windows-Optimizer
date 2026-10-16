@@ -12,15 +12,25 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- WPF's Fluent theme (ThemeMode) is still marked experimental. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- Program.Main runs Velopack's hooks before WPF starts, so App.xaml must not generate its own Main. -->
+    <StartupObject>Elynt.App.Program</StartupObject>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.3.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Elynt.Core\Elynt.Core.csproj" />
+    <!-- Only for installing the service, from the one-off elevated helper run (see ServiceBootstrap). -->
+    <ProjectReference Include="..\Elynt.Windows\Elynt.Windows.csproj" />
   </ItemGroup>
 
 </Project>

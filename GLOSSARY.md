@@ -37,3 +37,5 @@
 **Confirm-or-revert**: every GPU or CPU tuning change goes back on its own after a short window (15 s for GPUs, 60 s for CPUs) unless the user keeps it. Several unkept changes in a row go back to the last kept settings.
 
 **Unclean shutdown**: the service didn't stop normally (crash, freeze, power cut) while hardware was tuned. The next start puts that hardware on defaults and doesn't re-apply the kept tune, so a bad tune can't loop.
+
+**Release channel**: beta (every build, Aden first) or stable (a beta promoted by hand, for friends). The app updates itself from the channel it follows.

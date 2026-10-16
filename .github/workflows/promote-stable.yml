@@ -1,0 +1,46 @@
+name: Promote beta to stable
+
+# Manual only: Aden runs a beta first, then promotes that exact commit and version to the stable channel friends use.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Beta version to promote, e.g. 1.0.42 (its commit is tagged beta/1.0.42)
+        required: true
+
+env:
+  RELEASES_REPO: https://github.com/IONLYASKFORETA/Elynts-Windows-Optimizer-releases
+  VPK_VERSION: 1.2.161
+
+jobs:
+  promote:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/beta/${{ inputs.version }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        run: dotnet test --solution ElyntOptimizer.slnx --configuration Release
+
+      - name: Install Velopack
+        run: dotnet tool install --global vpk --version $env:VPK_VERSION
+
+      - name: Pack stable
+        shell: pwsh
+        run: ./build/pack.ps1 -Version "${{ inputs.version }}" -Channel stable -ReleasesRepo $env:RELEASES_REPO
+
+      - name: Publish stable to the releases repo
+        shell: pwsh
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          $version = "${{ inputs.version }}"
+          vpk upload github --repoUrl $env:RELEASES_REPO --token $env:RELEASES_TOKEN `
+            --channel stable --publish --merge `
+            --releaseName "$version" --tag "v$version" --outputDir out/releases
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

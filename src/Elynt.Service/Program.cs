@@ -1,4 +1,6 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Safety;
+using Elynt.Core.Setup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
@@ -19,11 +21,23 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    // Never change anything on an OS the tweaks weren't written for.
+    var support = OsSupport.Check(WindowsSystemInfo.Describe());
+    if (!support.Supported)
+    {
+        Log.Fatal("Not starting: {Message}", support.Message);
+        return 1;
+    }
+
     var builder = Host.CreateApplicationBuilder(args);
     builder.Services.AddWindowsService(options => options.ServiceName = "ElyntOptimizer");
     builder.Services.AddSerilog();
     builder.Services.AddSingleton(Catalogue.Default);
     builder.Services.AddSingleton(new ChangeJournal(new JsonFileJournalStore(ServicePaths.Journal)));
+    builder.Services.AddSingleton(services => new SafetyNet(
+        new WindowsRestorePoints(),
+        new WindowsStoreBackups(ServicePaths.Backups),
+        logger: services.GetRequiredService<ILogger<SafetyNet>>()));
     builder.Services.AddSingleton(new TuningSafety(new JsonFileTuningStore(ServicePaths.Tuning)));
     builder.Services.AddSingleton<AdlxGpuTuning>();
     builder.Services.AddSingleton(sp => new GpuTuning(
@@ -35,6 +49,7 @@ try
     builder.Services.AddHostedService<EngineHost>();
 
     builder.Build().Run();
+    return 0;
 }
 catch (Exception ex)
 {

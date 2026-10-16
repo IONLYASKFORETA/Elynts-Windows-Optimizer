@@ -316,6 +316,6 @@ public sealed class GpuTuningTests : IDisposable
         new SystemAdapters(new FakeRegistry(), new FakeSystemInfo()),
         new ChangeJournal(new InMemoryJournalStore()),
         "S-1-5-21-test",
-        _clock,
+        clock: _clock,
         gpuTuning: _service);
 }
