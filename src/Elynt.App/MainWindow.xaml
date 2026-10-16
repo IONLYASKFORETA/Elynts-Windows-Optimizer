@@ -1,0 +1,115 @@
+<Window x:Class="Elynt.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+        Title="Elynt's Windows Optimizer"
+        Width="1180" Height="720" MinWidth="900" MinHeight="520"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </Window.Resources>
+
+    <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
+          xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+          xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+          mc:Ignorable="d">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="400" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar: sections, then per-game profiles and the undo history. -->
+        <DockPanel Grid.Column="0" Margin="8">
+            <TextBlock DockPanel.Dock="Top" Text="Elynt's Optimizer" FontSize="18" FontWeight="SemiBold" Margin="8,4,8,12" />
+            <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}" BorderThickness="0" />
+        </DockPanel>
+
+        <!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
+        <DockPanel Grid.Column="1" Margin="8">
+            <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
+            <Grid>
+                <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
+                         HorizontalContentAlignment="Stretch" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
+                            <Grid Margin="4,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding TierText}" Opacity="0.7" FontSize="12" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding StateText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <CheckBox IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
+                                              AutomationProperties.Name="{Binding Name}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="Nothing here yet. This section arrives in a later build."
+                           Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
+                           Opacity="0.7" Margin="8" TextWrapping="Wrap" />
+            </Grid>
+        </DockPanel>
+
+        <!-- Detail pane: what the selected tweak does, the evidence, the exact change and how to undo it. -->
+        <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource Visible}}"
+                            DataContext="{Binding SelectedTweak}">
+                    <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Margin="0,4,0,0" Opacity="0.7">
+                        <Run Text="Evidence:" /> <Run Text="{Binding TierText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding Message}" Margin="0,12,0,0" TextWrapping="Wrap" FontWeight="SemiBold" />
+
+                    <TextBlock Text="What it does" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <TextBlock Text="{Binding View.WhatItDoes}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="Evidence" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <TextBlock Text="{Binding View.Evidence}" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding View.Sources}" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock TextWrapping="Wrap" Margin="0,2">
+                                    <Hyperlink NavigateUri="{Binding Url}" RequestNavigate="OpenLink">
+                                        <Run Text="{Binding Title, Mode=OneWay}" />
+                                    </Hyperlink>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Exact change" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <ItemsControl ItemsSource="{Binding View.ExactChange}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Undo" FontWeight="SemiBold" Margin="0,16,0,4" />
+                    <TextBlock Text="{Binding View.Undo}" TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Connection status. -->
+        <DockPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="16,4,16,10">
+            <Button DockPanel.Dock="Right" Content="Retry" Click="Retry" Padding="16,4"
+                    Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.8" />
+        </DockPanel>
+    </Grid>
+</Window>

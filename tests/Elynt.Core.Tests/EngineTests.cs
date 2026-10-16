@@ -1,0 +1,176 @@
+using Elynt.Core.Journal;
+using Elynt.Core.Tweaks;
+using Elynt.Core.Registry;
+using Elynt.Tests.Shared;
+
+namespace Elynt.Core.Tests;
+
+public class EngineTests
+{
+    private readonly FakeRegistry _registry = new();
+    private readonly InMemoryJournalStore _store = new();
+
+    private Engine NewEngine() => NewEngineWith(_store);
+
+    public static TheoryData<string, StartingState> EveryTweakFromEveryStartingState()
+    {
+        var data = new TheoryData<string, StartingState>();
+        foreach (var tweak in Catalogue.Default.Tweaks)
+            foreach (var state in Enum.GetValues<StartingState>())
+                data.Add(tweak.Id, state);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryTweakFromEveryStartingState))]
+    public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId, StartingState start)
+    {
+        var tweak = Catalogue.Default.Get(tweakId);
+        Seed(tweak, start);
+
+        CatalogueRoundTrip.Run(NewEngine(), _registry, tweak);
+    }
+
+    [Fact]
+    public void A_tweak_already_in_place_shows_as_on_and_has_nothing_to_undo()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        foreach (var step in tweak.Steps.OfType<RegistryValueStep>())
+            _registry.SetValue(step.Location, step.Desired);
+        var before = RegistrySnapshot.Take(_registry, tweak);
+        var engine = NewEngine();
+
+        var view = engine.ListTweaks().Single(t => t.Id == tweak.Id);
+        Assert.Equal(TweakState.On, view.State);
+        Assert.False(view.CanUndo);
+
+        Assert.True(engine.Apply(tweak.Id).Succeeded);
+        var revert = engine.Revert(tweak.Id);
+
+        Assert.False(revert.Succeeded);
+        Assert.Equal(TweakState.On, revert.Tweak!.State);
+        Assert.Equal(before, RegistrySnapshot.Take(_registry, tweak));
+    }
+
+    [Fact]
+    public void A_change_that_fails_part_way_is_put_back()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var before = RegistrySnapshot.Take(_registry, tweak);
+        var engine = NewEngine();
+
+        _registry.FailOnceAfter(1);
+        var result = engine.Apply(tweak.Id);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(before, RegistrySnapshot.Take(_registry, tweak));
+        Assert.Equal(TweakState.Off, engine.ListTweaks().Single(t => t.Id == tweak.Id).State);
+        Assert.False(engine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
+    }
+
+    [Fact]
+    public void A_change_interrupted_by_a_crash_can_be_undone_after_restart()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var before = RegistrySnapshot.Take(_registry, tweak);
+        var journalFile = Path.Combine(Path.GetTempPath(), $"elynt-journal-{Guid.NewGuid():N}.json");
+        try
+        {
+            // The service dies after the first write: nothing after that point reaches the registry.
+            _registry.DieAfter(1);
+            NewEngineWith(new JsonFileJournalStore(journalFile)).Apply(tweak.Id);
+            Assert.NotEqual(before, RegistrySnapshot.Take(_registry, tweak));
+
+            _registry.Revive();
+            var restarted = NewEngineWith(new JsonFileJournalStore(journalFile));
+            var revert = restarted.Revert(tweak.Id);
+
+            Assert.True(revert.Succeeded, revert.Message);
+            Assert.Equal(before, RegistrySnapshot.Take(_registry, tweak));
+        }
+        finally
+        {
+            File.Delete(journalFile);
+        }
+    }
+
+    [Fact]
+    public void Undo_only_reverts_the_users_own_changes()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var journal = new ChangeJournal(_store);
+        new Engine(Catalogue.Default, Adapters(), journal, "S-1-5-21-someone-else").Apply(tweak.Id);
+
+        var mine = new Engine(Catalogue.Default, Adapters(), journal, "S-1-5-21-test");
+
+        Assert.False(mine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
+        Assert.False(mine.Revert(tweak.Id).Succeeded);
+    }
+
+    [Fact]
+    public void An_unknown_tweak_is_refused_without_changing_anything()
+    {
+        var engine = NewEngine();
+
+        Assert.False(engine.Apply("no.such-tweak").Succeeded);
+        Assert.False(engine.Revert("no.such-tweak").Succeeded);
+    }
+
+    [Fact]
+    public void The_detail_pane_shows_the_exact_change()
+    {
+        var view = NewEngine().ListTweaks().Single(t => t.Id == GamingTweaks.EnhancePointerPrecisionOff.Id);
+
+        Assert.Equal(
+            [
+                @"Set HKCU\Control Panel\Mouse\MouseSpeed to ""0"" (REG_SZ)",
+                @"Set HKCU\Control Panel\Mouse\MouseThreshold1 to ""0"" (REG_SZ)",
+                @"Set HKCU\Control Panel\Mouse\MouseThreshold2 to ""0"" (REG_SZ)",
+            ],
+            view.ExactChange);
+        Assert.Equal(EvidenceTier.Proven, view.Tier);
+        Assert.NotEmpty(view.Sources);
+    }
+
+    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
+
+    private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
+
+    public enum StartingState
+    {
+        /// <summary>Each touched value exists with some other value of the same type.</summary>
+        OtherValue,
+        /// <summary>The keys exist but the values do not.</summary>
+        ValuesAbsent,
+        /// <summary>The keys themselves do not exist.</summary>
+        KeysAbsent,
+        /// <summary>The values exist with a different type than the tweak writes.</summary>
+        DifferentType,
+    }
+
+    private void Seed(TweakDefinition tweak, StartingState start)
+    {
+        foreach (var step in tweak.Steps.OfType<RegistryValueStep>())
+        {
+            var location = step.Location;
+            switch (start)
+            {
+                case StartingState.OtherValue:
+                    // Extra bytes after the terminator also check that raw bytes survive, not a parsed string.
+                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [.. step.Desired.Data, 0x31, 0x00]));
+                    break;
+                case StartingState.ValuesAbsent:
+                    _registry.CreateKey(location.Root, location.KeyPath);
+                    break;
+                case StartingState.KeysAbsent:
+                    break;
+                case StartingState.DifferentType:
+                    _registry.SetValue(location, new RegistryValue(RegistryValueKind.Binary, [0xAB, 0xCD]));
+                    break;
+            }
+        }
+    }
+}

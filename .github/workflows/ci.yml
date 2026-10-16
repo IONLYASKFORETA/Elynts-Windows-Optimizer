@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows:
+    # Builds everything and runs the logic tests plus the real-registry round trips on a real Windows machine.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build ElyntOptimizer.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test --solution ElyntOptimizer.slnx --configuration Release --no-build
