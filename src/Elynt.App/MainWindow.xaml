@@ -7,6 +7,11 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <CollectionViewSource x:Key="AppsByGroup" Source="{Binding Apps}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
     </Window.Resources>
 
     <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
@@ -30,9 +35,54 @@
         </DockPanel>
 
         <!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
-        <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}">
+        <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
             <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
-            <Grid>
+
+            <!-- Apps: tick apps, then install them silently one at a time from winget's community source. -->
+            <DockPanel Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}">
+                <StackPanel DockPanel.Dock="Bottom" Margin="4,8,4,0">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Install ticked apps" Padding="16,4"
+                                Click="InstallApps" IsEnabled="{Binding CanInstall}" />
+                        <CheckBox Content="Install all runtimes (Visual C++, DirectX legacy and .NET)"
+                                  IsChecked="{Binding InstallAllRuntimes}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding InstallStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         HorizontalContentAlignment="Stretch" BorderThickness="0">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" Margin="4,12,4,4" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:AppItemViewModel}">
+                            <Grid Margin="4,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                          AutomationProperties.Name="{Binding Name}" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" />
+                                    <TextBlock Text="{Binding Description}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center"
+                                           MaxWidth="220" TextWrapping="Wrap" Margin="8,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <Grid Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}">
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">
                     <ListBox.ItemTemplate>
@@ -178,7 +228,7 @@
         </DockPanel>
 
         <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
-                Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}"
+                Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource Visible}}"

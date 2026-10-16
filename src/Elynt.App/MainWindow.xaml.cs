@@ -26,6 +26,8 @@ public partial class MainWindow : Window
 
     private async void Retry(object sender, RoutedEventArgs e) => await _model.ConnectAsync();
 
+    private async void InstallApps(object sender, RoutedEventArgs e) => await _model.InstallTickedAsync();
+
     /// <summary>The separate confirmation a destructive tweak needs. "No" is the default button.</summary>
     private bool ConfirmDestructive(TweakView tweak) =>
         MessageBox.Show(

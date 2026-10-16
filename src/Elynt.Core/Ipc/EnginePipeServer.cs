@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -58,7 +59,7 @@ public sealed class EnginePipeServer(
             while (await reader.ReadLineAsync(cancellation) is { } line)
             {
                 engine ??= engineFor(pipe);
-                var response = await HandleAsync(engine, line, cancellation);
+                var response = await HandleAsync(engine, line, writer, cancellation);
                 await writer.WriteLineAsync(EngineProtocol.Serialize(response).AsMemory(), cancellation);
             }
         }
@@ -75,14 +76,48 @@ public sealed class EnginePipeServer(
         }
     }
 
-    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, CancellationToken cancellation)
+    /// <summary>
+    /// Runs one command. Progress events it raises are written to the client as they happen, before the response.
+    /// A long command (an install queue) keeps running to the end even if the client goes away, so commands
+    /// never overlap.
+    /// </summary>
+    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, StreamWriter writer, CancellationToken cancellation)
     {
         await _oneCommandAtATime.WaitAsync(cancellation);
         try
         {
             var request = EngineProtocol.Deserialize<EngineRequest>(line);
             _log.LogInformation("Command {Request}", request);
-            return EngineProtocol.Dispatch(engine, request);
+
+            var events = Channel.CreateUnbounded<EngineResponse>(new UnboundedChannelOptions { SingleReader = true });
+            var work = Task.Run(() =>
+            {
+                try
+                {
+                    return EngineProtocol.Dispatch(engine, request, e => events.Writer.TryWrite(e));
+                }
+                finally
+                {
+                    events.Writer.TryComplete();
+                }
+            }, CancellationToken.None);
+
+            var clientListening = true;
+            await foreach (var e in events.Reader.ReadAllAsync(CancellationToken.None))
+            {
+                if (!clientListening)
+                    continue;
+                try
+                {
+                    await writer.WriteLineAsync(EngineProtocol.Serialize(e).AsMemory(), cancellation);
+                }
+                catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+                {
+                    _log.LogInformation(ex, "The client stopped listening to progress; the command carries on");
+                    clientListening = false;
+                }
+            }
+            return await work;
         }
         catch (Exception ex)
         {
