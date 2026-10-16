@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Elynt.Core;
 using Elynt.Core.Apps;
 using Elynt.Core.Ipc;
+using Elynt.Core.Repair;
 using Elynt.Core.Setup;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Updates;
@@ -18,7 +19,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     public const string UndoHistory = "Undo history";
 
     private EnginePipeClient? _client;
+    // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
+    private EnginePipeClient? _repairClient;
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
+    private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
+    private RepairToolItemViewModel? _selectedRepairTool;
     private string _selectedPage = Sections.Gaming;
     private TweakItemViewModel? _selectedTweak;
     private string _status = "Connecting to the Elynt Optimizer service…";
@@ -40,11 +45,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
     public ObservableCollection<HistoryItemViewModel> History { get; } = [];
+
     /// <summary>The app catalogue, in group order. The Apps page groups it by <see cref="AppItemViewModel.Group"/>.</summary>
     public ObservableCollection<AppItemViewModel> Apps { get; } = [];
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
-
 
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
     public bool InstallAllRuntimes
@@ -72,6 +77,23 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         private set => Set(ref _installStatus, value);
     }
 
+    /// <summary>The Repair page's tools. Follow-ups (like fixing disk errors) are offered from a result instead.</summary>
+    public ObservableCollection<RepairToolItemViewModel> RepairTools { get; } = [];
+
+    public RepairToolItemViewModel? SelectedRepairTool
+    {
+        get => _selectedRepairTool;
+        set
+        {
+            if (Set(ref _selectedRepairTool, value))
+                OnPropertyChanged(nameof(HasRepairSelection));
+        }
+    }
+
+    public bool HasRepairSelection => IsRepairPage && SelectedRepairTool is not null;
+
+    public bool IsRepairPage => SelectedPage == Sections.Repair;
+
     public string SelectedPage
     {
         get => _selectedPage;
@@ -90,11 +112,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool IsHistoryPage => SelectedPage == UndoHistory;
 
-    /// <summary>Any section page (tweaks, Apps, BIOS), as opposed to the Undo history.</summary>
+    /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -127,9 +149,9 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         }
     }
 
-    public bool HasSelection => SelectedTweak is not null;
+    public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => Tweaks.Count == 0 && !IsBiosPage;
+    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
     public BiosPageViewModel? Bios
@@ -230,6 +252,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             Apps.Clear();
             foreach (var app in apps)
                 Apps.Add(new AppItemViewModel(app));
+            _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
@@ -291,6 +314,10 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         _client = null;
         if (client is not null)
             await client.DisposeAsync();
+        var repairClient = _repairClient;
+        _repairClient = null;
+        if (repairClient is not null)
+            await repairClient.DisposeAsync();
     }
 
     /// <summary>Undoes one change from the history. A refusal (e.g. something else changed it since) shows on that row.</summary>
@@ -422,7 +449,21 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
+
+        RepairTools.Clear();
+        if (IsRepairPage)
+        {
+            foreach (var tool in _allRepairTools.Where(t => !t.View.IsFollowUp))
+                RepairTools.Add(tool);
+        }
+        if (SelectedRepairTool is null || !RepairTools.Contains(SelectedRepairTool))
+            SelectedRepairTool = RepairTools.FirstOrDefault();
+
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsRepairPage));
+        OnPropertyChanged(nameof(IsTweakPage));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
     }
 
@@ -494,6 +535,34 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         InstallStage.Failed => "Didn't install",
         _ => "",
     };
+    /// <summary>Runs a repair tool (or the follow-up its last result offered), showing progress on <paramref name="item"/>.</summary>
+    /// <param name="confirmed">The user confirmed the tool's opt-in warning.</param>
+    public async Task RunRepairAsync(RepairToolItemViewModel item, string toolId, bool confirmed)
+    {
+        if (_client is null || item.IsRunning)
+            return;
+
+        item.Start();
+        try
+        {
+            _repairClient ??= await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
+            // Progress<T> posts back to the window's thread.
+            var result = await _repairClient.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
+            Log.Information("Repair {Tool}: {Succeeded} {Summary} (log: {Log})", toolId, result.Succeeded, result.Summary, result.LogLocation);
+            item.Finish(result);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Running repair {Tool} failed", toolId);
+            var repairClient = _repairClient;
+            _repairClient = null;
+            if (repairClient is not null)
+                await repairClient.DisposeAsync();
+            item.Finish(new RepairResult(toolId, false, $"Couldn't run this through the service: {ex.Message}", false, null, null, ""));
+        }
+    }
+
+    public RepairToolView? FindRepairTool(string toolId) => _allRepairTools.FirstOrDefault(t => t.View.Id == toolId)?.View;
 
     private async Task FlipAsync(TweakItemViewModel item, bool turnOn)
     {

@@ -16,6 +16,9 @@ internal static class ServicePaths
     /// <summary>Whole-store backups (BCD, firewall, power plans, tasks, drivers, hosts) taken before the first change of each kind.</summary>
     public static string Backups { get; } = Path.Combine(Root, "backups");
 
+    /// <summary>One log per repair run, readable by users so the app can copy them.</summary>
+    public static string RepairLogs { get; } = Path.Combine(Logs, "repair");
+
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
     /// (so the app can offer "copy log"), but cannot plant or edit files there.
@@ -42,5 +45,6 @@ internal static class ServicePaths
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Backups);
+        Directory.CreateDirectory(RepairLogs);
     }
 }

@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using Elynt.Core.Apps;
+using Elynt.Core.Repair;
 using Elynt.Core.Bios;
 
 namespace Elynt.Core.Ipc;
@@ -54,6 +55,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<RestoreResult> RestoreEverythingAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new RestoreEverythingRequest(), cancellation)).Restore ?? throw Missing("restore result");
+
     public async Task<IReadOnlyList<AppView>> ListAppsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListAppsRequest(), cancellation)).Apps ?? throw Missing("apps");
 
@@ -63,8 +65,22 @@ public sealed class EnginePipeClient : IAsyncDisposable
         bool allRuntimes,
         IProgress<InstallProgress>? progress = null,
         CancellationToken cancellation = default) =>
-        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation, e => progress?.Report(e.Progress!))).Install
+        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation,
+            e => { if (e is InstallProgressEvent p) progress?.Report(p.Progress); })).Install
         ?? throw Missing("install report");
+
+    public async Task<IReadOnlyList<RepairToolView>> ListRepairToolsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListRepairToolsRequest(), cancellation)).RepairTools ?? throw Missing("repair tools");
+
+    /// <summary>
+    /// Runs a repair tool; <paramref name="progress"/> gets every progress line as it arrives. Holds this connection
+    /// until the tool finishes, so the UI uses a second connection for other commands meanwhile.
+    /// </summary>
+    public async Task<RepairResult> RunRepairAsync(
+        string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new RunRepairRequest(toolId, confirmed), cancellation,
+            e => { if (e is RepairProgressEvent p) progress?.Report(p.Progress); })).RepairResult
+        ?? throw Missing("repair result");
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
@@ -79,7 +95,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
     private async Task<EngineResponse> SendAsync(
         EngineRequest request,
         CancellationToken cancellation,
-        Action<EngineResponse>? onEvent = null)
+        Action<EngineEvent>? onEvent = null)
     {
         await _oneAtATime.WaitAsync(cancellation);
         try
@@ -92,7 +108,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
                 response = EngineProtocol.Deserialize<EngineResponse>(line);
                 if (!response.IsEvent)
                     break;
-                onEvent?.Invoke(response);
+                onEvent?.Invoke(response.Event!);
             }
             if (response.Error is not null)
                 throw new EngineServiceException(response.Error);
