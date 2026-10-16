@@ -11,7 +11,11 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 {
     private const string ScratchRoot = @"Software\ElyntOptimizerTests";
     private readonly string _scratchKey = $@"{ScratchRoot}\{Guid.NewGuid():N}\Nested";
-    private readonly WindowsRegistry _registry = new();
+    private static readonly string CurrentUserSid =
+        OperatingSystem.IsWindows() ? System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value : "";
+
+    // HKEY_USERS\<sid>, as the service sees the signed-in user, not this process's HKEY_CURRENT_USER.
+    private readonly WindowsRegistry _registry = new(CurrentUserSid);
 
     public RealRegistryRoundTripTests() =>
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Needs the real Windows registry.");
@@ -60,5 +64,5 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         catalogue,
         new SystemAdapters(_registry, new WindowsSystemInfo()),
         new ChangeJournal(new InMemoryJournalStore()),
-        Environment.UserName);
+        CurrentUserSid);
 }

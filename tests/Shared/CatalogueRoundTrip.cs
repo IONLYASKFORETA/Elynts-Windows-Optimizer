@@ -34,7 +34,10 @@ public static class RegistrySnapshot
             .Select(step => step.Location)
             .Select(location =>
             {
-                var key = registry.KeyExists(location.Root, location.KeyPath) ? "key present" : "key absent";
+                var parts = location.KeyPath.Split('\\');
+                var key = string.Join(", ", Enumerable.Range(1, parts.Length)
+                    .Select(n => string.Join('\\', parts[..n]))
+                    .Select(path => $"{path} {(registry.KeyExists(location.Root, path) ? "present" : "absent")}"));
                 var value = registry.GetValue(location) is { } v
                     ? $"{v.Kind} {Convert.ToHexString(v.Data)}"
                     : "value absent";

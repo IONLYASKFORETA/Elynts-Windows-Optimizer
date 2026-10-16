@@ -97,6 +97,48 @@ public class EngineTests
     }
 
     [Fact]
+    public void Undo_after_reapplying_leaves_nothing_older_to_undo()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var engine = NewEngine();
+        engine.Apply(tweak.Id);
+
+        // Something else turns acceleration back on, then the user switches the tweak on again and off.
+        Seed(tweak, StartingState.DifferentType);
+        var userValues = RegistrySnapshot.Take(_registry, tweak);
+        engine.Apply(tweak.Id);
+        engine.Revert(tweak.Id);
+
+        Assert.Equal(userValues, RegistrySnapshot.Take(_registry, tweak));
+        Assert.False(engine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
+        Assert.False(engine.Revert(tweak.Id).Succeeded);
+        Assert.Equal(userValues, RegistrySnapshot.Take(_registry, tweak));
+    }
+
+    [Fact]
+    public void Nothing_is_changed_when_the_prior_state_cannot_be_saved()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var before = RegistrySnapshot.Take(_registry, tweak);
+        var engine = NewEngineWith(new FailingJournalStore());
+
+        var result = engine.Apply(tweak.Id);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Nothing was changed", result.Message);
+        Assert.Equal(before, RegistrySnapshot.Take(_registry, tweak));
+        Assert.False(engine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
+    }
+
+    private sealed class FailingJournalStore : IJournalStore
+    {
+        public IReadOnlyList<JournalEntry> Load() => [];
+        public void Save(IReadOnlyList<JournalEntry> entries) => throw new IOException("Disk full.");
+    }
+
+    [Fact]
     public void Undo_only_reverts_the_users_own_changes()
     {
         var tweak = GamingTweaks.EnhancePointerPrecisionOff;

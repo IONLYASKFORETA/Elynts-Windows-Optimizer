@@ -19,6 +19,8 @@ public enum EntryStatus
     /// <summary>The change failed part-way and was put back straight away.</summary>
     RolledBack,
     Reverted,
+    /// <summary>An older change to a tweak that was undone later: undoing the newest change ends the older ones too.</summary>
+    Superseded,
 }
 
 /// <summary>One apply of one tweak for one user.</summary>
@@ -69,7 +71,15 @@ public sealed class ChangeJournal
         lock (_gate)
         {
             _entries.Add(entry);
-            _store.Save(_entries);
+            try
+            {
+                _store.Save(_entries);
+            }
+            catch
+            {
+                _entries.Remove(entry);
+                throw;
+            }
         }
         return entry;
     }
@@ -80,6 +90,24 @@ public sealed class ChangeJournal
         {
             entry.Status = status;
             entry.ClosedAt = status == EntryStatus.Applied ? null : at;
+            _store.Save(_entries);
+        }
+    }
+
+    /// <summary>
+    /// Marks the newest open change to this tweak as reverted and any older open ones as superseded, so a second
+    /// undo can never write back an older, stale snapshot.
+    /// </summary>
+    public void CloseReverted(JournalEntry newest, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            foreach (var entry in _entries.Where(e =>
+                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied))
+            {
+                entry.Status = entry == newest ? EntryStatus.Reverted : EntryStatus.Superseded;
+                entry.ClosedAt = at;
+            }
             _store.Save(_entries);
         }
     }

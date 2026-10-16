@@ -64,8 +64,19 @@ public sealed class Engine(
                 return Done(tweak, "Already on. Nothing was changed.");
 
             // Write-ahead: the exact prior state is on disk before anything changes.
-            var records = tweak.Steps.Select(step => step.Capture(system)).ToList();
-            var entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+            List<StepRecord> records;
+            JournalEntry entry;
+            try
+            {
+                records = tweak.Steps.Select(step => step.Capture(system)).ToList();
+                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Couldn't record the prior state of {Tweak}", tweak.Id);
+                return Failed(tweak, $"Couldn't save the current settings before changing them: {ex.Message} Nothing was changed.");
+            }
+
             try
             {
                 foreach (var step in tweak.Steps)
@@ -102,7 +113,7 @@ public sealed class Engine(
         try
         {
             RevertSteps(entry.Steps);
-            journal.Close(entry, EntryStatus.Reverted, _clock.GetUtcNow());
+            journal.CloseReverted(entry, _clock.GetUtcNow());
             _log.LogInformation("Reverted {Tweak} for {User}", tweak.Id, user);
             return Done(tweak, "Turned off. The previous settings are back.");
         }

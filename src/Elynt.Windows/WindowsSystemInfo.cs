@@ -9,8 +9,8 @@ public sealed class WindowsSystemInfo : ISystemInfo
 
     private static string ReadBuild()
     {
-        using var key = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
-            .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var key = machine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
         return $"{key?.GetValue("CurrentBuild")}.{key?.GetValue("UBR")}";
     }
 }

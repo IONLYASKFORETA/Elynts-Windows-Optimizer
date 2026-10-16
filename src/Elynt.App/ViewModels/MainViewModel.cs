@@ -17,6 +17,7 @@ public sealed class MainViewModel : ObservableObject
     private TweakItemViewModel? _selectedTweak;
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
+    private bool _isConnecting;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -67,11 +68,14 @@ public sealed class MainViewModel : ObservableObject
 
     public async Task ConnectAsync()
     {
+        // Loaded and Retry can both ask; only one connect runs at a time.
+        if (_isConnecting)
+            return;
+        _isConnecting = true;
         Status = "Connecting to the Elynt Optimizer service…";
         try
         {
-            if (_client is not null)
-                await _client.DisposeAsync();
+            await DisconnectAsync();
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
             _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
@@ -82,10 +86,22 @@ public sealed class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Warning(ex, "Couldn't reach the service");
-            _client = null;
-            IsConnected = false;
+            await DisconnectAsync();
             Status = "The Elynt Optimizer service isn't running, so nothing can be changed yet. Start it, then press Retry.";
         }
+        finally
+        {
+            _isConnecting = false;
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        IsConnected = false;
+        var client = _client;
+        _client = null;
+        if (client is not null)
+            await client.DisposeAsync();
     }
 
     private void ShowPage()
@@ -114,11 +130,17 @@ public sealed class MainViewModel : ObservableObject
             if (result.Succeeded && item.View.Refresh == SessionRefresh.MouseSettings)
                 MouseSettings.ReloadFromRegistry();
         }
+        catch (EngineServiceException ex)
+        {
+            // The service answered, so the connection is fine; the command itself failed.
+            Log.Error(ex, "The service couldn't run the command for {Tweak}", item.View.Id);
+            item.Message = $"The service couldn't do this: {ex.Message}";
+        }
         catch (Exception ex)
         {
             Log.Error(ex, "Flipping {Tweak} failed", item.View.Id);
             item.Message = $"Couldn't reach the service: {ex.Message}";
-            IsConnected = false;
+            await DisconnectAsync();
             Status = "Lost the connection to the service. Press Retry.";
         }
         finally
