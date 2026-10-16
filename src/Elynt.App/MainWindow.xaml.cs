@@ -3,23 +3,30 @@ using System.Windows;
 using System.Windows.Navigation;
 using Elynt.App.ViewModels;
 using Elynt.Core;
+using Elynt.Core.Startup;
 
 namespace Elynt.App;
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _model;
+    private TrayNotes? _tray;
 
     public MainWindow()
     {
         _model = new MainViewModel(ConfirmDestructive);
         InitializeComponent();
         DataContext = _model;
+        _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
+            _tray = new TrayNotes(_model.Startup, ShowFromTray);
+            // The first look after connecting takes note of what is already there.
+            await _tray.CheckAsync();
             await _model.CheckForUpdatesAsync();
         };
+        Closed += (_, _) => _tray?.Dispose();
     }
 
     private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();
@@ -37,6 +44,24 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The separate confirmation deleting a startup item needs. "No" is the default button.</summary>
+    private bool ConfirmDeleteStartupItem(StartupItemView item) =>
+        MessageBox.Show(
+            this,
+            $"Delete {item.Name} from startup?\n\n{item.Location}\n\nThis can't be undone. Turning it off instead stops it starting and can be undone.\n\nDelete it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
 
     private async void UndoChange(object sender, RoutedEventArgs e)
     {

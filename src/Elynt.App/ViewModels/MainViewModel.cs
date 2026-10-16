@@ -12,8 +12,16 @@ namespace Elynt.App.ViewModels;
 /// <param name="confirmDestructive">
 /// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
 /// </param>
-public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : ObservableObject
+public sealed class MainViewModel : ObservableObject
 {
+    private readonly Func<TweakView, bool> confirmDestructive;
+
+    public MainViewModel(Func<TweakView, bool> confirmDestructive)
+    {
+        this.confirmDestructive = confirmDestructive;
+        Startup = new StartupPageViewModel(() => IsConnected ? _client : null);
+    }
+
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
 
@@ -44,6 +52,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     public ObservableCollection<AppItemViewModel> Apps { get; } = [];
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
+
+    /// <summary>The Startup list on the Startup &amp; Services page.</summary>
+    public StartupPageViewModel Startup { get; }
+
+    public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
 
 
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
@@ -81,6 +94,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsAppsPage));
+                OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
@@ -94,7 +108,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     public bool IsSectionPage => !IsHistoryPage;
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsStartupPage;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -416,6 +430,8 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             HistoryMessage = null;
             _ = ShowHistoryAsync();
         }
+        if (IsStartupPage)
+            _ = Startup.LoadAsync();
 
         Tweaks.Clear();
         // Tweaks that fit this PC first; not-applicable ones sink to the bottom.
