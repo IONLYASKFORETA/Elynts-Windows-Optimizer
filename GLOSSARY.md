@@ -11,3 +11,5 @@
 **Feature update**: the yearly Windows 11 version upgrade (e.g. 24H2 to 25H2). Can be skipped by pinning a version.
 
 **Quality update**: the monthly cumulative and security update. Can be deferred, never blocked.
+
+**App list**: a user's own saved selection of catalogue apps, used to reinstall them on another PC. Not a bundle or preset; the app ships none.
