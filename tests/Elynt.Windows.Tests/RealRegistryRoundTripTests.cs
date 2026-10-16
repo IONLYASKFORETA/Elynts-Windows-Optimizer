@@ -27,10 +27,16 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
     {
         var tweak = Catalogue.Default.Get(tweakId);
-        // CI runners are Windows Server, so tweaks for Windows 11 editions or builds don't apply there.
+        // CI runs on Windows Server, so tweaks for other builds or editions are skipped there, not failed.
         if (tweak.Applicability.WhyNot(new WindowsSystemInfo()) is { } whyNot)
-            Assert.Skip($"Doesn't apply to this PC: {whyNot}");
-        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), _registry, tweak);
+            Assert.Skip($"Not applicable on this machine: {whyNot}");
+
+        var engine = NewEngine(Catalogue.Default);
+        // A runner image may already ship a policy set (e.g. telemetry). Then there is nothing the app could undo.
+        if (engine.ListTweaks().Single(t => t.Id == tweakId).State == TweakState.On)
+            Assert.Skip("Already set on this machine, so there is nothing to apply and undo.");
+
+        CatalogueRoundTrip.Run(engine, _registry, tweak);
     }
 
     [Fact]

@@ -1,5 +1,8 @@
+using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -102,6 +105,22 @@ public interface IEngine
     /// the rest still go ahead.
     /// </summary>
     RestoreResult RestoreEverything();
+
+    IReadOnlyList<AppView> ListApps();
+
+    /// <summary>
+    /// Installs the ticked catalogue apps silently, one at a time, from winget's community source.
+    /// <paramref name="allRuntimes"/> adds every Visual C++, DirectX legacy and .NET runtime to the queue.
+    /// </summary>
+    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
+
+    /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
+    IReadOnlyList<RepairToolView> ListRepairTools();
+
+    /// <summary>Runs one repair tool, streaming progress, and saves a log of the run.</summary>
+    /// <param name="confirmed">The user confirmed an opt-in tool's warning. Opt-in tools refuse to run without it.</param>
+    Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
+
     BiosReport GetBiosReport();
 
     /// <summary>
@@ -112,6 +131,19 @@ public interface IEngine
 
     /// <summary>Progress of the latest "check and install now".</summary>
     UpdateRunStatus GetWindowsUpdateStatus();
+
+    /// <summary>The detected GPUs and their installed driver versions.</summary>
+    DriverReport GetDrivers();
+
+    /// <summary>Looks up the latest driver for one detected GPU, falling back to the vendor's page.</summary>
+    DriverCheck CheckDriver(DriverRequest request);
+
+    /// <summary>
+    /// Looks up, downloads, signature-checks and silently installs the latest driver for one detected GPU. A download
+    /// that isn't signed by the vendor, or doesn't match the vendor's published hash, is deleted and never run.
+    /// </summary>
+    /// <param name="progress">Told as each step (lookup, download, signature check, install) starts.</param>
+    DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -128,10 +160,26 @@ public sealed class Engine(
     SafetyNet? safetyNet = null,
     TimeProvider? clock = null,
     ILogger<Engine>? logger = null,
+    AppCatalogue? apps = null,
+    IRepairLogStore? repairLogs = null,
+    RepairCatalogue? repairs = null,
     ManualUpdate? windowsUpdate = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
+    private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+    private readonly RepairBench _repair = new(
+        repairs ?? RepairCatalogue.Default,
+        system,
+        repairLogs ?? new InMemoryRepairLogStore(),
+        user,
+        clock ?? TimeProvider.System,
+        logger ?? (ILogger)NullLogger<Engine>.Instance);
+
+    public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
+
+    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null) =>
+        _apps.Install(appIds, allRuntimes, progress);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
@@ -316,6 +364,11 @@ public sealed class Engine(
     /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
     private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
 
+    public IReadOnlyList<RepairToolView> ListRepairTools() => _repair.List();
+
+    public Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        _repair.RunAsync(toolId, confirmed, progress, cancellation);
+
     public BiosReport GetBiosReport()
     {
         HardwareSnapshot? hardware = null;
@@ -335,6 +388,15 @@ public sealed class Engine(
         windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
 
     public UpdateRunStatus GetWindowsUpdateStatus() => windowsUpdate?.Status ?? UpdateRunStatus.Idle;
+
+    public DriverReport GetDrivers() => DriverFlow.Report();
+
+    public DriverCheck CheckDriver(DriverRequest request) => DriverFlow.Check(request);
+
+    public DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null) =>
+        DriverFlow.Install(request, progress);
+
+    private DriverFlow DriverFlow => new(system, _log);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

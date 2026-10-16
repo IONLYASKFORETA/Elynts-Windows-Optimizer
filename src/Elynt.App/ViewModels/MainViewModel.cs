@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
 using Elynt.Core;
+using Elynt.Core.Apps;
+using Elynt.Core.Drivers;
 using Elynt.Core.Ipc;
+using Elynt.Core.Repair;
 using Elynt.Core.Setup;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Updates;
@@ -11,13 +14,18 @@ namespace Elynt.App.ViewModels;
 /// <param name="confirmDestructive">
 /// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
 /// </param>
-public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : ObservableObject
+/// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
+public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
 
     private EnginePipeClient? _client;
+    // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
+    private EnginePipeClient? _repairClient;
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
+    private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
+    private RepairToolItemViewModel? _selectedRepairTool;
     private string _selectedPage = Sections.Gaming;
     private TweakItemViewModel? _selectedTweak;
     private string _status = "Connecting to the Elynt Optimizer service…";
@@ -27,8 +35,12 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     private bool _isRestoring;
     private readonly AppUpdater _updater = new();
     private string? _updateReady;
+    private bool _installAllRuntimes;
+    private bool _isInstalling;
+    private string? _installStatus;
     private BiosPageViewModel? _bios;
     private WindowsUpdatePageViewModel? _windowsUpdate;
+    private DriversPageViewModel? _drivers;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -38,6 +50,54 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
     public ObservableCollection<HistoryItemViewModel> History { get; } = [];
 
+    /// <summary>The app catalogue, in group order. The Apps page groups it by <see cref="AppItemViewModel.Group"/>.</summary>
+    public ObservableCollection<AppItemViewModel> Apps { get; } = [];
+
+    public bool IsAppsPage => SelectedPage == Sections.Apps;
+
+    /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
+    public bool InstallAllRuntimes
+    {
+        get => _installAllRuntimes;
+        set => Set(ref _installAllRuntimes, value);
+    }
+
+    public bool IsInstalling
+    {
+        get => _isInstalling;
+        private set
+        {
+            if (Set(ref _isInstalling, value))
+                OnPropertyChanged(nameof(CanInstall));
+        }
+    }
+
+    public bool CanInstall => IsConnected && !IsInstalling;
+
+    /// <summary>What the install queue is doing now, or how it ended.</summary>
+    public string? InstallStatus
+    {
+        get => _installStatus;
+        private set => Set(ref _installStatus, value);
+    }
+
+    /// <summary>The Repair page's tools. Follow-ups (like fixing disk errors) are offered from a result instead.</summary>
+    public ObservableCollection<RepairToolItemViewModel> RepairTools { get; } = [];
+
+    public RepairToolItemViewModel? SelectedRepairTool
+    {
+        get => _selectedRepairTool;
+        set
+        {
+            if (Set(ref _selectedRepairTool, value))
+                OnPropertyChanged(nameof(HasRepairSelection));
+        }
+    }
+
+    public bool HasRepairSelection => IsRepairPage && SelectedRepairTool is not null;
+
+    public bool IsRepairPage => SelectedPage == Sections.Repair;
+
     public string SelectedPage
     {
         get => _selectedPage;
@@ -46,6 +106,8 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             if (Set(ref _selectedPage, value))
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
+                OnPropertyChanged(nameof(IsAppsPage));
+                OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
             }
@@ -54,7 +116,11 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool IsHistoryPage => SelectedPage == UndoHistory;
 
-    public bool IsTweakPage => !IsHistoryPage;
+    /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
+    public bool IsSectionPage => !IsHistoryPage;
+
+    /// <summary>A section page that lists tweaks.</summary>
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -87,9 +153,9 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         }
     }
 
-    public bool HasSelection => SelectedTweak is not null;
+    public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => Tweaks.Count == 0 && !IsBiosPage;
+    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
     public BiosPageViewModel? Bios
@@ -109,6 +175,19 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool IsWindowsUpdatePage => IsConnected && SelectedPage == Sections.WindowsUpdate;
 
+    /// <summary>The detected GPUs with driver lookup and install, shown on the Drivers page. Null until the service sends them.</summary>
+    public DriversPageViewModel? Drivers
+    {
+        get => _drivers;
+        private set
+        {
+            if (Set(ref _drivers, value))
+                OnPropertyChanged(nameof(IsDriversPage));
+        }
+    }
+
+    public bool IsDriversPage => Drivers is not null && SelectedPage == Sections.Drivers;
+
     public string Status
     {
         get => _status;
@@ -125,6 +204,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
                 OnPropertyChanged(nameof(IsDisconnected));
                 OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
+                OnPropertyChanged(nameof(CanInstall));
             }
         }
     }
@@ -191,7 +271,13 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
             _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+            var apps = await _client.ListAppsAsync();
+            Apps.Clear();
+            foreach (var app in apps)
+                Apps.Add(new AppItemViewModel(app));
+            _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            Drivers = await LoadDriversAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -245,6 +331,19 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         }
     }
 
+    private async Task<DriversPageViewModel?> LoadDriversAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new DriversPageViewModel(await client.GetDriversAsync(), () => _client, askToReboot);
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't detect the GPUs");
+            return null;
+        }
+    }
+
     private async Task DisconnectAsync()
     {
         IsConnected = false;
@@ -252,6 +351,10 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         _client = null;
         if (client is not null)
             await client.DisposeAsync();
+        var repairClient = _repairClient;
+        _repairClient = null;
+        if (repairClient is not null)
+            await repairClient.DisposeAsync();
     }
 
     /// <summary>Undoes one change from the history. A refusal (e.g. something else changed it since) shows on that row.</summary>
@@ -383,12 +486,124 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
+
+        RepairTools.Clear();
+        if (IsRepairPage)
+        {
+            foreach (var tool in _allRepairTools.Where(t => !t.View.IsFollowUp))
+                RepairTools.Add(tool);
+        }
+        if (SelectedRepairTool is null || !RepairTools.Contains(SelectedRepairTool))
+            SelectedRepairTool = RepairTools.FirstOrDefault();
+
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsRepairPage));
+        OnPropertyChanged(nameof(IsTweakPage));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsWindowsUpdatePage));
         if (IsWindowsUpdatePage)
             _ = WindowsUpdate.RefreshAsync();
+        OnPropertyChanged(nameof(IsDriversPage));
     }
+
+    /// <summary>Installs the ticked apps one at a time, showing each app's progress as the service reports it.</summary>
+    public async Task InstallTickedAsync()
+    {
+        if (_client is null || IsInstalling)
+            return;
+
+        var ticked = Apps.Where(a => a.IsTicked).ToList();
+        var byId = Apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var app in Apps)
+            app.Status = null;
+        foreach (var app in ticked)
+            app.Status = "Queued";
+        if (InstallAllRuntimes)
+            foreach (var app in Apps.Where(a => a.View.InAllRuntimes))
+                app.Status = "Queued";
+
+        IsInstalling = true;
+        InstallStatus = "Starting…";
+        // Progress<T> brings each event back to the UI thread.
+        var progress = new Progress<InstallProgress>(p =>
+        {
+            InstallStatus = p.Position > 0 ? $"{p.Position} of {p.Total}: {p.Message}" : p.Message;
+            if (p.AppId is not null && byId.TryGetValue(p.AppId, out var item))
+                item.Status = StatusText(p.Stage, p.Percent);
+        });
+        try
+        {
+            var report = await _client.InstallAppsAsync(ticked.Select(a => a.View.Id).ToList(), InstallAllRuntimes, progress);
+            Log.Information("Install queue: {Succeeded} {Message}", report.Succeeded, report.Message);
+            foreach (var outcome in report.Apps)
+                if (byId.TryGetValue(outcome.AppId, out var item))
+                    item.Status = outcome.Stage == InstallStage.Failed ? outcome.Message : StatusText(outcome.Stage, null);
+            foreach (var app in Apps.Where(a => a.Status == "Queued"))
+                app.Status = null;
+            InstallStatus = report.Message;
+            if (report.Succeeded)
+            {
+                foreach (var app in ticked)
+                    app.IsTicked = false;
+                InstallAllRuntimes = false;
+            }
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Error(ex, "The service couldn't run the install queue");
+            InstallStatus = $"The service couldn't do this: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Installing apps failed");
+            InstallStatus = $"Couldn't reach the service: {ex.Message}";
+            await DisconnectAsync();
+            Status = "Lost the connection to the service. Press Retry.";
+        }
+        finally
+        {
+            IsInstalling = false;
+        }
+    }
+
+    private static string StatusText(InstallStage stage, double? percent) => stage switch
+    {
+        InstallStage.Installing => percent is { } p ? $"Installing… {p:P0}" : "Installing…",
+        InstallStage.Installed => "Installed",
+        InstallStage.AlreadyInstalled => "Already installed",
+        InstallStage.Failed => "Didn't install",
+        _ => "",
+    };
+    /// <summary>Runs a repair tool (or the follow-up its last result offered), showing progress on <paramref name="item"/>.</summary>
+    /// <param name="confirmed">The user confirmed the tool's opt-in warning.</param>
+    public async Task RunRepairAsync(RepairToolItemViewModel item, string toolId, bool confirmed)
+    {
+        if (_client is null || item.IsRunning)
+            return;
+
+        item.Start();
+        try
+        {
+            _repairClient ??= await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
+            // Progress<T> posts back to the window's thread.
+            var result = await _repairClient.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
+            Log.Information("Repair {Tool}: {Succeeded} {Summary} (log: {Log})", toolId, result.Succeeded, result.Summary, result.LogLocation);
+            item.Finish(result);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Running repair {Tool} failed", toolId);
+            var repairClient = _repairClient;
+            _repairClient = null;
+            if (repairClient is not null)
+                await repairClient.DisposeAsync();
+            item.Finish(new RepairResult(toolId, false, $"Couldn't run this through the service: {ex.Message}", false, null, null, ""));
+        }
+    }
+
+    public RepairToolView? FindRepairTool(string toolId) => _allRepairTools.FirstOrDefault(t => t.View.Id == toolId)?.View;
 
     private async Task FlipAsync(TweakItemViewModel item, bool turnOn)
     {
