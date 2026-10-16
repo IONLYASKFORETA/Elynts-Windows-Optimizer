@@ -11,10 +11,20 @@ namespace Elynt.Tests.Shared;
 /// </summary>
 public static class CatalogueRoundTrip
 {
-    public static void Run(Engine engine, IRegistry registry, TweakDefinition tweak)
+    /// <summary>A program path for per-game tweaks. Nothing needs to exist there.</summary>
+    public const string ExampleGame = @"C:\ElyntOptimizerTests\example-game.exe";
+
+    /// <summary>
+    /// Every tweak that can be applied: each catalogue tweak, with a per-game tweak's template replaced by its
+    /// instance for <see cref="ExampleGame"/>.
+    /// </summary>
+    public static IEnumerable<string> ApplicableIds(Catalogue catalogue) =>
+        catalogue.Tweaks.Select(t => t.PerGame ? $"{t.Id}{PerGameTweak.Separator}{ExampleGame}" : t.Id);
+
+    public static void Run(Engine engine, SystemAdapters system, TweakDefinition tweak)
     {
         var tweakId = tweak.Id;
-        var before = RegistrySnapshot.Take(registry, tweak);
+        var before = SystemSnapshot.Take(system, tweak);
 
         // Confirmed, so destructive tweaks whose steps the journal can still put back are covered too.
         var applied = engine.Apply(tweakId, new ApplyOptions(ConfirmDestructive: true));
@@ -23,7 +33,30 @@ public static class CatalogueRoundTrip
 
         var reverted = engine.Revert(tweakId);
         Assert.True(reverted.Succeeded, reverted.Message);
-        Assert.Equal(before, RegistrySnapshot.Take(registry, tweak));
+        Assert.Equal(before, SystemSnapshot.Take(system, tweak));
+    }
+}
+
+/// <summary>Everything a tweak touches: registry values, boot settings and power plans.</summary>
+public static class SystemSnapshot
+{
+    public static IReadOnlyList<string> Take(SystemAdapters system, TweakDefinition tweak)
+    {
+        var lines = RegistrySnapshot.Take(system.Registry, tweak).ToList();
+        foreach (var target in tweak.Steps.Select(step => step.Target))
+        {
+            switch (target)
+            {
+                case BootSettingTarget boot:
+                    lines.Add($"boot {boot.Element}: {system.Boot!.Get(boot.Element) ?? "not set"}");
+                    break;
+                case PowerPlanTarget plan:
+                    lines.Add($"active power plan: {system.Power!.GetActive()}");
+                    lines.Add($"power plan {plan.Plan}: {(system.Power.Exists(plan.Plan) ? "present" : "absent")}");
+                    break;
+            }
+        }
+        return lines;
     }
 }
 
@@ -31,8 +64,8 @@ public static class CatalogueRoundTrip
 public static class RegistrySnapshot
 {
     public static IReadOnlyList<string> Take(IRegistry registry, TweakDefinition tweak) =>
-        tweak.Steps.OfType<RegistryValueStep>()
-            .Select(step => step.Location)
+        tweak.Steps.Select(step => step.Target).OfType<RegistryTarget>()
+            .Select(target => target.Location)
             .Select(location =>
             {
                 var parts = location.KeyPath.Split('\\');

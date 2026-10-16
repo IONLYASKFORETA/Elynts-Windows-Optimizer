@@ -1,5 +1,9 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Boot;
+using Elynt.Core.Drivers;
+using Elynt.Core.Games;
+using Elynt.Core.Power;
 using Elynt.Core.Registry;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
@@ -10,14 +14,24 @@ namespace Elynt.Core;
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
 /// <param name="Packages">winget. Without it, app installs report winget as missing.</param>
 /// <param name="Repair">Runs the Repair section's tools. Without it, no repair tools are listed.</param>
+/// <param name="Drivers">GPU driver detection, lookup, download and install. Without it, the Drivers page is unavailable.</param>
+/// <param name="Games">Where launchers record installed games. Without it, only games added by hand are known.</param>
 public sealed record SystemAdapters(
     IRegistry Registry,
     ISystemInfo System,
     IHardwareInfo? Hardware = null,
     IPackageManager? Packages = null,
-    IRepairSystem? Repair = null)
+    IRepairSystem? Repair = null,
+    DriverAdapters? Drivers = null,
+    IGameSources? Games = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+
+    /// <summary>The current boot entry's settings (BCD). Tweaks with boot steps fail without it.</summary>
+    public IBootConfig? Boot { get; init; }
+
+    /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
+    public IPowerPlans? Power { get; init; }
 }
 
 public interface ISystemInfo

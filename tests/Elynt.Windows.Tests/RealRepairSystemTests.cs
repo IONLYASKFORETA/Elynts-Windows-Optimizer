@@ -24,7 +24,22 @@ public sealed class RealRepairSystemTests : IDisposable
             return;
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElyntOptimizerTests");
         if (Directory.Exists(root))
-            Directory.Delete(root, recursive: true);
+            DeleteWithoutFollowingLinks(root);
+    }
+
+    // Directory.Delete(recursive) fails on the junctions some tests plant, so remove links first, then the rest.
+    private static void DeleteWithoutFollowingLinks(string folder)
+    {
+        foreach (var child in Directory.GetDirectories(folder))
+        {
+            if (new DirectoryInfo(child).Attributes.HasFlag(FileAttributes.ReparsePoint))
+                Directory.Delete(child);
+            else
+                DeleteWithoutFollowingLinks(child);
+        }
+        foreach (var file in Directory.GetFiles(folder))
+            File.Delete(file);
+        Directory.Delete(folder);
     }
 
     [Fact]

@@ -2,11 +2,15 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Drivers;
+using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Elynt.Windows;
 
 namespace Elynt.Service;
@@ -17,11 +21,27 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+
+    private readonly DriverAdapters _drivers = new(
+        new WindowsDriverInventory(),
+        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        ServicePaths.Downloads,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
+        new WinTrustSignatureVerifier(),
+        new ProcessInstallerRunner());
+    private readonly WindowsGameSources _games = new();
+    private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
     private bool _firstPipe = true;
+
+    // One "check and install now" for the whole PC, so any app window can follow its progress.
+    private readonly ManualUpdate _windowsUpdate = new(new WindowsUpdateAgent(), logger: loggers.CreateLogger<ManualUpdate>());
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -76,11 +96,16 @@ internal sealed class EngineHost(
                 _systemInfo,
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
-                new WindowsRepairSystem(sid)),
+                new WindowsRepairSystem(sid),
+                _drivers,
+                _games) { Boot = _boot, Power = _power },
             journal,
             sid,
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
-            repairLogs: repairLogs);
+            repairLogs: repairLogs,
+            gameStore: _gameStore,
+            gpuTuning: gpuTuning,
+            windowsUpdate: _windowsUpdate);
     }
 }
