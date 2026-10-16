@@ -65,6 +65,11 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public bool HasAntiCheatWarnings => View.AntiCheat.Count > 0;
 
+    /// <summary>Names the installed games this tweak would affect, e.g. "... may stop VALORANT (Riot Vanguard) from launching."</summary>
+    public string? GamesWarning => View.AntiCheatWarning;
+
+    public bool HasGamesWarning => View.AntiCheatWarning is not null;
+
     public bool IsDestructive => View.Reversibility == Reversibility.Destructive;
 
     public string StateText => !View.Applicable && View.State == TweakState.Off

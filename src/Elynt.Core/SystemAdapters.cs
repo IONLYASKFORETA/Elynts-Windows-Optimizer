@@ -1,4 +1,5 @@
 using Elynt.Core.Bios;
+using Elynt.Core.Games;
 using Elynt.Core.Registry;
 using Elynt.Core.Tweaks;
 
@@ -6,7 +7,8 @@ namespace Elynt.Core;
 
 /// <summary>Everything the engine may touch on the PC. Real adapters wrap Windows; fakes hold in-memory state.</summary>
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
-public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System, IHardwareInfo? Hardware = null);
+/// <param name="Games">Where launchers record installed games. Without it, only games added by hand are known.</param>
+public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System, IHardwareInfo? Hardware = null, IGameSources? Games = null);
 
 public interface ISystemInfo
 {

@@ -59,6 +59,38 @@
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />
 
+                <!-- Installed games: what the launchers report, plus games added by their .exe. -->
+                <DockPanel DataContext="{Binding Games}" Margin="4"
+                           Visibility="{Binding DataContext.IsGamesPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="Installed games" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games."
+                                   Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
+                        <Button Content="Add a game by its .exe…" Click="AddGame" HorizontalAlignment="Left" Padding="12,4" />
+                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,6" />
+                        <TextBlock Text="No games found yet." Opacity="0.7"
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Games}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Detail}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Remove" Click="RemoveGame" Padding="8,2" VerticalAlignment="Center"
+                                            Visibility="{Binding CanRemove, Converter={StaticResource Visible}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+
                 <!-- BIOS page: settings only the BIOS can change, read from Windows, with guides for this board and CPU. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding IsBiosPage, Converter={StaticResource Visible}}">
@@ -160,6 +192,8 @@
                     </TextBlock>
                     <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAntiCheatWarnings, Converter={StaticResource Visible}}">
                         <TextBlock Text="Anti-cheat warning (you can still turn it on)" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding GamesWarning}" TextWrapping="Wrap" Margin="0,2" FontWeight="SemiBold"
+                                   Visibility="{Binding HasGamesWarning, Converter={StaticResource Visible}}" />
                         <ItemsControl ItemsSource="{Binding AntiCheatWarnings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

@@ -1,3 +1,4 @@
+using Elynt.Core.Games;
 using System.IO.Pipes;
 using Elynt.Core.Bios;
 
@@ -47,6 +48,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    public async Task<IReadOnlyList<InstalledGame>> ListGamesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListGamesRequest(), cancellation)).Games ?? throw Missing("games");
+
+    public async Task<GameCommandResult> AddGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new AddGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
+
+    public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
 
     public async ValueTask DisposeAsync()
     {

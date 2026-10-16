@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
@@ -17,6 +18,8 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsGameSources _games = new();
+    private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -67,9 +70,10 @@ internal sealed class EngineHost(
 
         return new Engine(
             catalogue,
-            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware),
+            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware, _games),
             journal,
             sid,
-            logger: loggers.CreateLogger<Engine>());
+            logger: loggers.CreateLogger<Engine>(),
+            gameStore: _gameStore);
     }
 }

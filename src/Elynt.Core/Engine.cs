@@ -1,4 +1,5 @@
 using Elynt.Core.Bios;
+using Elynt.Core.Games;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -36,6 +37,12 @@ public sealed record TweakView(
 
     public IReadOnlyList<AntiCheatConflict> AntiCheat { get; init; } = [];
 
+    /// <summary>Installed games the tweak's anti-cheat conflicts would affect. Shown as a warning; never blocks.</summary>
+    public IReadOnlyList<GameConflict> AffectedGames { get; init; } = [];
+
+    /// <summary>A sentence naming the affected installed games, or null when none are installed.</summary>
+    public string? AntiCheatWarning { get; init; }
+
     /// <summary>The tweak needs a reboot and was applied or undone since Windows last started.</summary>
     public bool PendingReboot { get; init; }
 
@@ -68,6 +75,15 @@ public interface IEngine
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
     BiosReport GetBiosReport();
+
+    /// <summary>Installed games from every supported launcher, plus the ones the user added by hand.</summary>
+    IReadOnlyList<InstalledGame> ListGames();
+
+    /// <summary>Adds a game the launchers don't know about, by its .exe. Kept for this user.</summary>
+    GameCommandResult AddGame(string exePath);
+
+    /// <summary>Removes a game the user added by hand.</summary>
+    GameCommandResult RemoveGame(string exePath);
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -77,10 +93,12 @@ public sealed class Engine(
     ChangeJournal journal,
     string user,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    IGameStore? gameStore = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
+    private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
@@ -144,7 +162,9 @@ public sealed class Engine(
 
             journal.Close(entry, EntryStatus.Applied, _clock.GetUtcNow());
             _log.LogInformation("Applied {Tweak} for {User}", tweak.Id, user);
-            return Done(tweak, "Turned on.");
+            var done = Done(tweak, "Turned on.");
+            // Anti-cheat conflicts warn and never block: the change is made, and the message names the games.
+            return done.Tweak?.AntiCheatWarning is { } warning ? done with { Message = $"Turned on. {warning}" } : done;
         }
         catch (Exception ex)
         {
@@ -191,6 +211,12 @@ public sealed class Engine(
         return BiosAdvisor.Build(hardware);
     }
 
+    public IReadOnlyList<InstalledGame> ListGames() => _games.List();
+
+    public GameCommandResult AddGame(string exePath) => _games.Add(exePath);
+
+    public GameCommandResult RemoveGame(string exePath) => _games.Remove(exePath);
+
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {
         for (var i = records.Count - 1; i >= 0; i--)
@@ -200,7 +226,10 @@ public sealed class Engine(
     private TweakState Detect(TweakDefinition tweak) =>
         tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
 
-    private TweakView Describe(TweakDefinition tweak) => new(
+    private TweakView Describe(TweakDefinition tweak)
+    {
+        var affected = AffectedGames(tweak);
+        return new(
         tweak.Id,
         tweak.Section,
         tweak.Name,
@@ -218,11 +247,28 @@ public sealed class Engine(
         DestructiveWarning = tweak.DestructiveWarning,
         Risks = tweak.Risks,
         AntiCheat = tweak.AntiCheat,
+        AffectedGames = affected,
+        AntiCheatWarning = Games.AntiCheatWarning.For(affected),
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
         NotApplicableReason = tweak.Applicability.WhyNot(system.System),
         ProfileEligible = tweak.ProfileEligible,
     };
+    }
+
+    private IReadOnlyList<GameConflict> AffectedGames(TweakDefinition tweak)
+    {
+        try
+        {
+            return _games.Affected(tweak.AntiCheat);
+        }
+        catch (Exception ex)
+        {
+            // Game detection only adds names to a warning; it must never stop a tweak from showing or applying.
+            _log.LogWarning(ex, "Couldn't list installed games for {Tweak}", tweak.Id);
+            return [];
+        }
+    }
 
     private CommandResult Done(TweakDefinition tweak, string message) => new(true, message, Describe(tweak));
 

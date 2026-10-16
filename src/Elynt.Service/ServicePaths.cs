@@ -13,6 +13,9 @@ internal static class ServicePaths
 
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
+    /// <summary>Games each user added by hand, one file per user SID.</summary>
+    public static string Games { get; } = Path.Combine(Root, "games");
+
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
     /// (so the app can offer "copy log"), but cannot plant or edit files there.
@@ -38,5 +41,6 @@ internal static class ServicePaths
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         Directory.CreateDirectory(Logs);
+        Directory.CreateDirectory(Games);
     }
 }

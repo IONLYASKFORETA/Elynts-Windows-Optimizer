@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Bios;
+using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Tweaks;
 
@@ -74,6 +75,26 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListGames_arrives_unchanged()
+    {
+        var games = await _client.ListGamesAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListGames(), games);
+    }
+
+    [Fact]
+    public async Task AddGame_and_RemoveGame_arrive_unchanged()
+    {
+        var added = await _client.AddGameAsync(@"C:\Games\Game.exe", TestContext.Current.CancellationToken);
+        Assert.Equal(@"AddGame C:\Games\Game.exe", _engine.LastCall);
+        AssertSameJson(_engine.AddGame(@"C:\Games\Game.exe"), added);
+
+        var removed = await _client.RemoveGameAsync(@"C:\Games\Game.exe", TestContext.Current.CancellationToken);
+        Assert.Equal(@"RemoveGame C:\Games\Game.exe", _engine.LastCall);
+        AssertSameJson(_engine.RemoveGame(@"C:\Games\Game.exe"), removed);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -110,6 +131,8 @@ public sealed class PipeContractTests : IAsyncLifetime
             DestructiveWarning = "Gone for good.",
             Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,
             AntiCheat = [new AntiCheatConflict(AntiCheat.FaceIt, AntiCheatSeverity.WontLaunch, "VBS required")],
+            AffectedGames = [new GameConflict("Counter-Strike 2", AntiCheat.FaceIt, AntiCheatSeverity.WontLaunch, "VBS required")],
+            AntiCheatWarning = "Turning this on may stop Counter-Strike 2 (FACEIT) from launching.",
             PendingReboot = true,
             NotApplicableReason = "Needs an AMD CPU.",
             ProfileEligible = true,
@@ -131,6 +154,23 @@ public sealed class PipeContractTests : IAsyncLifetime
             [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
             [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
             [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
+
+        private static readonly InstalledGame Game = new(
+            "Counter-Strike 2", GameLauncher.Steam, @"C:\Steam\steamapps\common\Counter-Strike Global Offensive", @"C:\Steam\cs2.exe", [AntiCheat.FaceIt]);
+
+        public IReadOnlyList<InstalledGame> ListGames() => [Game];
+
+        public GameCommandResult AddGame(string exePath)
+        {
+            LastCall = $"AddGame {exePath}";
+            return new GameCommandResult(true, "Added.", Game with { Launcher = GameLauncher.Manual });
+        }
+
+        public GameCommandResult RemoveGame(string exePath)
+        {
+            LastCall = $"RemoveGame {exePath}";
+            return new GameCommandResult(true, "Removed.", null);
+        }
 
         public CommandResult Revert(string tweakId)
         {
