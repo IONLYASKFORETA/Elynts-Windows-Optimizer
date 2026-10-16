@@ -22,10 +22,62 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 
     public static TheoryData<string> CatalogueTweaks() => new(CatalogueRoundTrip.ApplicableIds(Catalogue.Default));
 
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
+
+    /// <summary>
+    /// Machine-wide changes (HKLM, boot settings, power plans) only run on CI's throwaway Windows machines, as admin,
+    /// never on a developer's own PC.
+    /// </summary>
+    private static bool OnDisposableRunner =>
+        OperatingSystem.IsWindows() &&
+        string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) &&
+        new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent())
+            .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+
     [Theory]
     [MemberData(nameof(CatalogueTweaks))]
-    public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId) =>
-        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), Adapters(), Catalogue.Default.Get(tweakId));
+    public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
+    {
+        var tweak = Catalogue.Default.Get(tweakId);
+        var machineWide = tweak.Steps.Any(step => step.Target is not RegistryTarget { Location.Root: RegistryRoot.CurrentUser });
+        Assert.SkipWhen(machineWide && !OnDisposableRunner,
+            "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");
+        Assert.SkipWhen(tweak.Steps.OfType<Core.Power.PowerPlanStep>().Any(p => p.CreateFrom is null && !_power.Exists(p.Plan)),
+            "This machine doesn't have that power plan.");
+
+        var engine = NewEngine(Catalogue.Default);
+        var view = engine.ListTweaks().Single(t => t.Id == tweakId);
+        Assert.SkipWhen(!view.Applicable, $"Doesn't apply to this machine: {view.NotApplicableReason}");
+        Assert.SkipWhen(view.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
+
+        CatalogueRoundTrip.Run(engine, Adapters(), tweak);
+    }
+
+    [Fact]
+    public void A_forced_useplatformclock_is_removed_and_put_back()
+    {
+        Assert.SkipUnless(OnDisposableRunner, "Changes the boot configuration, so it only runs on CI's throwaway machines.");
+        var before = _boot.Get("useplatformclock");
+        try
+        {
+            _boot.Set("useplatformclock", "Yes");
+            Assert.Equal("Yes", _boot.Get("useplatformclock"));
+
+            CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), Adapters(), GamingTweaks.UsePlatformClockRemoved);
+
+            Assert.Equal("Yes", _boot.Get("useplatformclock"));
+        }
+        finally
+        {
+            if (before is null)
+                _boot.Delete("useplatformclock");
+            else
+                _boot.Set("useplatformclock", before);
+        }
+    }
+
+    private SystemAdapters Adapters() => new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power };
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()
@@ -62,7 +114,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 
     private Engine NewEngine(Catalogue catalogue) => new(
         catalogue,
-        new SystemAdapters(_registry, new WindowsSystemInfo()),
+        Adapters(),
         new ChangeJournal(new InMemoryJournalStore()),
         CurrentUserSid);
 }

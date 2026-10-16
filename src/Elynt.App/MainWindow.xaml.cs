@@ -12,7 +12,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive);
+        _model = new MainViewModel(ConfirmDestructive, PickGame);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) => await _model.ConnectAsync();
@@ -29,6 +29,23 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private string? PickGame()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private async void AddGame(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
+            await _model.AddGameAsync(item);
+    }
 
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {

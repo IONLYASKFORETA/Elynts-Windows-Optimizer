@@ -17,6 +17,8 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -67,7 +69,7 @@ internal sealed class EngineHost(
 
         return new Engine(
             catalogue,
-            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware),
+            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware) { Boot = _boot, Power = _power },
             journal,
             sid,
             logger: loggers.CreateLogger<Engine>());

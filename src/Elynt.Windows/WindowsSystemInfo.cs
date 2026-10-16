@@ -54,6 +54,7 @@ public sealed partial class WindowsSystemInfo : ISystemInfo
                 "GenuineIntel" => HardwareTraits.IntelCpu,
                 _ => HardwareTraits.None,
             };
+            traits |= HardwareNames.FromCpuName((cpu?.GetValue("ProcessorNameString") as string) ?? "");
         }
 
         using (var adapters = machine.OpenSubKey(DisplayAdapterClass))
@@ -72,6 +73,7 @@ public sealed partial class WindowsSystemInfo : ISystemInfo
                 using (adapter)
                 {
                     var device = (adapter?.GetValue("MatchingDeviceId") as string)?.ToUpperInvariant() ?? "";
+                    traits |= HardwareNames.FromGpuName((adapter?.GetValue("DriverDesc") as string) ?? "");
                     if (device.Contains("VEN_10DE")) traits |= HardwareTraits.NvidiaGpu;
                     else if (device.Contains("VEN_1002")) traits |= HardwareTraits.AmdGpu;
                     else if (device.Contains("VEN_8086")) traits |= HardwareTraits.IntelGpu;
