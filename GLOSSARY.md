@@ -19,3 +19,5 @@
 **Protected service**: a service the app never changes, even in Advanced (anti-cheat, Windows Update core, boot drivers).
 
 **Drift**: a change the app made that something else (usually a Windows update) has since undone, or a removed app that came back.
+
+**BIOS guide**: step-by-step instructions, matched to the detected board vendor and CPU, for a change only the BIOS can make (XMP/EXPO, PBO, Curve Optimizer, Intel undervolting). The app reads these settings (a **readout**) but never changes them.
