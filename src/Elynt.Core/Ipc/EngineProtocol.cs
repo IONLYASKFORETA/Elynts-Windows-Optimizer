@@ -2,9 +2,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
-using Elynt.Core.Repair;
 using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
+using Elynt.Core.Drivers;
+using Elynt.Core.Games;
+using Elynt.Core.Repair;
+using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
 
@@ -24,6 +28,20 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListServicesRequest), "listServices")]
 [JsonDerivedType(typeof(SetServiceStartRequest), "setServiceStart")]
 [JsonDerivedType(typeof(UndoServiceChangeRequest), "undoServiceChange")]
+[JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
+[JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
+[JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
+[JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
+[JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(ListGamesRequest), "listGames")]
+[JsonDerivedType(typeof(AddGameRequest), "addGame")]
+[JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
+[JsonDerivedType(typeof(GetGpuTuningRequest), "getGpuTuning")]
+[JsonDerivedType(typeof(SetGpuTuningRequest), "setGpuTuning")]
+[JsonDerivedType(typeof(AutoTuneGpuRequest), "autoTuneGpu")]
+[JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
+[JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
+[JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -55,6 +73,34 @@ public sealed record ListServicesRequest : EngineRequest;
 public sealed record SetServiceStartRequest(string ServiceName, ServiceStart Start, ApplyOptions? Options = null) : EngineRequest;
 
 public sealed record UndoServiceChangeRequest(string ServiceName) : EngineRequest;
+public sealed record StartWindowsUpdateRequest : EngineRequest;
+
+public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
+
+public sealed record GetDriversRequest : EngineRequest;
+
+public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
+public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
+public sealed record ListGamesRequest : EngineRequest;
+
+public sealed record AddGameRequest(string ExePath) : EngineRequest;
+
+public sealed record RemoveGameRequest(string ExePath) : EngineRequest;
+
+public sealed record GetGpuTuningRequest : EngineRequest;
+
+public sealed record SetGpuTuningRequest(string DeviceId, IReadOnlyDictionary<string, int> Values) : EngineRequest;
+
+public sealed record AutoTuneGpuRequest(string DeviceId, AutoTuneKind Kind) : EngineRequest;
+
+public sealed record ConfirmGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
 
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
@@ -63,11 +109,14 @@ public sealed record UndoServiceChangeRequest(string ServiceName) : EngineReques
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
 [JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
 [JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(DriverInstallProgressEvent), "driverInstallProgress")]
 public abstract record EngineEvent;
 
 public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEvent;
 
 public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
+
+public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) : EngineEvent;
 
 /// <summary>
 /// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
@@ -84,6 +133,14 @@ public sealed record EngineResponse(
     InstallReport? Install = null,
     IReadOnlyList<RepairToolView>? RepairTools = null,
     RepairResult? RepairResult = null,
+    DriverReport? Drivers = null,
+    DriverCheck? DriverCheck = null,
+    DriverInstallResult? DriverInstall = null,
+    IReadOnlyList<InstalledGame>? Games = null,
+    GameCommandResult? GameResult = null,
+    GpuTuningReport? GpuTuning = null,
+    TuningResult? Tuning = null,
+    UpdateRunStatus? WindowsUpdate = null,
     EngineEvent? Event = null,
     IReadOnlyList<ServiceView>? Services = null,
     ServiceResult? ServiceResult = null)
@@ -132,11 +189,26 @@ public static class EngineProtocol
         ListServicesRequest => new(Services: engine.ListServices()),
         SetServiceStartRequest set => new(ServiceResult: engine.SetServiceStart(set.ServiceName, set.Start, set.Options)),
         UndoServiceChangeRequest undo => new(ServiceResult: engine.UndoServiceChange(undo.ServiceName)),
+        StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
+        GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
+        GetDriversRequest => new(Drivers: engine.GetDrivers()),
+        CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
+        InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
+            install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        ListGamesRequest => new(Games: engine.ListGames()),
+        AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
+        RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
+        GetGpuTuningRequest => new(GpuTuning: engine.GetGpuTuning()),
+        SetGpuTuningRequest set => new(Tuning: engine.SetGpuTuning(set.DeviceId, set.Values)),
+        AutoTuneGpuRequest auto => new(Tuning: engine.AutoTuneGpu(auto.DeviceId, auto.Kind)),
+        ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
+        RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
+        ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest;
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install queue).</summary>
     public static bool IsExclusive(EngineRequest request) => request is InstallAppsRequest;
