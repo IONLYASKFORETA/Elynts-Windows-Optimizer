@@ -19,6 +19,15 @@ internal sealed record StartupItem(
 
     /// <summary>Set when the source itself vouches for the signature (Store packages are verified on install).</summary>
     public SignatureStatus? Signature { get; init; }
+
+    /// <summary>What deleting changes, checked against the hard rules first.</summary>
+    public ChangeTarget? DeleteTarget { get; init; }
+
+    /// <summary>Removes the item for good (its switch value too). Null when it can't be deleted here.</summary>
+    public Action<SystemAdapters>? Remove { get; init; }
+
+    /// <summary>Shown when the program isn't signed and has no company name (a task's author).</summary>
+    public string? FallbackPublisher { get; init; }
 }
 
 /// <summary>Turns one startup item on or off, the way Task Manager (or Task Scheduler) does.</summary>
@@ -63,8 +72,110 @@ internal static class StartupItems
             run.Command,
             run.ExecutablePath,
             new StartupApprovedSwitch(new RegistryLocation(root, $@"{ApprovedPath}\{approvedKey}", run.Name)),
-            CanDelete: true);
+            CanDelete: true)
+        {
+            Remove = system =>
+            {
+                Sources(system).DeleteRunValue(run.Key, run.Name);
+                system.Registry.DeleteValue(new RegistryLocation(root, $@"{ApprovedPath}\{approvedKey}", run.Name));
+            },
+        };
     }
+
+    public static StartupItem FromStartupFile(StartupFile file)
+    {
+        var (root, tag) = file.Folder == StartupFolder.User ? (RegistryRoot.CurrentUser, "user") : (RegistryRoot.LocalMachine, "all");
+        return new StartupItem(
+            $"folder:{tag}:{file.FileName}",
+            Path.GetFileNameWithoutExtension(file.FileName),
+            StartupSource.StartupFolder,
+            Path.GetDirectoryName(file.FullPath) ?? file.FullPath,
+            file.Target ?? file.FullPath,
+            file.Target,
+            new StartupApprovedSwitch(new RegistryLocation(root, $@"{ApprovedPath}\StartupFolder", file.FileName)),
+            CanDelete: true)
+        {
+            DeleteTarget = new FileTarget(file.FullPath),
+            Remove = system =>
+            {
+                Sources(system).DeleteStartupFile(file.Folder, file.FileName);
+                system.Registry.DeleteValue(new RegistryLocation(root, $@"{ApprovedPath}\StartupFolder", file.FileName));
+            },
+        };
+    }
+
+    public static StartupItem FromStoreTask(StoreStartupTask task) => new(
+        $"store:{task.PackageFamilyName}!{task.TaskId}",
+        task.DisplayName,
+        StartupSource.StoreApp,
+        $"Store app {task.PackageFamilyName}",
+        task.ExecutablePath ?? task.PackageFamilyName,
+        task.ExecutablePath,
+        new StoreTaskSwitch(
+            new RegistryLocation(
+                RegistryRoot.CurrentUser,
+                $@"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\{task.PackageFamilyName}\{task.TaskId}",
+                "State"),
+            task.EnabledByDefault),
+        // Only the app (or uninstalling it) can remove its declared startup task.
+        CanDelete: false)
+    {
+        Publisher = task.Publisher,
+        // Store packages are signature-checked by Windows when they are installed.
+        Signature = SignatureStatus.Signed,
+    };
+
+    public static StartupItem FromTask(ScheduledTaskInfo task) => new(
+        $"task:{task.Path}",
+        task.Path[(task.Path.LastIndexOf('\\') + 1)..],
+        task.RunsAtSignIn ? StartupSource.SignInTask : StartupSource.ScheduledTask,
+        task.Path,
+        task.Command ?? "",
+        task.ExecutablePath,
+        new ScheduledTaskSwitch(task.Path, task.Enabled),
+        CanDelete: !IsMicrosoftTask(task.Path))
+    {
+        FallbackPublisher = task.Author,
+        Remove = IsMicrosoftTask(task.Path) ? null : system => ScheduledTaskStep.Tasks(system).Delete(task.Path),
+    };
+
+    private static IStartupSources Sources(SystemAdapters system) =>
+        system.Startup?.Sources ?? throw new InvalidOperationException("Startup items aren't available here.");
+
+    /// <summary>Windows' own tasks live under \Microsoft\; the app lists and changes only third-party ones.</summary>
+    public static bool IsMicrosoftTask(string path) => path.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// A Store app's startup task: a State DWORD under AppModel\SystemAppData. 0 off, 1 off by the user (what Task
+/// Manager and Settings write), 2 on, 3 off by policy, 4 on by policy. No value means the manifest's default.
+/// </summary>
+internal sealed record StoreTaskSwitch(RegistryLocation State, bool EnabledByDefault) : StartupSwitch
+{
+    private uint? Read(SystemAdapters system) =>
+        system.Registry.GetValue(State) is { Kind: RegistryValueKind.DWord, Data.Length: 4 } value ? BitConverter.ToUInt32(value.Data) : null;
+
+    public override bool IsEnabled(SystemAdapters system) => Read(system) switch
+    {
+        null => EnabledByDefault,
+        2 or 4 => true,
+        _ => false,
+    };
+
+    public override bool CanSwitch(SystemAdapters system) => Read(system) is not (3 or 4);
+
+    public override TweakStep StepFor(bool enabled, DateTimeOffset now) =>
+        new RegistryValueStep(State, RegistryValue.DWord(enabled ? 2u : 1u));
+}
+
+/// <summary>A scheduled task's own Enabled setting, as Task Scheduler's Disable and Enable set it.</summary>
+internal sealed record ScheduledTaskSwitch(string Path, bool Enabled) : StartupSwitch
+{
+    public override bool IsEnabled(SystemAdapters system) => Enabled;
+
+    public override bool CanSwitch(SystemAdapters system) => !StartupItems.IsMicrosoftTask(Path);
+
+    public override TweakStep StepFor(bool enabled, DateTimeOffset now) => new ScheduledTaskStep(Path, enabled);
 }
 
 /// <summary>

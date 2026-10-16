@@ -144,6 +144,24 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeleteStartupItem_carries_the_destructive_confirmation()
+    {
+        var result = await _client.DeleteStartupItemAsync("run:HKCU:Discord", true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("DeleteStartupItem run:HKCU:Discord True", _engine.LastCall);
+        AssertSameJson(_engine.DeleteStartupItem("run:HKCU:Discord", true), result);
+    }
+
+    [Fact]
+    public async Task CheckNewStartupItems_arrives_unchanged()
+    {
+        var items = await _client.CheckNewStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("CheckNewStartupItems", _engine.LastCall);
+        AssertSameJson(_engine.CheckNewStartupItems(), items);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -271,6 +289,18 @@ public sealed class PipeContractTests : IAsyncLifetime
         {
             LastCall = $"SetStartupItemEnabled {itemId} {enabled}";
             return new StartupCommandResult(true, "Turned off.", StartupItem);
+        }
+
+        public IReadOnlyList<StartupItemView> CheckNewStartupItems()
+        {
+            LastCall = "CheckNewStartupItems";
+            return [StartupItem with { Enabled = true }];
+        }
+
+        public StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive)
+        {
+            LastCall = $"DeleteStartupItem {itemId} {confirmDestructive}";
+            return new StartupCommandResult(true, "Deleted.", null);
         }
 
         public IReadOnlyList<ChangeView> ListHistory() =>

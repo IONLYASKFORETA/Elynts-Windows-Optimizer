@@ -19,6 +19,8 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 [JsonDerivedType(typeof(ListStartupItemsRequest), "listStartupItems")]
 [JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
+[JsonDerivedType(typeof(DeleteStartupItemRequest), "deleteStartupItem")]
+[JsonDerivedType(typeof(CheckNewStartupItemsRequest), "checkNewStartupItems")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -90,6 +92,8 @@ public static class EngineProtocol
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         ListStartupItemsRequest => new(StartupItems: engine.ListStartupItems()),
         SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
+        CheckNewStartupItemsRequest => new(StartupItems: engine.CheckNewStartupItems()),
+        DeleteStartupItemRequest delete => new(StartupResult: engine.DeleteStartupItem(delete.ItemId, delete.ConfirmDestructive)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

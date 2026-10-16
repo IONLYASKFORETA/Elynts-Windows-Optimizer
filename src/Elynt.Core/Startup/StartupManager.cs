@@ -66,6 +66,60 @@ internal sealed class StartupManager(
         }
     }
 
+    public StartupCommandResult Delete(string itemId, bool confirmDestructive)
+    {
+        if (Find(itemId) is not { } item)
+            return Unknown(itemId);
+        if (item.Remove is null)
+            return Failed(item, item.Source == StartupSource.StoreApp
+                ? "A Store app's startup task can only be turned off here; uninstall the app to remove it. Nothing was changed."
+                : "This item can't be deleted here. Nothing was changed.");
+        if (item.DeleteTarget is { } target && HardRules.Violation(target) is { } violation)
+            return Failed(item, $"This change is never allowed: {violation}. Nothing was changed.");
+        if (!confirmDestructive)
+            return Failed(item, $"Deleting {item.Name} can't be undone, so it needs a separate confirmation first. " +
+                                "Turning it off instead stops it starting and can be undone. Nothing was changed.");
+
+        try
+        {
+            // A task deletion is covered by the whole-store backup of scheduled tasks.
+            if (item.Source is StartupSource.SignInTask or StartupSource.ScheduledTask)
+                safetyNet?.BeforeChange(AsTweak(item, new ScheduledTaskStep(item.Location, false)));
+            item.Remove(system);
+            _log.LogInformation("Deleted startup item {Item} for {User}", item.Id, user);
+            return new StartupCommandResult(true, $"Deleted {item.Name}. It won't start at sign-in, and this can't be undone.", null);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Deleting startup item {Item} failed", item.Id);
+            return Failed(item, $"Couldn't delete this: {ex.Message}");
+        }
+    }
+
+    public IReadOnlyList<StartupItemView> CheckNew()
+    {
+        if (system.Startup is not { } startup)
+            return [];
+
+        var items = Read(startup).ToList();
+        var known = startup.Known.Load(user);
+        var seen = new HashSet<string>(known ?? new HashSet<string>(), StringComparer.OrdinalIgnoreCase);
+        seen.UnionWith(items.Select(i => i.Id));
+        startup.Known.Save(user, seen);
+        if (known is null)
+            return [];
+
+        // Only things that will actually start at sign-in are worth a note.
+        var impact = startup.Impact.Read();
+        var added = items
+            .Where(i => !known.Contains(i.Id) && i.Source != StartupSource.ScheduledTask && i.Switch.IsEnabled(system))
+            .Select(i => Describe(i, impact))
+            .ToList();
+        if (added.Count > 0)
+            _log.LogInformation("New startup items for {User}: {Items}", user, added.Select(i => i.Id));
+        return added;
+    }
+
     /// <summary>Undoes one journaled startup switch from the Undo history.</summary>
     public (bool Succeeded, string Message) Undo(JournalEntry entry)
     {
@@ -140,8 +194,19 @@ internal sealed class StartupManager(
     private StartupItem? Find(string itemId) =>
         system.Startup is { } startup ? Read(startup).FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase)) : null;
 
-    private static IEnumerable<StartupItem> Read(StartupAdapters startup) =>
-        startup.Sources.RunValues().Select(StartupItems.FromRunValue);
+    /// <summary>Every item in page order: Run keys, Startup folders, sign-in tasks, Store apps, then other tasks.</summary>
+    private static IEnumerable<StartupItem> Read(StartupAdapters startup)
+    {
+        var tasks = startup.Tasks.List()
+            .Where(t => !StartupItems.IsMicrosoftTask(t.Path))
+            .Select(StartupItems.FromTask)
+            .ToList();
+        return startup.Sources.RunValues().Select(StartupItems.FromRunValue)
+            .Concat(startup.Sources.StartupFiles().Select(StartupItems.FromStartupFile))
+            .Concat(tasks.Where(t => t.Source == StartupSource.SignInTask))
+            .Concat(startup.Sources.StoreStartupTasks().Select(StartupItems.FromStoreTask))
+            .Concat(tasks.Where(t => t.Source == StartupSource.ScheduledTask));
+    }
 
     private StartupItemView Describe(StartupItem item, IReadOnlyList<StartupMeasurement> measurements)
     {
@@ -154,7 +219,7 @@ internal sealed class StartupManager(
             item.Source,
             item.Location,
             item.Command,
-            item.Publisher ?? signature.Publisher,
+            item.Publisher ?? signature.Publisher ?? item.FallbackPublisher,
             item.Signature ?? signature.Status,
             StartupImpactRules.Classify(item.ExecutablePath, measurements),
             item.Switch.IsEnabled(system),

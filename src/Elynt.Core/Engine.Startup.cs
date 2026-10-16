@@ -10,6 +10,10 @@ public sealed partial class Engine
 
     public StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled) => _startup.SetEnabled(itemId, enabled);
 
+    public StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive) => _startup.Delete(itemId, confirmDestructive);
+
+    public IReadOnlyList<StartupItemView> CheckNewStartupItems() => _startup.CheckNew();
+
     /// <summary>The name the Undo history shows for a journal entry: a tweak's name, or a startup switch's item.</summary>
     private string NameOf(string journalId) =>
         StartupManager.Owns(journalId) ? _startup.NameOf(journalId)

@@ -122,6 +122,18 @@ public interface IEngine
     /// so it can be undone from the Undo history.
     /// </summary>
     StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled);
+
+    /// <summary>
+    /// Deletes a startup item (the Run value, Startup folder file or scheduled task). Destructive: refused unless
+    /// <paramref name="confirmDestructive"/> says the user confirmed it separately.
+    /// </summary>
+    StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive);
+
+    /// <summary>
+    /// Startup items that were added and are on since the last look, for the tray note. The first look for a user
+    /// only takes note of what is there. Each new item is reported once.
+    /// </summary>
+    IReadOnlyList<StartupItemView> CheckNewStartupItems();
 }
 
 /// <summary>What happened to one change during restore everything.</summary>

@@ -21,13 +21,13 @@ public class StartupItemsTests
     private readonly FakeClock _clock = new(Start);
     private readonly ChangeJournal _journal = new(new InMemoryJournalStore());
 
-    private Engine NewEngine() => new(
+    private Engine NewEngine(ChangeJournal? journal = null) => new(
         new Catalogue([]),
         new SystemAdapters(_registry, new FakeSystemInfo())
         {
             Startup = new StartupAdapters(_sources, _tasks, _signatures, _impact),
         },
-        _journal,
+        journal ?? _journal,
         User,
         clock: _clock);
 
@@ -155,6 +155,183 @@ public class StartupItemsTests
         Assert.False(result.Succeeded);
         Assert.Contains("Something else changed", result.Message);
         Assert.Equal(taskManagerValue, _registry.GetValue(DiscordApproved));
+    }
+
+    private const string SteamExe = @"C:\Program Files (x86)\Steam\steam.exe";
+    private const string SpotifyPfn = "SpotifyAB.SpotifyMusic_zpdnekdrzrea0";
+    private const string ChromeUpdater = @"\GoogleSystem\GoogleUpdater\GoogleUpdaterTaskSystem";
+
+    private static readonly RegistryLocation SteamApproved = new(
+        RegistryRoot.LocalMachine, @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder", "Steam.lnk");
+
+    private static readonly RegistryLocation SpotifyState = new(
+        RegistryRoot.CurrentUser,
+        $@"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\{SpotifyPfn}\SpotifyStartupTask",
+        "State");
+
+    private void AddEverySource()
+    {
+        AddDiscord();
+        _sources.Files.Add(new StartupFile(StartupFolder.AllUsers, "Steam.lnk", @"C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\Steam.lnk", SteamExe));
+        _sources.Store.Add(new StoreStartupTask(SpotifyPfn, "SpotifyStartupTask", "Spotify", "Spotify AB", EnabledByDefault: true, null));
+        _tasks.Tasks.Add(new ScheduledTaskInfo(@"\Logitech\LGHUB Launch", true, RunsAtSignIn: true, "Logitech", @"C:\Program Files\LGHUB\lghub.exe", @"C:\Program Files\LGHUB\lghub.exe"));
+        _tasks.Tasks.Add(new ScheduledTaskInfo(ChromeUpdater, true, RunsAtSignIn: false, "Google", @"C:\Program Files\Google\updater.exe --wake", @"C:\Program Files\Google\updater.exe"));
+        _tasks.Tasks.Add(new ScheduledTaskInfo(@"\Microsoft\Windows\Defrag\ScheduledDefrag", true, RunsAtSignIn: false, "Microsoft Corporation", null, null));
+        _tasks.Tasks.Add(new ScheduledTaskInfo(@"\MicrosoftEdgeUpdateTaskMachineUA", true, RunsAtSignIn: false, "Microsoft Corporation", null, null));
+    }
+
+    [Fact]
+    public void Every_startup_source_and_third_party_scheduled_tasks_are_listed()
+    {
+        AddEverySource();
+        _signatures.Files[SteamExe] = new FileSignature(SignatureStatus.Invalid, "Valve");
+
+        var items = NewEngine().ListStartupItems();
+
+        Assert.Equal(
+            ["Discord", "Steam", "LGHUB Launch", "Spotify", "GoogleUpdaterTaskSystem", "MicrosoftEdgeUpdateTaskMachineUA"],
+            items.Select(i => i.Name));
+        Assert.Equal(
+            [StartupSource.RunKey, StartupSource.StartupFolder, StartupSource.SignInTask, StartupSource.StoreApp, StartupSource.ScheduledTask, StartupSource.ScheduledTask],
+            items.Select(i => i.Source));
+
+        var steam = items.Single(i => i.Name == "Steam");
+        Assert.Equal(SignatureStatus.Invalid, steam.Signature);
+        Assert.Equal("Valve", steam.Publisher);
+        var spotify = items.Single(i => i.Name == "Spotify");
+        Assert.Equal("Spotify AB", spotify.Publisher);
+        Assert.Equal(SignatureStatus.Signed, spotify.Signature);
+        Assert.True(spotify.Enabled);
+        Assert.False(spotify.CanDelete);
+        var updater = items.Single(i => i.Name == "GoogleUpdaterTaskSystem");
+        Assert.Equal(ChromeUpdater, updater.Location);
+        Assert.Equal("Google", updater.Publisher);
+    }
+
+    [Fact]
+    public void Startup_folder_items_use_the_startup_folder_switch()
+    {
+        AddEverySource();
+        var engine = NewEngine();
+        var steam = engine.ListStartupItems().Single(i => i.Name == "Steam");
+
+        Assert.True(engine.SetStartupItemEnabled(steam.Id, false).Succeeded);
+
+        Assert.Equal(0x03, _registry.GetValue(SteamApproved)!.Data[0]);
+        Assert.True(engine.SetStartupItemEnabled(steam.Id, true).Succeeded);
+        Assert.Null(_registry.GetValue(SteamApproved));
+    }
+
+    [Fact]
+    public void Store_apps_are_turned_off_as_disabled_by_user_like_task_manager()
+    {
+        AddEverySource();
+        var engine = NewEngine();
+        var spotify = engine.ListStartupItems().Single(i => i.Name == "Spotify");
+
+        Assert.True(engine.SetStartupItemEnabled(spotify.Id, false).Succeeded);
+
+        Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(SpotifyState));
+        Assert.False(engine.ListStartupItems().Single(i => i.Name == "Spotify").Enabled);
+        Assert.True(engine.SetStartupItemEnabled(spotify.Id, true).Succeeded);
+        Assert.Null(_registry.GetValue(SpotifyState));
+    }
+
+    [Fact]
+    public void A_store_app_a_policy_controls_cannot_be_switched()
+    {
+        AddEverySource();
+        _registry.SetValue(SpotifyState, RegistryValue.DWord(4));
+        var engine = NewEngine();
+        var spotify = engine.ListStartupItems().Single(i => i.Name == "Spotify");
+        Assert.True(spotify.Enabled);
+        Assert.False(spotify.CanSwitch);
+
+        Assert.False(engine.SetStartupItemEnabled(spotify.Id, false).Succeeded);
+        Assert.Equal(RegistryValue.DWord(4), _registry.GetValue(SpotifyState));
+    }
+
+    [Fact]
+    public void Third_party_scheduled_tasks_switch_off_and_back_through_task_scheduler()
+    {
+        AddEverySource();
+        var engine = NewEngine();
+        var updater = engine.ListStartupItems().Single(i => i.Name == "GoogleUpdaterTaskSystem");
+
+        Assert.True(engine.SetStartupItemEnabled(updater.Id, false).Succeeded);
+        Assert.False(_tasks.IsEnabled(ChromeUpdater));
+        Assert.Equal("Startup item: GoogleUpdaterTaskSystem", engine.ListHistory().Single().TweakName);
+
+        Assert.True(engine.RestoreEverything().Succeeded);
+        Assert.True(_tasks.IsEnabled(ChromeUpdater));
+    }
+
+    [Fact]
+    public void Microsoft_tasks_under_the_microsoft_folder_are_never_switched()
+    {
+        AddEverySource();
+
+        var result = NewEngine().SetStartupItemEnabled(@"task:\Microsoft\Windows\Defrag\ScheduledDefrag", false);
+
+        Assert.False(result.Succeeded);
+        Assert.True(_tasks.IsEnabled(@"\Microsoft\Windows\Defrag\ScheduledDefrag"));
+    }
+
+    [Fact]
+    public void A_task_switch_can_still_be_undone_after_the_service_restarts()
+    {
+        AddEverySource();
+        var store = new InMemoryJournalStore();
+        var before = NewEngine(new ChangeJournal(store));
+        before.SetStartupItemEnabled($"task:{ChromeUpdater}", false);
+
+        var after = NewEngine(new ChangeJournal(store));
+
+        Assert.True(after.UndoChange(after.ListHistory().Single().Id).Succeeded);
+        Assert.True(_tasks.IsEnabled(ChromeUpdater));
+    }
+
+    [Fact]
+    public void Deleting_needs_its_own_confirmation()
+    {
+        AddEverySource();
+
+        var result = NewEngine().DeleteStartupItem("run:HKCU:Discord", confirmDestructive: false);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("can't be undone", result.Message);
+        Assert.Single(_sources.Run);
+    }
+
+    [Fact]
+    public void Deleting_removes_the_item_and_its_switch_from_every_kind_of_source()
+    {
+        AddEverySource();
+        var engine = NewEngine();
+        engine.SetStartupItemEnabled("run:HKCU:Discord", false);
+        var steam = engine.ListStartupItems().Single(i => i.Name == "Steam");
+
+        Assert.True(engine.DeleteStartupItem("run:HKCU:Discord", confirmDestructive: true).Succeeded);
+        Assert.True(engine.DeleteStartupItem(steam.Id, confirmDestructive: true).Succeeded);
+        Assert.True(engine.DeleteStartupItem($"task:{ChromeUpdater}", confirmDestructive: true).Succeeded);
+
+        Assert.Empty(_sources.Run);
+        Assert.Null(_registry.GetValue(DiscordApproved));
+        Assert.Empty(_sources.Files);
+        Assert.DoesNotContain(_tasks.Tasks, t => t.Path == ChromeUpdater);
+        Assert.DoesNotContain(engine.ListStartupItems(), i => i.Name is "Discord" or "Steam" or "GoogleUpdaterTaskSystem");
+    }
+
+    [Fact]
+    public void Store_apps_and_microsoft_tasks_cannot_be_deleted()
+    {
+        AddEverySource();
+        var engine = NewEngine();
+        var spotify = engine.ListStartupItems().Single(i => i.Name == "Spotify");
+
+        Assert.False(engine.DeleteStartupItem(spotify.Id, confirmDestructive: true).Succeeded);
+        Assert.False(engine.DeleteStartupItem(@"task:\Microsoft\Windows\Defrag\ScheduledDefrag", confirmDestructive: true).Succeeded);
+        Assert.Contains(_tasks.Tasks, t => t.Path == @"\Microsoft\Windows\Defrag\ScheduledDefrag");
     }
 
     [Fact]

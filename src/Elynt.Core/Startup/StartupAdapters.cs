@@ -95,8 +95,13 @@ public interface IStartupImpactLog
 }
 
 /// <summary>Everything the startup manager reads and changes besides the registry.</summary>
+/// <param name="Known">What each user has already been told about. The service keeps it on disk.</param>
 public sealed record StartupAdapters(
     IStartupSources Sources,
     IScheduledTasks Tasks,
     IFileSignatures Signatures,
-    IStartupImpactLog Impact);
+    IStartupImpactLog Impact,
+    IKnownStartupItems? Known = null)
+{
+    public IKnownStartupItems Known { get; init; } = Known ?? new InMemoryKnownStartupItems();
+}
