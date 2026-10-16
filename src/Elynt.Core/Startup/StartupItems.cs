@@ -89,7 +89,7 @@ internal static class StartupItems
             $"folder:{tag}:{file.FileName}",
             Path.GetFileNameWithoutExtension(file.FileName),
             StartupSource.StartupFolder,
-            Path.GetDirectoryName(file.FullPath) ?? file.FullPath,
+            file.FullPath.LastIndexOf('\\') is > 0 and var slash ? file.FullPath[..slash] : file.FullPath,
             file.Target ?? file.FullPath,
             file.Target,
             new StartupApprovedSwitch(new RegistryLocation(root, $@"{ApprovedPath}\StartupFolder", file.FileName)),

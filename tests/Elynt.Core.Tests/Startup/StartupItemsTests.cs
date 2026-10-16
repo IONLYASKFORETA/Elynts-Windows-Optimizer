@@ -198,6 +198,7 @@ public class StartupItemsTests
         var steam = items.Single(i => i.Name == "Steam");
         Assert.Equal(SignatureStatus.Invalid, steam.Signature);
         Assert.Equal("Valve", steam.Publisher);
+        Assert.Equal(@"C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp", steam.Location);
         var spotify = items.Single(i => i.Name == "Spotify");
         Assert.Equal("Spotify AB", spotify.Publisher);
         Assert.Equal(SignatureStatus.Signed, spotify.Signature);
