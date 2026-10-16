@@ -49,7 +49,10 @@ To remove it: `sc.exe stop ElyntOptimizer` then `sc.exe delete ElyntOptimizer`.
 ## Logs and journal
 
 - Service log: `%ProgramData%\ElyntOptimizer\logs\service-*.log`
+- Repair runs: `%ProgramData%\ElyntOptimizer\logs\repair\repair-*.log` (one per run)
 - App log: `%LocalAppData%\ElyntOptimizer\logs\app-*.log`
+
+The Repair section's "Copy app log" button copies the newest app, service and repair logs for a bug report.
 - Change journal: `%ProgramData%\ElyntOptimizer\journal\journal.json`
 - Whole-store backups (BCD, firewall, power plans, scheduled tasks, drivers, hosts), taken before the first change
   of each kind after the service starts: `%ProgramData%\ElyntOptimizer\backups\<time>-<store>`

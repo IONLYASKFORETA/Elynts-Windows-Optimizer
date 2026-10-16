@@ -1,6 +1,7 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -111,6 +112,13 @@ public interface IEngine
     /// </summary>
     InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
 
+    /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
+    IReadOnlyList<RepairToolView> ListRepairTools();
+
+    /// <summary>Runs one repair tool, streaming progress, and saves a log of the run.</summary>
+    /// <param name="confirmed">The user confirmed an opt-in tool's warning. Opt-in tools refuse to run without it.</param>
+    Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
+
     BiosReport GetBiosReport();
 }
 
@@ -128,11 +136,20 @@ public sealed class Engine(
     SafetyNet? safetyNet = null,
     TimeProvider? clock = null,
     ILogger<Engine>? logger = null,
-    AppCatalogue? apps = null) : IEngine
+    AppCatalogue? apps = null,
+    IRepairLogStore? repairLogs = null,
+    RepairCatalogue? repairs = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+    private readonly RepairBench _repair = new(
+        repairs ?? RepairCatalogue.Default,
+        system,
+        repairLogs ?? new InMemoryRepairLogStore(),
+        user,
+        clock ?? TimeProvider.System,
+        logger ?? (ILogger)NullLogger<Engine>.Instance);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
 
@@ -321,6 +338,11 @@ public sealed class Engine(
 
     /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
     private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
+
+    public IReadOnlyList<RepairToolView> ListRepairTools() => _repair.List();
+
+    public Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        _repair.RunAsync(toolId, confirmed, progress, cancellation);
 
     public BiosReport GetBiosReport()
     {

@@ -1,6 +1,7 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Registry;
+using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core;
@@ -8,11 +9,13 @@ namespace Elynt.Core;
 /// <summary>Everything the engine may touch on the PC. Real adapters wrap Windows; fakes hold in-memory state.</summary>
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
 /// <param name="Packages">winget. Without it, app installs report winget as missing.</param>
+/// <param name="Repair">Runs the Repair section's tools. Without it, no repair tools are listed.</param>
 public sealed record SystemAdapters(
     IRegistry Registry,
     ISystemInfo System,
     IHardwareInfo? Hardware = null,
-    IPackageManager? Packages = null)
+    IPackageManager? Packages = null,
+    IRepairSystem? Repair = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
 }
