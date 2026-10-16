@@ -5,6 +5,7 @@ using Elynt.Core;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
+using Elynt.Core.Startup;
 using Elynt.Core.Tweaks;
 using Elynt.Windows;
 
@@ -19,6 +20,9 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsScheduledTasks _tasks = new();
+    private readonly WindowsFileSignatures _signatures = new();
+    private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -73,7 +77,11 @@ internal sealed class EngineHost(
                 new WindowsRegistry(sid),
                 _systemInfo,
                 _hardware,
-                new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>())),
+                new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()))
+            {
+                Startup = new StartupAdapters(
+                    new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+            },
             journal,
             sid,
             safetyNet,
