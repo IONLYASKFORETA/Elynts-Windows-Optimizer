@@ -39,6 +39,12 @@ public interface IEngine
     CommandResult Apply(string tweakId);
     CommandResult Revert(string tweakId);
     IReadOnlyList<AppView> ListApps();
+
+    /// <summary>
+    /// Installs the ticked catalogue apps silently, one at a time, from winget's community source.
+    /// <paramref name="allRuntimes"/> adds every Visual C++, DirectX legacy and .NET runtime to the queue.
+    /// </summary>
+    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -53,9 +59,12 @@ public sealed class Engine(
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
-    private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default);
+    private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
+
+    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null) =>
+        _apps.Install(appIds, allRuntimes, progress);
 
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks.Select(Describe).ToList();
 

@@ -48,6 +48,23 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task InstallApps_streams_progress_while_it_runs_then_the_report()
+    {
+        var seen = new List<InstallProgress>();
+        var firstSeen = new TaskCompletionSource();
+        _engine.WaitBetweenProgress = firstSeen.Task;
+
+        var report = await _client.InstallAppsAsync(
+            ["Valve.Steam"], allRuntimes: true,
+            new SyncProgress(p => { seen.Add(p); firstSeen.TrySetResult(); }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("InstallApps Valve.Steam runtimes=True", _engine.LastCall);
+        AssertSameJson(StubEngine.Progress, seen);
+        AssertSameJson(StubEngine.Report, report);
+    }
+
+    [Fact]
     public async Task Apply_arrives_unchanged()
     {
         var result = await _client.ApplyAsync("some.tweak", TestContext.Current.CancellationToken);
@@ -84,6 +101,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Empty(commands.Except(clientMethods));
     }
 
+    private sealed class SyncProgress(Action<InstallProgress> report) : IProgress<InstallProgress>
+    {
+        public void Report(InstallProgress value) => report(value);
+    }
+
     private static void AssertSameJson<T>(T expected, T actual) =>
         Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual));
 
@@ -101,6 +123,28 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         public IReadOnlyList<AppView> ListApps() =>
             [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];
+
+        public static readonly IReadOnlyList<InstallProgress> Progress =
+        [
+            new(1, 1, "Valve.Steam", "Steam", InstallStage.Installing, 0.25, "Installing Steam…"),
+            new(1, 1, "Valve.Steam", "Steam", InstallStage.Installed, null, "Steam is installed."),
+        ];
+
+        public static readonly InstallReport Report = new(true, "1 of 1 installed.",
+            [new("Valve.Steam", "Steam", InstallStage.Installed, "Steam is installed.", false)]);
+
+        /// <summary>When set, the second progress event waits for this, so the client must have seen the first.</summary>
+        public Task? WaitBetweenProgress { get; set; }
+
+        public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null)
+        {
+            LastCall = $"InstallApps {string.Join(",", appIds)} runtimes={allRuntimes}";
+            progress?.Report(Progress[0]);
+            if (WaitBetweenProgress is not null && !WaitBetweenProgress.Wait(TimeSpan.FromSeconds(10)))
+                throw new TimeoutException("The client never saw the first progress event.");
+            progress?.Report(Progress[1]);
+            return Report;
+        }
 
         public CommandResult Apply(string tweakId)
         {

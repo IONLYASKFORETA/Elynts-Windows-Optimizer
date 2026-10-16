@@ -48,6 +48,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<IReadOnlyList<AppView>> ListAppsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListAppsRequest(), cancellation)).Apps ?? throw Missing("apps");
 
+    /// <param name="progress">Receives each progress event as it arrives, before the report.</param>
+    public async Task<InstallReport> InstallAppsAsync(
+        IReadOnlyList<string> appIds,
+        bool allRuntimes,
+        IProgress<InstallProgress>? progress = null,
+        CancellationToken cancellation = default) =>
+        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation, e => progress?.Report(e.Progress!))).Install
+        ?? throw Missing("install report");
+
     public async ValueTask DisposeAsync()
     {
         _reader.Dispose();
@@ -55,14 +64,24 @@ public sealed class EnginePipeClient : IAsyncDisposable
         await _pipe.DisposeAsync();
     }
 
-    private async Task<EngineResponse> SendAsync(EngineRequest request, CancellationToken cancellation)
+    private async Task<EngineResponse> SendAsync(
+        EngineRequest request,
+        CancellationToken cancellation,
+        Action<EngineResponse>? onEvent = null)
     {
         await _oneAtATime.WaitAsync(cancellation);
         try
         {
             await _writer.WriteLineAsync(EngineProtocol.Serialize(request).AsMemory(), cancellation);
-            var line = await _reader.ReadLineAsync(cancellation) ?? throw new IOException("The service closed the connection.");
-            var response = EngineProtocol.Deserialize<EngineResponse>(line);
+            EngineResponse response;
+            while (true)
+            {
+                var line = await _reader.ReadLineAsync(cancellation) ?? throw new IOException("The service closed the connection.");
+                response = EngineProtocol.Deserialize<EngineResponse>(line);
+                if (!response.IsEvent)
+                    break;
+                onEvent?.Invoke(response);
+            }
             if (response.Error is not null)
                 throw new EngineServiceException(response.Error);
             return response;
