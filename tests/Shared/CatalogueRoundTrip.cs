@@ -16,7 +16,8 @@ public static class CatalogueRoundTrip
         var tweakId = tweak.Id;
         var before = RegistrySnapshot.Take(registry, tweak);
 
-        var applied = engine.Apply(tweakId);
+        // Confirmed, so destructive tweaks whose steps the journal can still put back are covered too.
+        var applied = engine.Apply(tweakId, new ApplyOptions(ConfirmDestructive: true));
         Assert.True(applied.Succeeded, applied.Message);
         Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == tweakId).State);
 

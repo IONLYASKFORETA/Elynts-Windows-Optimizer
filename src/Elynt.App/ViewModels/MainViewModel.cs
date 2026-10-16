@@ -6,7 +6,10 @@ using Serilog;
 
 namespace Elynt.App.ViewModels;
 
-public sealed class MainViewModel : ObservableObject
+/// <param name="confirmDestructive">
+/// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
+/// </param>
+public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
@@ -107,7 +110,8 @@ public sealed class MainViewModel : ObservableObject
     private void ShowPage()
     {
         Tweaks.Clear();
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage))
+        // Tweaks that fit this PC first; not-applicable ones sink to the bottom.
+        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
         OnPropertyChanged(nameof(IsEmpty));
@@ -121,7 +125,21 @@ public sealed class MainViewModel : ObservableObject
         item.IsBusy = true;
         try
         {
-            var result = turnOn ? await _client.ApplyAsync(item.View.Id) : await _client.RevertAsync(item.View.Id);
+            // The service refuses a destructive apply without this flag; the app only sets it after the user confirms.
+            var confirmed = false;
+            if (turnOn && item.View.Reversibility == Reversibility.Destructive)
+            {
+                confirmed = confirmDestructive(item.View);
+                if (!confirmed)
+                {
+                    item.Message = "Not changed.";
+                    return;
+                }
+            }
+
+            var result = turnOn
+                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed))
+                : await _client.RevertAsync(item.View.Id);
             Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)
                 item.View = result.Tweak;

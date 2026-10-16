@@ -12,7 +12,7 @@ public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
 
-public sealed record ApplyRequest(string TweakId) : EngineRequest;
+public sealed record ApplyRequest(string TweakId, ApplyOptions? Options = null) : EngineRequest;
 
 public sealed record RevertRequest(string TweakId) : EngineRequest;
 
@@ -37,7 +37,7 @@ public static class EngineProtocol
     public static EngineResponse Dispatch(IEngine engine, EngineRequest request) => request switch
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
-        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId)),
+        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };

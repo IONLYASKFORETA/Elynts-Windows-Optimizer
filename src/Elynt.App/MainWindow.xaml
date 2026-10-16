@@ -44,7 +44,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding TierText}" Opacity="0.7" FontSize="12" />
+                                    <TextBlock Text="{Binding LabelLine}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding StateText}" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -71,6 +71,33 @@
                     <TextBlock Margin="0,4,0,0" Opacity="0.7">
                         <Run Text="Evidence:" /> <Run Text="{Binding TierText, Mode=OneWay}" />
                     </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7">
+                        <Run Text="Undo:" /> <Run Text="{Binding ReversibilityText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7" TextWrapping="Wrap">
+                        <Run Text="Risks:" /> <Run Text="{Binding RiskText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7">
+                        <Run Text="State:" /> <Run Text="{Binding StateText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding NotApplicableReason}" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding IsNotApplicable, Converter={StaticResource Visible}}" />
+                    <TextBlock Text="Restart the PC for this change to take effect." Margin="0,8,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding PendingReboot, Converter={StaticResource Visible}}" />
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkRed"
+                               Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
+                        <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
+                    </TextBlock>
+                    <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAntiCheatWarnings, Converter={StaticResource Visible}}">
+                        <TextBlock Text="Anti-cheat warning (you can still turn it on)" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding AntiCheatWarnings}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                     <TextBlock Text="{Binding Message}" Margin="0,12,0,0" TextWrapping="Wrap" FontWeight="SemiBold" />
 
                     <TextBlock Text="What it does" FontWeight="SemiBold" Margin="0,16,0,4" />

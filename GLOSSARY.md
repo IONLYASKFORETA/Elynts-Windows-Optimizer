@@ -19,3 +19,15 @@
 **Protected service**: a service the app never changes, even in Advanced (anti-cheat, Windows Update core, boot drivers).
 
 **Drift**: a change the app made that something else (usually a Windows update) has since undone, or a removed app that came back.
+
+**Evidence tier**: how well a tweak's benefit is backed: proven, situational or possible placebo.
+
+**Reversibility label**: what undo can do for a tweak: reversible, needs a download, or destructive. A destructive tweak needs a separate confirmation, enforced by the Engine.
+
+**Risk flag**: a risk shown on every tweak it applies to: security risk, needs reboot, can stop boot, or an anti-cheat conflict (which warns, never blocks).
+
+**Pending reboot**: a reboot-needing tweak that was applied or undone since Windows last started.
+
+**Not applicable**: a tweak that doesn't fit this PC's hardware, edition or build. It is shown greyed out or hidden, and the Engine refuses to apply it.
+
+**Never-touch rule**: a hard rule the Engine enforces in every mode, Advanced included: no test signing, driver-signature or kernel-debugging changes, no Driver Verifier, no known-vulnerable drivers, no protected services, no user folders, no blocked quality updates, no Edge removal.
