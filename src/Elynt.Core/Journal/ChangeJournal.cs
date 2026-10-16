@@ -7,6 +7,8 @@ namespace Elynt.Core.Journal;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
+[JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
+[JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
 public abstract record StepRecord
 {
     public abstract void Revert(SystemAdapters system);
@@ -127,6 +129,19 @@ public sealed class ChangeJournal
                     _ => null,
                 })
                 .Max();
+        }
+    }
+
+    /// <summary>Every tweak this user has a change to undo for, oldest first.</summary>
+    public IReadOnlyList<string> UndoableTweakIds(string user)
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Where(e => e.User == user && e.Status is EntryStatus.Applying or EntryStatus.Applied)
+                .Select(e => e.TweakId)
+                .Distinct()
+                .ToList();
         }
     }
 

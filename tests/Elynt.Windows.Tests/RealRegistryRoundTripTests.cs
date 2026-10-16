@@ -20,19 +20,19 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public RealRegistryRoundTripTests() =>
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Needs the real Windows registry.");
 
-    public static TheoryData<string> CatalogueTweaks() => new(Catalogue.Default.Tweaks.Select(t => t.Id));
+    public static TheoryData<string> CatalogueTweaks() => new(CatalogueRoundTrip.ApplicableIds(Catalogue.Default));
 
     [Theory]
     [MemberData(nameof(CatalogueTweaks))]
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId) =>
-        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), _registry, Catalogue.Default.Get(tweakId));
+        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), Adapters(), Catalogue.Default.Get(tweakId));
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()
     {
         var tweak = ScratchTweak();
 
-        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), Adapters(), tweak);
 
         Assert.False(_registry.KeyExists(RegistryRoot.CurrentUser, _scratchKey));
     }
@@ -44,7 +44,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         var location = ((RegistryValueStep)tweak.Steps[0]).Location;
         _registry.SetValue(location, RegistryValue.DWord(7));
 
-        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), Adapters(), tweak);
 
         Assert.Equal(RegistryValue.DWord(7), _registry.GetValue(location));
     }

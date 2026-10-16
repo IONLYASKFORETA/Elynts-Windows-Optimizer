@@ -1,3 +1,5 @@
+using Elynt.Core.Boot;
+using Elynt.Core.Power;
 using Elynt.Core.Registry;
 
 namespace Elynt.Core.Tweaks;
@@ -200,8 +202,127 @@ public static class GamingTweaks
                 RegistryListFormat.SemicolonPairs, "SwapEffectUpgradeEnable", "1"),
         ]);
 
+    public static TweakDefinition UsePlatformClockRemoved { get; } = new(
+        Id: "gaming.useplatformclock-removed",
+        Section: Sections.Gaming,
+        Name: "Remove a forced useplatformclock",
+        WhatItDoes:
+            "Removes the useplatformclock boot setting that some \"optimizer\" guides tell you to set. With it removed, " +
+            "Windows goes back to choosing its own timer, which on modern PCs is the fast TSC instead of the slower HPET. " +
+            "Shows as on when the setting isn't forced, which is the Windows default. Takes effect after a restart.",
+        Evidence:
+            "Microsoft documents that when QueryPerformanceCounter has to use HPET or the ACPI timer, every call needs a " +
+            "system call and costs about 0.8 to 1 microseconds, while the TSC costs tens of cycles. Games call it many " +
+            "times per frame. BCDEdit's own documentation says useplatformclock is for debugging only. The benefit is " +
+            "putting the default back, not a gain beyond it.",
+        Sources:
+        [
+            new("Microsoft: Acquiring high-resolution time stamps",
+                "https://learn.microsoft.com/en-us/windows/win32/sysinfo/acquiring-high-resolution-time-stamps"),
+            new("Microsoft: BCDEdit /set", "https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/bcdedit--set"),
+        ],
+        Tier: EvidenceTier.Proven,
+        Undo: "Sets useplatformclock back to exactly the value it had before, then needs a restart.",
+        Steps: [new BootSettingStep("useplatformclock", null)])
+    {
+        Risks = RiskFlags.NeedsReboot,
+    };
+
+    private static readonly Source UltimatePerformanceAnnouncement = new(
+        "Windows blog: Ultimate Performance power plan (as quoted by winhelponline)",
+        "https://www.winhelponline.com/blog/what-is-ultimate-performance-plan-in-windows-10-power-options/");
+
+    private const string PowerPlanEvidence =
+        "No reputable, methodical Windows 11 benchmark shows a consistent FPS gain over Balanced on modern CPUs; the " +
+        "possible gain is in 1% lows on some desktops, because cores don't drop to low clocks between frames. It costs " +
+        "idle power and heat. On dual-CCD Ryzen X3D CPUs it makes games slower, because core parking needs Balanced. " +
+        "When it helps: desktops with stutter you can measure. Measure 1% lows before and after.";
+
+    public static TweakDefinition HighPerformancePlan { get; } = new(
+        Id: "gaming.high-performance-plan",
+        Section: Sections.Gaming,
+        Name: "Use the High performance power plan",
+        WhatItDoes:
+            "Switches to Windows' High performance power plan, which keeps the CPU at higher clocks and stops it saving " +
+            "power as aggressively between bursts of work.",
+        Evidence: PowerPlanEvidence,
+        Sources:
+        [
+            new("Microsoft: Powercfg command-line options",
+                "https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options"),
+            X3dParking,
+        ],
+        Tier: EvidenceTier.Situational,
+        Undo: "Switches back to exactly the plan that was active before.",
+        Steps: [new PowerPlanStep(PowerPlans.HighPerformance, "High performance")])
+    {
+        ProfileEligible = true,
+        HardwareNotes = [X3dCoreParking, LaptopPower],
+    };
+
+    public static TweakDefinition UltimatePerformancePlan { get; } = new(
+        Id: "gaming.ultimate-performance-plan",
+        Section: Sections.Gaming,
+        Name: "Use the Ultimate Performance power plan",
+        WhatItDoes:
+            "Adds Windows' hidden Ultimate Performance plan and switches to it. It goes further than High performance, " +
+            "removing the small delays of fine-grained power management. Microsoft made it for workstations, not games.",
+        Evidence: PowerPlanEvidence,
+        Sources:
+        [
+            UltimatePerformanceAnnouncement,
+            new("Microsoft: Powercfg command-line options",
+                "https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options"),
+            X3dParking,
+        ],
+        Tier: EvidenceTier.Situational,
+        Undo: "Switches back to exactly the plan that was active before, and deletes the plan the app added.",
+        Steps:
+        [
+            new PowerPlanStep(PowerPlans.ElyntUltimatePerformance, "Ultimate Performance", PowerPlans.UltimatePerformanceTemplate),
+        ])
+    {
+        ProfileEligible = true,
+        HardwareNotes = [X3dCoreParking, LaptopPower],
+    };
+
+    public static PerGameTweak FullscreenOptimizationsOff { get; } = new(
+        new TweakDefinition(
+            Id: "gaming.fullscreen-optimizations-off",
+            Section: Sections.Gaming,
+            Name: "Turn off fullscreen optimizations for a game",
+            WhatItDoes:
+                "Ticks \"Disable fullscreen optimizations\" on one game's Compatibility tab, so that game runs in true " +
+                "exclusive fullscreen instead of Windows' optimized borderless mode. Choose the game's .exe; any other " +
+                "compatibility settings on it are kept. You lose fast Alt+Tab and some overlays in that game.",
+            Evidence:
+                "Microsoft's telemetry shows fullscreen optimizations perform as well as or better than exclusive " +
+                "fullscreen for almost all users, and Microsoft advises turning them off only for a specific game that " +
+                "shows lower performance or input lag with them. When it helps: one game that stutters or feels laggy " +
+                "in fullscreen. Never as a global setting.",
+            Sources:
+            [
+                new("Microsoft DirectX blog: Demystifying fullscreen optimizations",
+                    "https://devblogs.microsoft.com/directx/demystifying-full-screen-optimizations"),
+            ],
+            Tier: EvidenceTier.Situational,
+            Undo:
+                "Puts back exactly what the game's compatibility settings were. If you changed other compatibility " +
+                "settings since, those are kept.",
+            Steps: []),
+        exePath =>
+        [
+            new RegistryListItemStep(
+                new(RegistryRoot.CurrentUser, @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers", exePath),
+                RegistryListFormat.CompatibilityLayers, "DISABLEDXMAXIMIZEDWINDOWEDMODE", null),
+        ]);
+
+    /// <summary>Tweaks applied one game at a time.</summary>
+    public static IReadOnlyList<PerGameTweak> PerGame { get; } = [FullscreenOptimizationsOff];
+
     public static IReadOnlyList<TweakDefinition> All { get; } =
     [
-        WindowedGamesOptimizationsOn, EnhancePointerPrecisionOff, GameModeOn, HardwareGpuSchedulingOn, GlobalTimerResolution,
+        WindowedGamesOptimizationsOn, EnhancePointerPrecisionOff, UsePlatformClockRemoved, HighPerformancePlan,
+        UltimatePerformancePlan, GlobalTimerResolution, HardwareGpuSchedulingOn, GameModeOn,
     ];
 }

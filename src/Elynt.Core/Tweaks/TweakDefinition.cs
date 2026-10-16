@@ -57,6 +57,9 @@ public sealed record TweakDefinition(
     /// undo it. Never true for reboot-needing, destructive or Security tweaks.
     /// </summary>
     public bool ProfileEligible { get; init; }
+
+    /// <summary>A per-game choice listed before a game is picked (see <see cref="PerGameTweak"/>). It can't be applied itself.</summary>
+    public bool PerGame { get; init; }
 }
 
 /// <summary>

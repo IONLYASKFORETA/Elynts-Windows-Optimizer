@@ -49,6 +49,12 @@ public sealed record TweakView(
 
     /// <summary>Instant, so a per-game profile may include it.</summary>
     public bool ProfileEligible { get; init; }
+
+    /// <summary>Set for one game at a time: the app asks for the game's .exe and applies the id from <see cref="ForGame"/>.</summary>
+    public bool PerGame { get; init; }
+
+    /// <summary>The id of this per-game tweak's instance for one game.</summary>
+    public string ForGame(string exePath) => $"{Id}{PerGameTweak.Separator}{exePath}";
 }
 
 /// <summary>How the user asked for a tweak to be applied.</summary>
@@ -90,15 +96,25 @@ public sealed class Engine(
     /// still shows while it has a change to undo.
     /// </summary>
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks
+        .Concat(GamesWithChanges())
         .Select(Describe)
         .Where(view => view.Applicable || view.CanUndo || !catalogue.Get(view.Id).Applicability.Hide)
         .ToList();
+
+    /// <summary>One game's instance of a per-game tweak is listed while it has a change to undo.</summary>
+    private IEnumerable<TweakDefinition> GamesWithChanges() => journal.UndoableTweakIds(user)
+        .Where(id => id.Contains(PerGameTweak.Separator))
+        .Select(id => catalogue.TryGet(id, out var tweak) ? tweak : null)
+        .OfType<TweakDefinition>();
 
     public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
         options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
+
+        if (tweak.PerGame)
+            return Failed(tweak, "Choose a game first: this is set for one game at a time. Nothing was changed.");
 
         if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
@@ -201,7 +217,7 @@ public sealed class Engine(
     }
 
     private TweakState Detect(TweakDefinition tweak) =>
-        tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
+        !tweak.PerGame && tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
 
     private TweakView Describe(TweakDefinition tweak) => new(
         tweak.Id,
@@ -229,6 +245,7 @@ public sealed class Engine(
             .Select(note => note.Text)
             .ToList(),
         ProfileEligible = tweak.ProfileEligible,
+        PerGame = tweak.PerGame,
     };
 
     private CommandResult Done(TweakDefinition tweak, string message) => new(true, message, Describe(tweak));
