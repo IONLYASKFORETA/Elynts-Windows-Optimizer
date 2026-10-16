@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Elynt.App/Elynt.App.csproj" />
+    <Project Path="src/Elynt.Core/Elynt.Core.csproj" />
+    <Project Path="src/Elynt.Service/Elynt.Service.csproj" />
+    <Project Path="src/Elynt.Windows/Elynt.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Elynt.Core.Tests/Elynt.Core.Tests.csproj" />
+    <Project Path="tests/Elynt.Windows.Tests/Elynt.Windows.Tests.csproj" />
+  </Folder>
+</Solution>
