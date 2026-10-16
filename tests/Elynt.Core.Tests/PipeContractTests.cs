@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Ipc;
+using Elynt.Core.Startup;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -126,6 +127,23 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListStartupItems_arrives_unchanged()
+    {
+        var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListStartupItems(), items);
+    }
+
+    [Fact]
+    public async Task SetStartupItemEnabled_arrives_unchanged()
+    {
+        var result = await _client.SetStartupItemEnabledAsync("run:HKCU:Discord", false, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetStartupItemEnabled run:HKCU:Discord False", _engine.LastCall);
+        AssertSameJson(_engine.SetStartupItemEnabled("run:HKCU:Discord", false), result);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -236,6 +254,23 @@ public sealed class PipeContractTests : IAsyncLifetime
                 new(Change, "Some tweak", true, "Turned off."),
                 new(Guid.Empty, "Other tweak", false, "Something else changed it since."),
             ]);
+        }
+
+        private static readonly StartupItemView StartupItem = new(
+            "run:HKCU:Discord", "Discord", StartupSource.RunKey, @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+            @"""C:\Discord\Update.exe"" --processStart Discord.exe", "Discord Inc.", SignatureStatus.Signed, StartupImpact.High,
+            Enabled: false, CanSwitch: true, CanDelete: true)
+        {
+            CanUndo = true,
+            Note = "A note.",
+        };
+
+        public IReadOnlyList<StartupItemView> ListStartupItems() => [StartupItem];
+
+        public StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled)
+        {
+            LastCall = $"SetStartupItemEnabled {itemId} {enabled}";
+            return new StartupCommandResult(true, "Turned off.", StartupItem);
         }
 
         public IReadOnlyList<ChangeView> ListHistory() =>

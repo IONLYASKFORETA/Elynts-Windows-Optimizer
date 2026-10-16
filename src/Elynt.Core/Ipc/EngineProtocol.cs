@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Startup;
 
 namespace Elynt.Core.Ipc;
 
@@ -16,6 +17,8 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListAppsRequest), "listApps")]
 [JsonDerivedType(typeof(InstallAppsRequest), "installApps")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(ListStartupItemsRequest), "listStartupItems")]
+[JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -49,7 +52,9 @@ public sealed record EngineResponse(
     BiosReport? Bios = null,
     IReadOnlyList<AppView>? Apps = null,
     InstallReport? Install = null,
-    InstallProgress? Progress = null)
+    InstallProgress? Progress = null,
+    IReadOnlyList<StartupItemView>? StartupItems = null,
+    StartupCommandResult? StartupResult = null)
 {
     [JsonIgnore]
     public bool IsEvent => Progress is not null;
@@ -83,6 +88,8 @@ public static class EngineProtocol
         InstallAppsRequest install => new(Install: engine.InstallApps(
             install.AppIds, install.AllRuntimes, new Relay<InstallProgress>(p => sendEvent?.Invoke(new(Progress: p))))),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        ListStartupItemsRequest => new(StartupItems: engine.ListStartupItems()),
+        SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

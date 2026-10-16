@@ -2,6 +2,7 @@ using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
+using Elynt.Core.Startup;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -112,6 +113,15 @@ public interface IEngine
     InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
 
     BiosReport GetBiosReport();
+
+    /// <summary>Every startup item (Run keys, Startup folders, sign-in tasks, Store apps) and third-party scheduled task.</summary>
+    IReadOnlyList<StartupItemView> ListStartupItems();
+
+    /// <summary>
+    /// Turns a startup item on or off through the switch Task Manager uses (Task Scheduler's for tasks). Journaled,
+    /// so it can be undone from the Undo history.
+    /// </summary>
+    StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -120,7 +130,7 @@ public sealed record UndoOutcome(Guid ChangeId, string TweakName, bool Succeeded
 public sealed record RestoreResult(bool Succeeded, string Message, IReadOnlyList<UndoOutcome> Changes);
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
-public sealed class Engine(
+public sealed partial class Engine(
     Catalogue catalogue,
     SystemAdapters system,
     ChangeJournal journal,
@@ -133,6 +143,7 @@ public sealed class Engine(
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+    private readonly StartupManager _startup = new(system, journal, user, safetyNet, clock ?? TimeProvider.System, logger);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
 
@@ -239,6 +250,8 @@ public sealed class Engine(
         var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
         if (entry is null)
             return new(false, "There is no such change in your undo history.", null);
+        if (StartupManager.Owns(entry.TweakId))
+            return UndoStartupChange(entry);
         if (!catalogue.TryGet(entry.TweakId, out var tweak))
             return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
         if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
@@ -257,7 +270,7 @@ public sealed class Engine(
         var results = new List<UndoOutcome>();
         foreach (var entry in open)
         {
-            var name = catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId;
+            var name = NameOf(entry.TweakId);
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
@@ -304,7 +317,7 @@ public sealed class Engine(
             .Select(entry => new ChangeView(
                 entry.Id,
                 entry.TweakId,
-                catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId,
+                NameOf(entry.TweakId),
                 entry.AppliedAt,
                 entry.Status switch
                 {

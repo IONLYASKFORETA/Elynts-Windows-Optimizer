@@ -1,6 +1,7 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Registry;
+using Elynt.Core.Startup;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core;
@@ -15,6 +16,9 @@ public sealed record SystemAdapters(
     IPackageManager? Packages = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+
+    /// <summary>Startup sources, scheduled tasks, signatures and impact. Without it, the Startup page is empty.</summary>
+    public StartupAdapters? Startup { get; init; }
 }
 
 public interface ISystemInfo

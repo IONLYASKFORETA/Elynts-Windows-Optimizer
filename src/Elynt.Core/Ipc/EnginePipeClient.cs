@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Startup;
 
 namespace Elynt.Core.Ipc;
 
@@ -68,6 +69,12 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    public async Task<IReadOnlyList<StartupItemView>> ListStartupItemsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
+
+    public async Task<StartupCommandResult> SetStartupItemEnabledAsync(string itemId, bool enabled, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetStartupItemEnabledRequest(itemId, enabled), cancellation)).StartupResult ?? throw Missing("result");
 
     public async ValueTask DisposeAsync()
     {
