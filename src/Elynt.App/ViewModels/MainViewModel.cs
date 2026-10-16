@@ -51,6 +51,12 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
 
+    /// <summary>The Apps page's search, installed apps (updates and uninstalls) and app list parts.</summary>
+    public AppsManagerViewModel? AppsManager { get; set; }
+
+    /// <summary>The service connection, for the page view models that send their own commands.</summary>
+    internal EnginePipeClient? Client => _client;
+
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
     public bool InstallAllRuntimes
     {
@@ -61,7 +67,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     public bool IsInstalling
     {
         get => _isInstalling;
-        private set
+        internal set
         {
             if (Set(ref _isInstalling, value))
                 OnPropertyChanged(nameof(CanInstall));
