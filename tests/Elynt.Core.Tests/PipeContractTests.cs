@@ -4,6 +4,7 @@ using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Ipc;
 using Elynt.Core.Repair;
+using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -90,6 +91,33 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         Assert.Equal("Revert some.tweak", _engine.LastCall);
         AssertSameJson(_engine.Revert("some.tweak"), result);
+    }
+
+    [Fact]
+    public async Task ListServices_arrives_unchanged()
+    {
+        var services = await _client.ListServicesAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListServices(), services);
+    }
+
+    [Fact]
+    public async Task SetServiceStart_arrives_unchanged_with_advanced_mode()
+    {
+        var result = await _client.SetServiceStartAsync("Spooler", ServiceStart.Disabled, new ApplyOptions(Advanced: true), TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetServiceStart Spooler Disabled", _engine.LastCall);
+        Assert.Equal(new ApplyOptions(Advanced: true), _engine.LastOptions);
+        AssertSameJson(_engine.SetServiceStart("Spooler", ServiceStart.Disabled), result);
+    }
+
+    [Fact]
+    public async Task UndoServiceChange_arrives_unchanged()
+    {
+        var result = await _client.UndoServiceChangeAsync("Spooler", TestContext.Current.CancellationToken);
+
+        Assert.Equal("UndoServiceChange Spooler", _engine.LastCall);
+        AssertSameJson(_engine.UndoServiceChange("Spooler"), result);
     }
 
     [Fact]
@@ -252,6 +280,29 @@ public sealed class PipeContractTests : IAsyncLifetime
         };
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
+
+        private static readonly ServiceView Service = new(
+            "Spooler", "Print Spooler", "Queues print jobs.", ServiceKind.Service, ServiceStart.Automatic, DelayedAutoStart: true,
+            Running: true, ServiceAccess.Listed, LockReason: null,
+            new ServiceRecommendation(ServiceStart.Manual, "No printer was found."),
+            [ServiceStart.Automatic, ServiceStart.Manual], [ServiceStart.Automatic, ServiceStart.Manual, ServiceStart.Disabled],
+            CanUndo: true);
+
+        public IReadOnlyList<ServiceView> ListServices() =>
+            [Service, Service with { Name = "vgc", Access = ServiceAccess.Protected, LockReason = "anti-cheat", Recommendation = null }];
+
+        public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null)
+        {
+            LastCall = $"SetServiceStart {serviceName} {start}";
+            LastOptions = options;
+            return new ServiceResult(true, "Print Spooler now starts Manual.", Service with { Start = start });
+        }
+
+        public ServiceResult UndoServiceChange(string serviceName)
+        {
+            LastCall = $"UndoServiceChange {serviceName}";
+            return new ServiceResult(false, "Nothing to undo.", Service with { CanUndo = false });
+        }
 
         public IReadOnlyList<AppView> ListApps() =>
             [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];

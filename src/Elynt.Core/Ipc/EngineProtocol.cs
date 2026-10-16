@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Repair;
+using Elynt.Core.Services;
+using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Ipc;
 
@@ -19,6 +21,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(ListServicesRequest), "listServices")]
+[JsonDerivedType(typeof(SetServiceStartRequest), "setServiceStart")]
+[JsonDerivedType(typeof(UndoServiceChangeRequest), "undoServiceChange")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -44,6 +49,12 @@ public sealed record ListRepairToolsRequest : EngineRequest;
 public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineRequest;
 
 public sealed record GetBiosReportRequest : EngineRequest;
+
+public sealed record ListServicesRequest : EngineRequest;
+
+public sealed record SetServiceStartRequest(string ServiceName, ServiceStart Start, ApplyOptions? Options = null) : EngineRequest;
+
+public sealed record UndoServiceChangeRequest(string ServiceName) : EngineRequest;
 
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
@@ -73,7 +84,9 @@ public sealed record EngineResponse(
     InstallReport? Install = null,
     IReadOnlyList<RepairToolView>? RepairTools = null,
     RepairResult? RepairResult = null,
-    EngineEvent? Event = null)
+    EngineEvent? Event = null,
+    IReadOnlyList<ServiceView>? Services = null,
+    ServiceResult? ServiceResult = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -116,6 +129,9 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        ListServicesRequest => new(Services: engine.ListServices()),
+        SetServiceStartRequest set => new(ServiceResult: engine.SetServiceStart(set.ServiceName, set.Start, set.Options)),
+        UndoServiceChangeRequest undo => new(ServiceResult: engine.UndoServiceChange(undo.ServiceName)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

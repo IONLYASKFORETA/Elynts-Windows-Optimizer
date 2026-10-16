@@ -18,6 +18,12 @@ public sealed record SystemAdapters(
     IRepairSystem? Repair = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+
+    /// <summary>The Service Control Manager. Without it, no services are listed and boot drivers can't be detected.</summary>
+    public Services.IServiceManager? Services { get; init; }
+
+    /// <summary>Which devices the PC has, for hardware-aware service recommendations. Without it, none are made.</summary>
+    public Services.IDevicePresence? Devices { get; init; }
 }
 
 public interface ISystemInfo
