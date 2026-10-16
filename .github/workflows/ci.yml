@@ -4,10 +4,18 @@ on:
   push:
   pull_request:
 
+env:
+  # The public repo that holds only release files. Friends download Setup.exe there and the app updates from it,
+  # so it needs no token. Source stays in this private repo.
+  RELEASES_REPO: https://github.com/IONLYASKFORETA/Elynts-Windows-Optimizer-releases
+  VPK_VERSION: 1.2.161
+
 jobs:
   windows:
     # Builds everything and runs the logic tests plus the real-registry round trips on a real Windows machine.
     runs-on: windows-latest
+    permissions:
+      contents: write # to tag the commit each beta was built from, so it can be promoted to stable later
     steps:
       - uses: actions/checkout@v4
 
@@ -21,15 +29,41 @@ jobs:
       - name: Test
         run: dotnet test --solution ElyntOptimizer.slnx --configuration Release --no-build
 
-      # A ready-to-run build for trying the app in a VM, downloadable from the run's Artifacts.
-      - name: Publish test build
-        run: |
-          dotnet publish src/Elynt.Service --configuration Release --runtime win-x64 --self-contained --output out/ElyntOptimizer/service
-          dotnet publish src/Elynt.App --configuration Release --runtime win-x64 --self-contained --output out/ElyntOptimizer/app
-          Copy-Item build/test-install/* out/ElyntOptimizer/
+      - name: Install Velopack
+        run: dotnet tool install --global vpk --version $env:VPK_VERSION
 
+      # Every build is packed as a beta. Pushes to the default branch are also published (below).
+      - name: Pack beta
+        shell: pwsh
+        env:
+          HAS_RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
+        run: |
+          # Earlier betas (for a small delta update) can only be fetched once the releases repo is set up.
+          $repo = if ($env:HAS_RELEASES_TOKEN -eq 'true') { $env:RELEASES_REPO } else { '' }
+          ./build/pack.ps1 -Version "1.0.${{ github.run_number }}" -Channel beta -ReleasesRepo $repo
+
+      # A ready-to-install build for trying the app in a VM, downloadable from the run's Artifacts.
       - uses: actions/upload-artifact@v4
         with:
-          name: ElyntOptimizer-test-build
-          path: out/ElyntOptimizer
+          name: ElyntOptimizer-beta-setup
+          path: out/releases/*Setup.exe
           retention-days: 30
+
+      - name: Publish beta to the releases repo
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: pwsh
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          if (-not $env:RELEASES_TOKEN) {
+            Write-Host "::warning::RELEASES_TOKEN isn't set, so this beta wasn't published. See docs/releasing.md."
+            exit 0
+          }
+          $version = "1.0.${{ github.run_number }}"
+          vpk upload github --repoUrl $env:RELEASES_REPO --token $env:RELEASES_TOKEN `
+            --channel beta --pre --publish --merge `
+            --releaseName "$version beta" --tag "v$version-beta" --outputDir out/releases
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Remember which commit this beta came from, for promote-stable.yml.
+          git tag "beta/$version"
+          git push origin "beta/$version"

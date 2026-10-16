@@ -1,4 +1,6 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Setup;
+using Elynt.Windows;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
 using Serilog;
@@ -17,6 +19,14 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
+    // Never change anything on an OS the tweaks weren't written for.
+    var support = OsSupport.Check(WindowsSystemInfo.Describe());
+    if (!support.Supported)
+    {
+        Log.Fatal("Not starting: {Message}", support.Message);
+        return 1;
+    }
+
     var builder = Host.CreateApplicationBuilder(args);
     builder.Services.AddWindowsService(options => options.ServiceName = "ElyntOptimizer");
     builder.Services.AddSerilog();
@@ -25,6 +35,7 @@ try
     builder.Services.AddHostedService<EngineHost>();
 
     builder.Build().Run();
+    return 0;
 }
 catch (Exception ex)
 {
