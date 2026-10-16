@@ -34,3 +34,6 @@ public sealed record FileTarget(string Path) : ChangeTarget;
 
 /// <summary>Removes an app package (Appx, provisioned or winget).</summary>
 public sealed record PackageTarget(string PackageName) : ChangeTarget;
+
+/// <summary>Makes a power plan the active one.</summary>
+public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;

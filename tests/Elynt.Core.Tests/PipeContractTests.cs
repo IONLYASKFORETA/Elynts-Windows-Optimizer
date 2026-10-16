@@ -2,9 +2,14 @@ using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
+using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Startup;
+using Elynt.Core.Repair;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 
 namespace Elynt.Core.Tests;
 
@@ -62,7 +67,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         Assert.Equal("InstallApps Valve.Steam runtimes=True", _engine.LastCall);
-        AssertSameJson(StubEngine.Progress, seen);
+        AssertSameJson(StubEngine.InstallSteps, seen);
         AssertSameJson(StubEngine.Report, report);
     }
 
@@ -119,6 +124,82 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListRepairTools_arrives_unchanged()
+    {
+        var tools = await _client.ListRepairToolsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListRepairTools(), tools);
+    }
+
+    [Fact]
+    public async Task RunRepair_streams_every_progress_line_then_the_result_unchanged()
+    {
+        var progress = new List<RepairProgress>();
+
+        var result = await _client.RunRepairAsync("some.repair", confirmed: true, new Collect(progress), TestContext.Current.CancellationToken);
+
+        Assert.Equal("RunRepair some.repair True", _engine.LastCall);
+        AssertSameJson(StubEngine.RepairSteps, progress);
+        AssertSameJson(StubEngine.Repaired, result);
+    }
+
+    [Fact]
+    public async Task Other_commands_still_answer_while_a_repair_runs()
+    {
+        _engine.HoldRepair = new TaskCompletionSource();
+        await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        var repair = _client.RunRepairAsync("some.repair", confirmed: false, null, TestContext.Current.CancellationToken);
+
+        var tweaks = await second.ListTweaksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(tweaks);
+        Assert.False(repair.IsCompleted);
+        _engine.HoldRepair.SetResult();
+        Assert.True((await repair).Succeeded);
+    }
+
+    [Fact]
+    public async Task An_install_waits_for_a_running_repair_while_tweak_commands_still_answer()
+    {
+        _engine.HoldRepair = new TaskCompletionSource();
+        await using var installer = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        await using var switches = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        var repair = _client.RunRepairAsync("some.repair", confirmed: false, null, TestContext.Current.CancellationToken);
+        await _engine.RepairStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        var install = installer.InstallAppsAsync(["Valve.Steam"], allRuntimes: false, null, TestContext.Current.CancellationToken);
+        var tweaks = await switches.ListTweaksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(tweaks);
+        Assert.False(install.IsCompleted);
+        Assert.Equal("RunRepair some.repair False", _engine.LastCall);
+        _engine.HoldRepair.SetResult();
+        Assert.True((await repair).Succeeded);
+        Assert.True((await install).Succeeded);
+    }
+
+    [Fact]
+    public void Progress_from_every_command_travels_in_the_one_event_envelope()
+    {
+        EngineEvent[] events = [new InstallProgressEvent(StubEngine.InstallSteps[0]), new RepairProgressEvent(StubEngine.RepairSteps[1])];
+
+        var lines = events.Select(e => EngineProtocol.Serialize(new EngineResponse(Event: e))).ToList();
+        var back = lines.Select(EngineProtocol.Deserialize<EngineResponse>).ToList();
+
+        Assert.All(back, r => Assert.True(r.IsEvent));
+        Assert.Contains("\"event\":\"installProgress\"", lines[0]);
+        Assert.Contains("\"event\":\"repairProgress\"", lines[1]);
+        AssertSameJson(StubEngine.InstallSteps[0], Assert.IsType<InstallProgressEvent>(back[0].Event).Progress);
+        AssertSameJson(StubEngine.RepairSteps[1], Assert.IsType<RepairProgressEvent>(back[1].Event).Progress);
+        Assert.False(EngineProtocol.Deserialize<EngineResponse>(EngineProtocol.Serialize(new EngineResponse(Install: StubEngine.Report))).IsEvent);
+    }
+
+    private sealed class Collect(List<RepairProgress> into) : IProgress<RepairProgress>
+    {
+        public void Report(RepairProgress value) => into.Add(value);
+    }
+
+    [Fact]
     public async Task GetBiosReport_arrives_unchanged()
     {
         var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
@@ -162,6 +243,121 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task StartWindowsUpdate_arrives_unchanged()
+    {
+        var status = await _client.StartWindowsUpdateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("StartWindowsUpdate", _engine.LastCall);
+        AssertSameJson(_engine.StartWindowsUpdate(), status);
+    }
+
+    [Fact]
+    public async Task GetWindowsUpdateStatus_arrives_unchanged()
+    {
+        var status = await _client.GetWindowsUpdateStatusAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetWindowsUpdateStatus(), status);
+    }
+
+    [Fact]
+    public async Task GetDrivers_arrives_unchanged()
+    {
+        var report = await _client.GetDriversAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetDrivers(), report);
+    }
+
+    [Fact]
+    public async Task CheckDriver_arrives_unchanged()
+    {
+        var request = new DriverRequest(@"PCI\VEN_10DE&DEV_2786", DriverBranch.Studio, CleanInstall: true);
+
+        var check = await _client.CheckDriverAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastDriverRequest);
+        AssertSameJson(_engine.CheckDriver(request), check);
+    }
+
+    [Fact]
+    public async Task InstallDriver_arrives_unchanged()
+    {
+        var request = new DriverRequest(@"PCI\VEN_10DE&DEV_2786", DriverBranch.GameReady, CleanInstall: true);
+
+        var progress = new List<DriverInstallProgress>();
+
+        var result = await _client.InstallDriverAsync(
+            request, new SyncCollect<DriverInstallProgress>(progress), TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastDriverRequest);
+        AssertSameJson(StubEngine.DriverSteps, progress);
+        AssertSameJson(_engine.InstallDriver(request), result);
+    }
+
+    [Fact]
+    public void A_driver_install_runs_in_the_long_running_lane()
+    {
+        var install = new InstallDriverRequest(new DriverRequest(@"PCI\VEN_10DE&DEV_2786"));
+
+        Assert.True(EngineProtocol.IsLongRunning(install));
+        Assert.False(EngineProtocol.IsExclusive(install));
+        var line = EngineProtocol.Serialize(new EngineResponse(Event: new DriverInstallProgressEvent(StubEngine.DriverSteps[0])));
+        Assert.Contains("\"event\":\"driverInstallProgress\"", line);
+        AssertSameJson(StubEngine.DriverSteps[0],
+            Assert.IsType<DriverInstallProgressEvent>(EngineProtocol.Deserialize<EngineResponse>(line).Event).Progress);
+    }
+
+    private sealed class SyncCollect<T>(List<T> into) : IProgress<T>
+    {
+        public void Report(T value) => into.Add(value);
+    }
+
+    [Fact]
+    public async Task ListGames_arrives_unchanged()
+    {
+        var games = await _client.ListGamesAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListGames(), games);
+    }
+
+    [Fact]
+    public async Task AddGame_and_RemoveGame_arrive_unchanged()
+    {
+        var added = await _client.AddGameAsync(@"C:\Games\Game.exe", TestContext.Current.CancellationToken);
+        Assert.Equal(@"AddGame C:\Games\Game.exe", _engine.LastCall);
+        AssertSameJson(_engine.AddGame(@"C:\Games\Game.exe"), added);
+
+        var removed = await _client.RemoveGameAsync(@"C:\Games\Game.exe", TestContext.Current.CancellationToken);
+        Assert.Equal(@"RemoveGame C:\Games\Game.exe", _engine.LastCall);
+        AssertSameJson(_engine.RemoveGame(@"C:\Games\Game.exe"), removed);
+    }
+
+    [Fact]
+    public async Task GetGpuTuning_arrives_unchanged()
+    {
+        var report = await _client.GetGpuTuningAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetGpuTuning(), report);
+    }
+
+    [Fact]
+    public async Task GPU_tuning_commands_arrive_unchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var values = new Dictionary<string, int> { [GpuControls.MaxClock] = 2600, [GpuControls.PowerLimit] = -5 };
+
+        AssertSameJson(_engine.SetGpuTuning("amd:0", values), await _client.SetGpuTuningAsync("amd:0", values, ct));
+        Assert.Equal("SetGpuTuning amd:0 gpuMaxClock=2600,powerLimit=-5", _engine.LastCall);
+        await _client.AutoTuneGpuAsync("amd:0", AutoTuneKind.UndervoltGpu, ct);
+        Assert.Equal("AutoTuneGpu amd:0 UndervoltGpu", _engine.LastCall);
+        await _client.ConfirmGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ConfirmGpuTuning amd:0", _engine.LastCall);
+        await _client.RevertGpuTuningAsync("amd:0", ct);
+        Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
+        await _client.ResetGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -174,7 +370,7 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public void Every_engine_command_has_a_client_method()
     {
-        var commands = typeof(IEngine).GetMethods().Select(m => m.Name + "Async");
+        var commands = typeof(IEngine).GetMethods().Select(m => m.Name.EndsWith("Async") ? m.Name : m.Name + "Async");
         var clientMethods = typeof(EnginePipeClient).GetMethods().Select(m => m.Name);
 
         Assert.Empty(commands.Except(clientMethods));
@@ -205,6 +401,8 @@ public sealed class PipeContractTests : IAsyncLifetime
             DestructiveWarning = "Gone for good.",
             Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,
             AntiCheat = [new AntiCheatConflict(AntiCheat.FaceIt, AntiCheatSeverity.WontLaunch, "VBS required")],
+            AffectedGames = [new GameConflict("Counter-Strike 2", AntiCheat.FaceIt, AntiCheatSeverity.WontLaunch, "VBS required")],
+            AntiCheatWarning = "Turning this on may stop Counter-Strike 2 (FACEIT) from launching.",
             PendingReboot = true,
             NotApplicableReason = "Needs an AMD CPU.",
             ProfileEligible = true,
@@ -215,7 +413,7 @@ public sealed class PipeContractTests : IAsyncLifetime
         public IReadOnlyList<AppView> ListApps() =>
             [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];
 
-        public static readonly IReadOnlyList<InstallProgress> Progress =
+        public static readonly IReadOnlyList<InstallProgress> InstallSteps =
         [
             new(1, 1, "Valve.Steam", "Steam", InstallStage.Installing, 0.25, "Installing Steam…"),
             new(1, 1, "Valve.Steam", "Steam", InstallStage.Installed, null, "Steam is installed."),
@@ -230,10 +428,10 @@ public sealed class PipeContractTests : IAsyncLifetime
         public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null)
         {
             LastCall = $"InstallApps {string.Join(",", appIds)} runtimes={allRuntimes}";
-            progress?.Report(Progress[0]);
+            progress?.Report(InstallSteps[0]);
             if (WaitBetweenProgress is not null && !WaitBetweenProgress.Wait(TimeSpan.FromSeconds(10)))
                 throw new TimeoutException("The client never saw the first progress event.");
-            progress?.Report(Progress[1]);
+            progress?.Report(InstallSteps[1]);
             return Report;
         }
 
@@ -251,6 +449,93 @@ public sealed class PipeContractTests : IAsyncLifetime
             [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
             [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
             [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
+
+        public DriverReport GetDrivers() => new(
+            [new InstalledGpu("NVIDIA GeForce RTX 4070", @"PCI\VEN_10DE&DEV_2786", GpuVendor.Nvidia, "591.74", "32.0.15.9174")],
+            "A problem.");
+
+        public DriverRequest? LastDriverRequest { get; private set; }
+
+        private static readonly DriverOffer Offer = new(
+            "617.42", DriverBranch.Studio, new Uri("https://us.download.nvidia.com/Windows/617.42/x.exe"),
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), "ab12");
+
+        public DriverCheck CheckDriver(DriverRequest request)
+        {
+            LastDriverRequest = request;
+            return new DriverCheck(true, "Newer.", GetDrivers().Gpus[0], Offer, true, "https://www.nvidia.com/en-us/drivers/");
+        }
+
+        public static readonly IReadOnlyList<DriverInstallProgress> DriverSteps =
+        [
+            new(DriverInstallStage.Downloading, "Downloading driver 617.42…"),
+            new(DriverInstallStage.Installing, "Installing driver 617.42…"),
+        ];
+
+        public DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null)
+        {
+            LastDriverRequest = request;
+            foreach (var step in DriverSteps)
+                progress?.Report(step);
+            return new DriverInstallResult(true, RebootNeeded: true, "Restart to finish.", "617.42", "https://www.nvidia.com/en-us/drivers/");
+        }
+
+        private static readonly InstalledGame Game = new(
+            "Counter-Strike 2", GameLauncher.Steam, @"C:\Steam\steamapps\common\Counter-Strike Global Offensive", @"C:\Steam\cs2.exe", [AntiCheat.FaceIt]);
+
+        public IReadOnlyList<InstalledGame> ListGames() => [Game];
+
+        public GameCommandResult AddGame(string exePath)
+        {
+            LastCall = $"AddGame {exePath}";
+            return new GameCommandResult(true, "Added.", Game with { Launcher = GameLauncher.Manual });
+        }
+
+        public GameCommandResult RemoveGame(string exePath)
+        {
+            LastCall = $"RemoveGame {exePath}";
+            return new GameCommandResult(true, "Removed.", null);
+        }
+
+        private static readonly GpuTuningView Gpu = new(
+            "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,
+            [new TuningControl(GpuControls.MaxClock, "Max GPU clock", "MHz", 500, 3000, 5, 2500, 2600)],
+            [AutoTuneKind.OverclockGpu, AutoTuneKind.UndervoltGpu],
+            AtDefaults: false,
+            RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
+            Notice: "Waiting.");
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+
+        public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
+        {
+            LastCall = $"SetGpuTuning {deviceId} " + string.Join(",", values.OrderBy(v => v.Key).Select(v => $"{v.Key}={v.Value}"));
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind)
+        {
+            LastCall = $"AutoTuneGpu {deviceId} {kind}";
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult ConfirmGpuTuning(string deviceId)
+        {
+            LastCall = $"ConfirmGpuTuning {deviceId}";
+            return new TuningResult(true, "Kept.", Gpu);
+        }
+
+        public TuningResult RevertGpuTuning(string deviceId)
+        {
+            LastCall = $"RevertGpuTuning {deviceId}";
+            return new TuningResult(true, "Put back.", Gpu);
+        }
+
+        public TuningResult ResetGpuTuning(string deviceId)
+        {
+            LastCall = $"ResetGpuTuning {deviceId}";
+            return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
+        }
 
         public CommandResult Revert(string tweakId)
         {
@@ -302,11 +587,54 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastCall = $"DeleteStartupItem {itemId} {confirmDestructive}";
             return new StartupCommandResult(true, "Deleted.", null);
         }
+        private static readonly UpdateRunStatus UpdateStatus = new(
+            UpdatePhase.Finished, "Installed 1 of 2 updates. Restart to finish installing.", 1, 2, null, RebootRequired: true,
+            Installed: ["2026-10 Cumulative Update"], NotInstalled: ["Defender update"], Skipped: ["NVIDIA - Display"]);
+
+        public UpdateRunStatus StartWindowsUpdate()
+        {
+            LastCall = "StartWindowsUpdate";
+            return UpdateStatus with { Phase = UpdatePhase.Installing, Current = "2026-10 Cumulative Update" };
+        }
+
+        public UpdateRunStatus GetWindowsUpdateStatus() => UpdateStatus;
 
         public IReadOnlyList<ChangeView> ListHistory() =>
         [
             new(Change, "some.tweak", "Some tweak", new DateTimeOffset(2026, 10, 16, 9, 0, 0, TimeSpan.FromHours(2)),
                 ChangeState.Undone, new DateTimeOffset(2026, 10, 16, 9, 5, 0, TimeSpan.FromHours(2)), CanUndo: false),
         ];
+
+        public TaskCompletionSource? HoldRepair { get; set; }
+
+        /// <summary>Set once a repair is running, holding the repair lane.</summary>
+        public TaskCompletionSource RepairStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public static readonly IReadOnlyList<RepairProgress> RepairSteps =
+        [
+            new("some.repair", 1, 2, "First", null, null),
+            new("some.repair", 1, 2, "First", 42.5, "[=== 42.5% ===]"),
+            new("some.repair", 2, 2, "Second", null, "Done with it."),
+        ];
+
+        public static readonly RepairResult Repaired = new(
+            "some.repair", true, "Done. Restart the PC to finish.\n• First: ok", true, "some.follow-up", @"C:\logs\repair.log", "the log");
+
+        public IReadOnlyList<RepairToolView> ListRepairTools() =>
+        [
+            new("some.repair", Sections.Repair, "Some repair", "Repairs a thing.", ["Run thing.exe /fix"], RestartNeed.Restart,
+                "Needs a restart.", "Are you sure?", IsFollowUp: false, Available: false, "Not on this PC."),
+        ];
+
+        public async Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = $"RunRepair {toolId} {confirmed}";
+            RepairStarted.TrySetResult();
+            foreach (var p in RepairSteps)
+                progress?.Report(p);
+            if (HoldRepair is not null)
+                await HoldRepair.Task.WaitAsync(cancellation);
+            return Repaired;
+        }
     }
 }

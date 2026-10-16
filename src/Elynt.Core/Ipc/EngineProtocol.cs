@@ -3,6 +3,11 @@ using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Startup;
+using Elynt.Core.UpdateControl;
+using Elynt.Core.Drivers;
+using Elynt.Core.Games;
+using Elynt.Core.Repair;
+using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
 
@@ -16,11 +21,27 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RestoreEverythingRequest), "restoreEverything")]
 [JsonDerivedType(typeof(ListAppsRequest), "listApps")]
 [JsonDerivedType(typeof(InstallAppsRequest), "installApps")]
+[JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
+[JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 [JsonDerivedType(typeof(ListStartupItemsRequest), "listStartupItems")]
 [JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
 [JsonDerivedType(typeof(DeleteStartupItemRequest), "deleteStartupItem")]
 [JsonDerivedType(typeof(CheckNewStartupItemsRequest), "checkNewStartupItems")]
+[JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
+[JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
+[JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
+[JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
+[JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(ListGamesRequest), "listGames")]
+[JsonDerivedType(typeof(AddGameRequest), "addGame")]
+[JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
+[JsonDerivedType(typeof(GetGpuTuningRequest), "getGpuTuning")]
+[JsonDerivedType(typeof(SetGpuTuningRequest), "setGpuTuning")]
+[JsonDerivedType(typeof(AutoTuneGpuRequest), "autoTuneGpu")]
+[JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
+[JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
+[JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -37,13 +58,64 @@ public sealed record RestoreEverythingRequest : EngineRequest;
 
 public sealed record ListAppsRequest : EngineRequest;
 
+/// <summary>Streams an <see cref="InstallProgressEvent"/> per step of the queue, then the report.</summary>
 public sealed record InstallAppsRequest(IReadOnlyList<string> AppIds, bool AllRuntimes) : EngineRequest;
+
+public sealed record ListRepairToolsRequest : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="RepairProgressEvent"/> per step and output line, then the result.</summary>
+public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineRequest;
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record StartWindowsUpdateRequest : EngineRequest;
+
+public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
+
+public sealed record GetDriversRequest : EngineRequest;
+
+public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
+public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
+public sealed record ListGamesRequest : EngineRequest;
+
+public sealed record AddGameRequest(string ExePath) : EngineRequest;
+
+public sealed record RemoveGameRequest(string ExePath) : EngineRequest;
+
+public sealed record GetGpuTuningRequest : EngineRequest;
+
+public sealed record SetGpuTuningRequest(string DeviceId, IReadOnlyDictionary<string, int> Values) : EngineRequest;
+
+public sealed record AutoTuneGpuRequest(string DeviceId, AutoTuneKind Kind) : EngineRequest;
+
+public sealed record ConfirmGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
+
 /// <summary>
-/// The reply to one request. <see cref="Error"/> is set only when the service itself failed. A line carrying
-/// <see cref="Progress"/> is an event streamed while the command runs; the reply proper follows it.
+/// Something a running command reports before its reply. Every command that streams progress uses this one
+/// stream; each kind of event is one derived record.
+/// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
+[JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
+[JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(DriverInstallProgressEvent), "driverInstallProgress")]
+public abstract record EngineEvent;
+
+public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEvent;
+
+public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
+
+public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) : EngineEvent;
+
+/// <summary>
+/// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
+/// <see cref="Event"/> is streamed while the command runs; any number of them come before the reply proper.
 /// </summary>
 public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
@@ -54,15 +126,27 @@ public sealed record EngineResponse(
     BiosReport? Bios = null,
     IReadOnlyList<AppView>? Apps = null,
     InstallReport? Install = null,
-    InstallProgress? Progress = null,
+    IReadOnlyList<RepairToolView>? RepairTools = null,
+    RepairResult? RepairResult = null,
+    DriverReport? Drivers = null,
+    DriverCheck? DriverCheck = null,
+    DriverInstallResult? DriverInstall = null,
+    IReadOnlyList<InstalledGame>? Games = null,
+    GameCommandResult? GameResult = null,
+    GpuTuningReport? GpuTuning = null,
+    TuningResult? Tuning = null,
+    UpdateRunStatus? WindowsUpdate = null,
+    EngineEvent? Event = null,
     IReadOnlyList<StartupItemView>? StartupItems = null,
     StartupCommandResult? StartupResult = null)
 {
     [JsonIgnore]
-    public bool IsEvent => Progress is not null;
+    public bool IsEvent => Event is not null;
 }
 
-/// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
+/// <summary>
+/// Newline-delimited JSON over a named pipe: one request line, then any number of event lines, then one response line.
+/// </summary>
 public static class EngineProtocol
 {
     public const string PipeName = "Elynt.Optimizer.Engine";
@@ -77,8 +161,12 @@ public static class EngineProtocol
     public static T Deserialize<T>(string line) =>
         JsonSerializer.Deserialize<T>(line, Options) ?? throw new JsonException("Empty message.");
 
-    /// <param name="sendEvent">Receives progress events, in order, on the thread running the command.</param>
-    public static EngineResponse Dispatch(IEngine engine, EngineRequest request, Action<EngineResponse>? sendEvent = null) => request switch
+    /// <param name="sendEvent">Receives the command's events, in order, on the thread running the command.</param>
+    public static async Task<EngineResponse> DispatchAsync(
+        IEngine engine,
+        EngineRequest request,
+        Action<EngineEvent>? sendEvent = null,
+        CancellationToken cancellation = default) => request switch
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
         ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
@@ -88,17 +176,44 @@ public static class EngineProtocol
         RestoreEverythingRequest => new(Restore: engine.RestoreEverything()),
         ListAppsRequest => new(Apps: engine.ListApps()),
         InstallAppsRequest install => new(Install: engine.InstallApps(
-            install.AppIds, install.AllRuntimes, new Relay<InstallProgress>(p => sendEvent?.Invoke(new(Progress: p))))),
+            install.AppIds, install.AllRuntimes, Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
+        ListRepairToolsRequest => new(RepairTools: engine.ListRepairTools()),
+        RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
+            run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         ListStartupItemsRequest => new(StartupItems: engine.ListStartupItems()),
         SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
         CheckNewStartupItemsRequest => new(StartupItems: engine.CheckNewStartupItems()),
         DeleteStartupItemRequest delete => new(StartupResult: engine.DeleteStartupItem(delete.ItemId, delete.ConfirmDestructive)),
+        StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
+        GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
+        GetDriversRequest => new(Drivers: engine.GetDrivers()),
+        CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
+        InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
+            install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        ListGamesRequest => new(Games: engine.ListGames()),
+        AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
+        RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
+        GetGpuTuningRequest => new(GpuTuning: engine.GetGpuTuning()),
+        SetGpuTuningRequest set => new(Tuning: engine.SetGpuTuning(set.DeviceId, set.Values)),
+        AutoTuneGpuRequest auto => new(Tuning: engine.AutoTuneGpu(auto.DeviceId, auto.Kind)),
+        ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
+        RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
+        ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
+    /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest;
+
+    /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install queue).</summary>
+    public static bool IsExclusive(EngineRequest request) => request is InstallAppsRequest;
+
+    private static IProgress<T> Relay<T>(Func<T, EngineEvent> toEvent, Action<EngineEvent>? sendEvent) =>
+        new SyncProgress<T>(value => sendEvent?.Invoke(toEvent(value)));
+
     /// <summary>Passes progress on synchronously, so events keep their order (unlike <see cref="Progress{T}"/>).</summary>
-    private sealed class Relay<T>(Action<T> report) : IProgress<T>
+    private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
     }

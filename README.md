@@ -8,7 +8,8 @@ a described tweak with its own switch, and every tweak can be undone exactly. Th
 | Project | What it is |
 |---|---|
 | `src/Elynt.Core` | Tweak catalogue, change journal, Engine and the pipe protocol. Cross-platform: it touches Windows only through adapter interfaces. |
-| `src/Elynt.Windows` | The real system adapters (registry today). The only code that touches Windows. |
+| `src/Elynt.Windows` | The real system adapters (registry, hardware readouts, AMD GPU tuning). The only code that touches Windows. |
+| `native/ElyntAdlx` | A thin C bridge to AMD ADLX for GPU tuning, built by hand with MSVC and the ADLX SDK (see the file header). Without `elynt_adlx.dll` next to the service, AMD tuning shows as unavailable. |
 | `src/Elynt.Service` | The elevated Windows Service. Owns the journal and makes every change. |
 | `src/Elynt.App` | The WPF window. Runs without admin rights and sends every change to the service over a named pipe. |
 | `tests/Elynt.Core.Tests` | Logic tests: Engine commands against fake adapters, and the pipe contract. |
@@ -49,7 +50,10 @@ To remove it: `sc.exe stop ElyntOptimizer` then `sc.exe delete ElyntOptimizer`.
 ## Logs and journal
 
 - Service log: `%ProgramData%\ElyntOptimizer\logs\service-*.log`
+- Repair runs: `%ProgramData%\ElyntOptimizer\logs\repair\repair-*.log` (one per run)
 - App log: `%LocalAppData%\ElyntOptimizer\logs\app-*.log`
+
+The Repair section's "Copy app log" button copies the newest app, service and repair logs for a bug report.
 - Change journal: `%ProgramData%\ElyntOptimizer\journal\journal.json`
 - Whole-store backups (BCD, firewall, power plans, scheduled tasks, drivers, hosts), taken before the first change
   of each kind after the service starts: `%ProgramData%\ElyntOptimizer\backups\<time>-<store>`

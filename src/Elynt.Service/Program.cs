@@ -1,9 +1,11 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Setup;
-using Elynt.Windows;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
+using Elynt.Windows;
 using Serilog;
 
 ServicePaths.EnsureCreated();
@@ -37,6 +39,15 @@ try
         new WindowsRestorePoints(),
         new WindowsStoreBackups(ServicePaths.Backups),
         logger: services.GetRequiredService<ILogger<SafetyNet>>()));
+    builder.Services.AddSingleton<IRepairLogStore>(new FileRepairLogStore(ServicePaths.RepairLogs));
+    builder.Services.AddSingleton(new TuningSafety(new JsonFileTuningStore(ServicePaths.Tuning)));
+    builder.Services.AddSingleton<AdlxGpuTuning>();
+    builder.Services.AddSingleton(sp => new GpuTuning(
+        [sp.GetRequiredService<AdlxGpuTuning>()],
+        sp.GetRequiredService<TuningSafety>(),
+        logger: sp.GetRequiredService<ILogger<GpuTuning>>()));
+    // Before the pipe: hardware is recovered before any command arrives, and closed after the pipe stops.
+    builder.Services.AddHostedService<TuningHost>();
     builder.Services.AddHostedService<EngineHost>();
 
     builder.Build().Run();

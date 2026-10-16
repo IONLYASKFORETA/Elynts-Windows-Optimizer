@@ -11,6 +11,9 @@ internal static class ServicePaths
 
     public static string Journal { get; } = Path.Combine(Root, "journal", "journal.json");
 
+    /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
+    public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
+
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
     /// <summary>The startup items each user has already been told about, so only new ones raise a tray note.</summary>
@@ -18,6 +21,15 @@ internal static class ServicePaths
 
     /// <summary>Whole-store backups (BCD, firewall, power plans, tasks, drivers, hosts) taken before the first change of each kind.</summary>
     public static string Backups { get; } = Path.Combine(Root, "backups");
+
+    /// <summary>One log per repair run, readable by users so the app can copy them.</summary>
+    public static string RepairLogs { get; } = Path.Combine(Logs, "repair");
+
+    /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
+    public static string Downloads { get; } = Path.Combine(Root, "downloads");
+
+    /// <summary>Games each user added by hand, one file per user SID.</summary>
+    public static string Games { get; } = Path.Combine(Root, "games");
 
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
@@ -43,8 +55,12 @@ internal static class ServicePaths
             root.SetAccessControl(security);
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(Tuning)!);
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Backups);
         Directory.CreateDirectory(Path.GetDirectoryName(KnownStartupItems)!);
+        Directory.CreateDirectory(RepairLogs);
+        Directory.CreateDirectory(Downloads);
+        Directory.CreateDirectory(Games);
     }
 }

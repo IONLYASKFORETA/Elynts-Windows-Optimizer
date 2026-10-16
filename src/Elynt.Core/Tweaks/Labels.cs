@@ -63,7 +63,14 @@ public enum HardwareTraits
     IntelGpu = 1 << 3,
     AmdCpu = 1 << 4,
     IntelCpu = 1 << 5,
+    /// <summary>An AMD Ryzen X3D with two CCDs (7900X3D, 7950X3D, 9900X3D, 9950X3D): games rely on core parking.</summary>
+    DualCcdX3dCpu = 1 << 6,
+    /// <summary>A GPU that can run DLSS Frame Generation (NVIDIA RTX 40 or 50 series), which needs HAGS.</summary>
+    FrameGenerationGpu = 1 << 7,
 }
+
+/// <summary>A warning shown on a tweak only when this PC has all of <paramref name="When"/>.</summary>
+public sealed record HardwareNote(HardwareTraits When, string Text);
 
 /// <summary>Windows 11 editions, from the EditionID registry value.</summary>
 public enum WindowsEdition
@@ -119,6 +126,8 @@ public sealed record Applicability(
             HardwareTraits.IntelGpu => "an Intel GPU",
             HardwareTraits.AmdCpu => "an AMD CPU",
             HardwareTraits.IntelCpu => "an Intel CPU",
+            HardwareTraits.DualCcdX3dCpu => "a dual-CCD Ryzen X3D CPU",
+            HardwareTraits.FrameGenerationGpu => "an NVIDIA RTX 40 or 50 series GPU",
             _ => t.ToString(),
         }));
 }

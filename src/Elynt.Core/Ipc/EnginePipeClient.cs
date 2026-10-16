@@ -1,7 +1,12 @@
+using Elynt.Core.Games;
 using System.IO.Pipes;
 using Elynt.Core.Apps;
+using Elynt.Core.Repair;
 using Elynt.Core.Bios;
 using Elynt.Core.Startup;
+using Elynt.Core.UpdateControl;
+using Elynt.Core.Drivers;
+using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
 
@@ -55,6 +60,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<RestoreResult> RestoreEverythingAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new RestoreEverythingRequest(), cancellation)).Restore ?? throw Missing("restore result");
+
     public async Task<IReadOnlyList<AppView>> ListAppsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListAppsRequest(), cancellation)).Apps ?? throw Missing("apps");
 
@@ -64,8 +70,22 @@ public sealed class EnginePipeClient : IAsyncDisposable
         bool allRuntimes,
         IProgress<InstallProgress>? progress = null,
         CancellationToken cancellation = default) =>
-        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation, e => progress?.Report(e.Progress!))).Install
+        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation,
+            e => { if (e is InstallProgressEvent p) progress?.Report(p.Progress); })).Install
         ?? throw Missing("install report");
+
+    public async Task<IReadOnlyList<RepairToolView>> ListRepairToolsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListRepairToolsRequest(), cancellation)).RepairTools ?? throw Missing("repair tools");
+
+    /// <summary>
+    /// Runs a repair tool; <paramref name="progress"/> gets every progress line as it arrives. Holds this connection
+    /// until the tool finishes, so the UI uses a second connection for other commands meanwhile.
+    /// </summary>
+    public async Task<RepairResult> RunRepairAsync(
+        string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new RunRepairRequest(toolId, confirmed), cancellation,
+            e => { if (e is RepairProgressEvent p) progress?.Report(p.Progress); })).RepairResult
+        ?? throw Missing("repair result");
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
@@ -81,6 +101,50 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<IReadOnlyList<StartupItemView>> CheckNewStartupItemsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new CheckNewStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
+    public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
+
+    public async Task<UpdateRunStatus> GetWindowsUpdateStatusAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetWindowsUpdateStatusRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
+
+    public async Task<DriverReport> GetDriversAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetDriversRequest(), cancellation)).Drivers ?? throw Missing("driver report");
+
+    public async Task<DriverCheck> CheckDriverAsync(DriverRequest request, CancellationToken cancellation = default) =>
+        (await SendAsync(new CheckDriverRequest(request), cancellation)).DriverCheck ?? throw Missing("driver check");
+
+    public async Task<DriverInstallResult> InstallDriverAsync(
+        DriverRequest request, IProgress<DriverInstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new InstallDriverRequest(request), cancellation,
+            e => { if (e is DriverInstallProgressEvent p) progress?.Report(p.Progress); })).DriverInstall
+            ?? throw Missing("driver install result");
+
+    public async Task<IReadOnlyList<InstalledGame>> ListGamesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListGamesRequest(), cancellation)).Games ?? throw Missing("games");
+
+    public async Task<GameCommandResult> AddGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new AddGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
+
+    public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
+
+    public async Task<GpuTuningReport> GetGpuTuningAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetGpuTuningRequest(), cancellation)).GpuTuning ?? throw Missing("GPU tuning");
+
+    public Task<TuningResult> SetGpuTuningAsync(string deviceId, IReadOnlyDictionary<string, int> values, CancellationToken cancellation = default) =>
+        TuneAsync(new SetGpuTuningRequest(deviceId, values), cancellation);
+
+    public Task<TuningResult> AutoTuneGpuAsync(string deviceId, AutoTuneKind kind, CancellationToken cancellation = default) =>
+        TuneAsync(new AutoTuneGpuRequest(deviceId, kind), cancellation);
+
+    public Task<TuningResult> ConfirmGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new ConfirmGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> RevertGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new RevertGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> ResetGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new ResetGpuTuningRequest(deviceId), cancellation);
 
     public async ValueTask DisposeAsync()
     {
@@ -92,7 +156,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
     private async Task<EngineResponse> SendAsync(
         EngineRequest request,
         CancellationToken cancellation,
-        Action<EngineResponse>? onEvent = null)
+        Action<EngineEvent>? onEvent = null)
     {
         await _oneAtATime.WaitAsync(cancellation);
         try
@@ -105,7 +169,7 @@ public sealed class EnginePipeClient : IAsyncDisposable
                 response = EngineProtocol.Deserialize<EngineResponse>(line);
                 if (!response.IsEvent)
                     break;
-                onEvent?.Invoke(response);
+                onEvent?.Invoke(response.Event!);
             }
             if (response.Error is not null)
                 throw new EngineServiceException(response.Error);
@@ -116,6 +180,9 @@ public sealed class EnginePipeClient : IAsyncDisposable
             _oneAtATime.Release();
         }
     }
+
+    private async Task<TuningResult> TuneAsync(EngineRequest request, CancellationToken cancellation) =>
+        (await SendAsync(request, cancellation)).Tuning ?? throw Missing("result");
 
     private static EngineServiceException Missing(string what) => new($"The service's reply had no {what}.");
 }
