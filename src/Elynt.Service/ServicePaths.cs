@@ -13,6 +13,9 @@ internal static class ServicePaths
 
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
+    /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
+    public static string Downloads { get; } = Path.Combine(Root, "downloads");
+
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
     /// (so the app can offer "copy log"), but cannot plant or edit files there.
@@ -38,5 +41,6 @@ internal static class ServicePaths
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         Directory.CreateDirectory(Logs);
+        Directory.CreateDirectory(Downloads);
     }
 }

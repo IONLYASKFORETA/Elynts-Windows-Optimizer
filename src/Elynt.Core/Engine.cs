@@ -1,4 +1,5 @@
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -68,6 +69,18 @@ public interface IEngine
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
     BiosReport GetBiosReport();
+
+    /// <summary>The detected GPUs and their installed driver versions.</summary>
+    DriverReport GetDrivers();
+
+    /// <summary>Looks up the latest driver for one detected GPU, falling back to the vendor's page.</summary>
+    DriverCheck CheckDriver(DriverRequest request);
+
+    /// <summary>
+    /// Looks up, downloads, signature-checks and silently installs the latest driver for one detected GPU. A download
+    /// that isn't signed by the vendor, or doesn't match the vendor's published hash, is deleted and never run.
+    /// </summary>
+    DriverInstallResult InstallDriver(DriverRequest request);
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -190,6 +203,14 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public DriverReport GetDrivers() => DriverFlow.Report();
+
+    public DriverCheck CheckDriver(DriverRequest request) => DriverFlow.Check(request);
+
+    public DriverInstallResult InstallDriver(DriverRequest request) => DriverFlow.Install(request);
+
+    private DriverFlow DriverFlow => new(system, _log);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

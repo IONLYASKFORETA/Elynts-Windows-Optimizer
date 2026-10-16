@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Bios;
+using Elynt.Core.Drivers;
 
 namespace Elynt.Core.Ipc;
 
@@ -10,6 +11,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ApplyRequest), "apply")]
 [JsonDerivedType(typeof(RevertRequest), "revert")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
+[JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
+[JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -20,12 +24,21 @@ public sealed record RevertRequest(string TweakId) : EngineRequest;
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record GetDriversRequest : EngineRequest;
+
+public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
+
+public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
 /// <summary>The reply to one request. <see cref="Error"/> is set only when the service itself failed.</summary>
 public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
     CommandResult? Result = null,
     string? Error = null,
-    BiosReport? Bios = null);
+    BiosReport? Bios = null,
+    DriverReport? Drivers = null,
+    DriverCheck? DriverCheck = null,
+    DriverInstallResult? DriverInstall = null);
 
 /// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
 public static class EngineProtocol
@@ -48,6 +61,9 @@ public static class EngineProtocol
         ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        GetDriversRequest => new(Drivers: engine.GetDrivers()),
+        CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
+        InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(install.Request)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 }
