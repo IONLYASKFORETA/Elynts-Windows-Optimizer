@@ -13,6 +13,9 @@ internal static class ServicePaths
 
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
+    /// <summary>Whole-store backups (BCD, firewall, power plans, tasks, drivers, hosts) taken before the first change of each kind.</summary>
+    public static string Backups { get; } = Path.Combine(Root, "backups");
+
     /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
     public static string Downloads { get; } = Path.Combine(Root, "downloads");
 
@@ -41,6 +44,7 @@ internal static class ServicePaths
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
         Directory.CreateDirectory(Logs);
+        Directory.CreateDirectory(Backups);
         Directory.CreateDirectory(Downloads);
     }
 }

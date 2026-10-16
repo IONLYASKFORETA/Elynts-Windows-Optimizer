@@ -68,6 +68,12 @@ public abstract record TweakStep
     /// <summary>The exact change, as shown in the detail pane.</summary>
     public abstract string DescribeChange();
 
+    /// <summary>
+    /// The whole store this step changes, backed up before the first change of its kind; null when the journal
+    /// alone is enough (registry values).
+    /// </summary>
+    public virtual Safety.BackupStore? Store => null;
+
     /// <summary>Whether the system is already in this step's desired state.</summary>
     public abstract bool IsApplied(SystemAdapters system);
 

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Elynt.Core;
+using Elynt.Core.Setup;
 using Elynt.Core.Tweaks;
 using Microsoft.Win32;
 
@@ -17,6 +18,17 @@ public sealed partial class WindowsSystemInfo : ISystemInfo
 
     public DateTimeOffset BootTime { get; } =
         DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+
+    /// <summary>What <see cref="OsSupport"/> needs to decide whether the app may run here. Reads only.</summary>
+    public static OsDescription Describe()
+    {
+        using var machine = Machine();
+        using var key = machine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+        var build = int.TryParse(key?.GetValue("CurrentBuildNumber") as string, out var number) ? number : 0;
+        // "Client" on desktop Windows; "Server" or "Server Core" on Windows Server.
+        var installationType = key?.GetValue("InstallationType") as string ?? "";
+        return new OsDescription(build, installationType.StartsWith("Server", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static RegistryKey Machine() => RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
 

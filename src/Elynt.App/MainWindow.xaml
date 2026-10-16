@@ -7,6 +7,11 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <CollectionViewSource x:Key="AppsByGroup" Source="{Binding Apps}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
     </Window.Resources>
 
     <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
@@ -30,9 +35,54 @@
         </DockPanel>
 
         <!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
-        <DockPanel Grid.Column="1" Margin="8">
+        <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
             <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
-            <Grid>
+
+            <!-- Apps: tick apps, then install them silently one at a time from winget's community source. -->
+            <DockPanel Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}">
+                <StackPanel DockPanel.Dock="Bottom" Margin="4,8,4,0">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Install ticked apps" Padding="16,4"
+                                Click="InstallApps" IsEnabled="{Binding CanInstall}" />
+                        <CheckBox Content="Install all runtimes (Visual C++, DirectX legacy and .NET)"
+                                  IsChecked="{Binding InstallAllRuntimes}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding InstallStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </StackPanel>
+                <ListBox ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         HorizontalContentAlignment="Stretch" BorderThickness="0">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" Margin="4,12,4,4" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:AppItemViewModel}">
+                            <Grid Margin="4,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                          AutomationProperties.Name="{Binding Name}" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" />
+                                    <TextBlock Text="{Binding Description}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center"
+                                           MaxWidth="220" TextWrapping="Wrap" Margin="8,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <Grid Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}">
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">
                     <ListBox.ItemTemplate>
@@ -170,7 +220,53 @@
         </DockPanel>
 
         <!-- Detail pane: what the selected tweak does, the evidence, the exact change and how to undo it. -->
+        <!-- Undo history: every change, newest first, with undo for any one and restore everything. -->
+        <DockPanel Grid.Column="1" Grid.ColumnSpan="2" Margin="8"
+                   Visibility="{Binding IsHistoryPage, Converter={StaticResource Visible}}">
+            <DockPanel DockPanel.Dock="Top" Margin="4,4,4,8">
+                <Button DockPanel.Dock="Right" Content="Restore everything" Padding="16,6" Click="RestoreEverything"
+                        IsEnabled="{Binding CanRestoreEverything}"
+                        ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed." />
+                <TextBlock Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock DockPanel.Dock="Top" Margin="4,0,4,8" TextWrapping="Wrap" Opacity="0.8"
+                       Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+            <TextBlock DockPanel.Dock="Top" Text="{Binding HistoryMessage}" Margin="4,0,4,8" TextWrapping="Wrap" FontWeight="SemiBold" />
+            <Grid>
+                <ListView ItemsSource="{Binding History}" BorderThickness="0" HorizontalContentAlignment="Stretch">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="When" Width="150" DisplayMemberBinding="{Binding When}" />
+                            <GridViewColumn Header="Tweak" Width="300">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding TweakName}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="State" Width="190" DisplayMemberBinding="{Binding StateText}" />
+                            <GridViewColumn Width="90">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
+                                        <Button Content="Undo" Padding="12,2" Click="UndoChange" IsEnabled="{Binding CanUndo}"
+                                                AutomationProperties.Name="{Binding TweakName, StringFormat='Undo {0}'}" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                <TextBlock Text="No changes yet. Everything you switch on shows up here."
+                           Visibility="{Binding IsHistoryEmpty, Converter={StaticResource Visible}}"
+                           Opacity="0.7" Margin="8,32,8,8" TextWrapping="Wrap" />
+            </Grid>
+        </DockPanel>
+
         <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
+                Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource Visible}}"
@@ -242,8 +338,20 @@
 
         <!-- Connection status. -->
         <DockPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="16,4,16,10">
-            <Button DockPanel.Dock="Right" Content="Retry" Click="Retry" Padding="16,4"
-                    Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+            <!-- Updates: the channel, and a restart button once a newer build has downloaded. -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Retry" Click="Retry" Padding="16,4" Margin="0,0,16,0"
+                        Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+                <Button Click="RestartIntoUpdate" Padding="16,4" Margin="0,0,16,0"
+                        Visibility="{Binding HasUpdateReady, Converter={StaticResource Visible}}">
+                    <TextBlock>
+                        <Run Text="Restart to update to" /> <Run Text="{Binding UpdateReady, Mode=OneWay}" />
+                    </TextBlock>
+                </Button>
+                <TextBlock Text="Updates:" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.8" />
+                <ComboBox ItemsSource="{Binding Channels}" SelectedItem="{Binding Channel}" MinWidth="90"
+                          AutomationProperties.Name="Update channel" />
+            </StackPanel>
             <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.8" />
         </DockPanel>
     </Grid>
