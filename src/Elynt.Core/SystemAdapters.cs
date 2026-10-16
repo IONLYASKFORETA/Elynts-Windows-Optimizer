@@ -1,9 +1,11 @@
+using Elynt.Core.Bios;
 using Elynt.Core.Registry;
 
 namespace Elynt.Core;
 
 /// <summary>Everything the engine may touch on the PC. Real adapters wrap Windows; fakes hold in-memory state.</summary>
-public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System);
+/// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
+public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System, IHardwareInfo? Hardware = null);
 
 public interface ISystemInfo
 {

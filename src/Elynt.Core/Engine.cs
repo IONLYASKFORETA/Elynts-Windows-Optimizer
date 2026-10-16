@@ -1,3 +1,4 @@
+using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
@@ -71,6 +72,7 @@ public interface IEngine
     /// the rest still go ahead.
     /// </summary>
     RestoreResult RestoreEverything();
+    BiosReport GetBiosReport();
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -252,6 +254,21 @@ public sealed class Engine(
 
     /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
     private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
+
+    public BiosReport GetBiosReport()
+    {
+        HardwareSnapshot? hardware = null;
+        try
+        {
+            hardware = system.Hardware?.Read();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
+        }
+
+        return BiosAdvisor.Build(hardware);
+    }
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

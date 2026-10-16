@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Text.Json;
+using Elynt.Core.Bios;
 using Elynt.Core.Ipc;
 using Elynt.Core.Tweaks;
 
@@ -83,6 +84,14 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetBiosReport_arrives_unchanged()
+    {
+        var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetBiosReport(), report);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -125,6 +134,12 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastCall = $"Apply {tweakId}";
             return new CommandResult(true, "Turned on.", View);
         }
+
+        public BiosReport GetBiosReport() => new(
+            "ASUS ROG STRIX B650E-F, AMD Ryzen 7 7800X3D",
+            [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
+            [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
+            [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
 
         public CommandResult Revert(string tweakId)
         {

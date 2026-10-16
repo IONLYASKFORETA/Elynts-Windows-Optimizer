@@ -20,6 +20,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isConnecting;
     private string? _historyMessage;
     private bool _isRestoring;
+    private BiosPageViewModel? _bios;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -80,7 +81,20 @@ public sealed class MainViewModel : ObservableObject
 
     public bool HasSelection => SelectedTweak is not null;
 
-    public bool IsEmpty => Tweaks.Count == 0;
+    public bool IsEmpty => Tweaks.Count == 0 && !IsBiosPage;
+
+    /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
+    public BiosPageViewModel? Bios
+    {
+        get => _bios;
+        private set
+        {
+            if (Set(ref _bios, value))
+                OnPropertyChanged(nameof(IsBiosPage));
+        }
+    }
+
+    public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
 
     public string Status
     {
@@ -116,6 +130,7 @@ public sealed class MainViewModel : ObservableObject
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
             _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+            Bios = await LoadBiosAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -129,6 +144,19 @@ public sealed class MainViewModel : ObservableObject
         finally
         {
             _isConnecting = false;
+        }
+    }
+
+    private static async Task<BiosPageViewModel?> LoadBiosAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new BiosPageViewModel(await client.GetBiosReportAsync());
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't build the BIOS report");
+            return null;
         }
     }
 
@@ -270,6 +298,7 @@ public sealed class MainViewModel : ObservableObject
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsBiosPage));
     }
 
     private async Task FlipAsync(TweakItemViewModel item, bool turnOn)

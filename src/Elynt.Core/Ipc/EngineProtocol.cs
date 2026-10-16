@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elynt.Core.Bios;
 
 namespace Elynt.Core.Ipc;
 
@@ -11,6 +12,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListHistoryRequest), "listHistory")]
 [JsonDerivedType(typeof(UndoChangeRequest), "undoChange")]
 [JsonDerivedType(typeof(RestoreEverythingRequest), "restoreEverything")]
+[JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -24,6 +26,7 @@ public sealed record ListHistoryRequest : EngineRequest;
 public sealed record UndoChangeRequest(Guid ChangeId) : EngineRequest;
 
 public sealed record RestoreEverythingRequest : EngineRequest;
+public sealed record GetBiosReportRequest : EngineRequest;
 
 /// <summary>The reply to one request. <see cref="Error"/> is set only when the service itself failed.</summary>
 public sealed record EngineResponse(
@@ -31,7 +34,8 @@ public sealed record EngineResponse(
     CommandResult? Result = null,
     string? Error = null,
     IReadOnlyList<ChangeView>? History = null,
-    RestoreResult? Restore = null);
+    RestoreResult? Restore = null,
+    BiosReport? Bios = null);
 
 /// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
 public static class EngineProtocol
@@ -56,6 +60,7 @@ public static class EngineProtocol
         ListHistoryRequest => new(History: engine.ListHistory()),
         UndoChangeRequest undo => new(Result: engine.UndoChange(undo.ChangeId)),
         RestoreEverythingRequest => new(Restore: engine.RestoreEverything()),
+        GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 }
