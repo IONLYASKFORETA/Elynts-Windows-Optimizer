@@ -72,7 +72,17 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public bool IsDestructive => View.Reversibility == Reversibility.Destructive;
 
-    public string StateText => !View.Applicable && View.State == TweakState.Off
+    /// <summary>Warnings for this PC's hardware, such as the X3D core-parking and Frame Generation notes.</summary>
+    public IReadOnlyList<string> Warnings => View.Warnings;
+
+    public bool HasWarnings => View.Warnings.Count > 0;
+
+    /// <summary>A per-game choice: instead of a switch it offers "Choose a game…".</summary>
+    public bool IsPerGame => View.PerGame;
+
+    public bool HasSwitch => !View.PerGame;
+
+    public string StateText => View.PerGame ? "Per game" : !View.Applicable && View.State == TweakState.Off
         ? "Not applicable"
         : (View.State == TweakState.On ? "On" : "Off") + (View.PendingReboot ? " · pending reboot" : "");
 

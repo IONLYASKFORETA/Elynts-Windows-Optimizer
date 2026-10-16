@@ -15,7 +15,9 @@ namespace Elynt.App.ViewModels;
 /// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
 /// </param>
 /// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
-public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot) : ObservableObject
+/// <param name="pickGame">Asks the user for a game's .exe, or returns null when they cancel.</param>
+public sealed class MainViewModel(
+    Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot, Func<string?> pickGame) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
@@ -576,6 +578,39 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
             Games.Message = $"Couldn't reach the service: {ex.Message}";
             await DisconnectAsync();
             Status = "Lost the connection to the service. Press Retry.";
+        }
+    }
+
+    /// <summary>Applies a per-game tweak to a game the user picks; the game then gets its own row and switch.</summary>
+    public async Task ApplyForGameAsync(TweakItemViewModel template)
+    {
+        if (_client is null || !template.IsPerGame)
+            return;
+        var exe = pickGame();
+        if (exe is null)
+            return;
+
+        template.IsBusy = true;
+        try
+        {
+            var result = await _client.ApplyAsync(template.View.ForGame(exe));
+            Log.Information("Apply {Tweak} for {Game}: {Succeeded} {Message}", template.View.Id, exe, result.Succeeded, result.Message);
+            template.Message = result.Message;
+            if (result.Succeeded && result.Tweak is { } game && _allTweaks.All(t => t.View.Id != game.Id))
+            {
+                _allTweaks = [.. _allTweaks, new TweakItemViewModel(game, FlipAsync)];
+                ShowPage();
+                SelectedTweak = Tweaks.FirstOrDefault(t => t.View.Id == game.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Applying {Tweak} for {Game} failed", template.View.Id, exe);
+            template.Message = $"Couldn't do this: {ex.Message}";
+        }
+        finally
+        {
+            template.IsBusy = false;
         }
     }
 

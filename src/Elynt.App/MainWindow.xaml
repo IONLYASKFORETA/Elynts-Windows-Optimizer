@@ -133,7 +133,10 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding StateText}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                     <CheckBox IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
-                                              AutomationProperties.Name="{Binding Name}" />
+                                              AutomationProperties.Name="{Binding Name}"
+                                              Visibility="{Binding HasSwitch, Converter={StaticResource Visible}}" />
+                                    <Button Content="Choose a game…" Click="ApplyForGame" Padding="8,2" IsEnabled="{Binding IsEnabled}"
+                                            Visibility="{Binding IsPerGame, Converter={StaticResource Visible}}" />
                                 </StackPanel>
                             </Grid>
                         </DataTemplate>
@@ -416,6 +419,16 @@
                                Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
                         <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
                     </TextBlock>
+                    <StackPanel Margin="0,8,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Visible}}">
+                        <TextBlock Text="For your hardware" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding Warnings}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                     <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAntiCheatWarnings, Converter={StaticResource Visible}}">
                         <TextBlock Text="Anti-cheat warning (you can still turn it on)" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding GamesWarning}" TextWrapping="Wrap" Margin="0,2" FontWeight="SemiBold"

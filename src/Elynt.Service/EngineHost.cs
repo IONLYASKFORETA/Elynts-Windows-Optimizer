@@ -35,6 +35,8 @@ internal sealed class EngineHost(
         new ProcessInstallerRunner());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -92,7 +94,7 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games),
+                _games) { Boot = _boot, Power = _power },
             journal,
             sid,
             safetyNet,

@@ -15,7 +15,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive, AskToReboot);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) =>
@@ -114,21 +114,34 @@ public partial class MainWindow : Window
             Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
     }
 
+    private string? PickGame()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
     private async void AddGame(object sender, RoutedEventArgs e)
     {
-        var picker = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Pick the game's .exe",
-            Filter = "Programs (*.exe)|*.exe",
-        };
-        if (picker.ShowDialog(this) == true)
-            await _model.AddGameAsync(picker.FileName);
+        if (PickGame() is { } exe)
+            await _model.AddGameAsync(exe);
     }
 
     private async void RemoveGame(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: GamesPageViewModel.GameItem item })
             await _model.RemoveGameAsync(item);
+    }
+
+    /// <summary>Applies a per-game tweak to a game the user picks.</summary>
+    private async void ApplyForGame(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
+            await _model.ApplyForGameAsync(item);
     }
 
     private async void UndoChange(object sender, RoutedEventArgs e)
