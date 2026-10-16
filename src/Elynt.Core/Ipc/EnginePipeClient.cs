@@ -64,14 +64,36 @@ public sealed class EnginePipeClient : IAsyncDisposable
         (await SendAsync(new ListAppsRequest(), cancellation)).Apps ?? throw Missing("apps");
 
     /// <param name="progress">Receives each progress event as it arrives, before the report.</param>
+    /// <param name="allowNotReviewed">The user accepted that apps outside the catalogue are not reviewed.</param>
     public async Task<InstallReport> InstallAppsAsync(
         IReadOnlyList<string> appIds,
         bool allRuntimes,
         IProgress<InstallProgress>? progress = null,
-        CancellationToken cancellation = default) =>
-        (await SendAsync(new InstallAppsRequest(appIds, allRuntimes), cancellation,
+        CancellationToken cancellation = default,
+        bool allowNotReviewed = false) =>
+        await RunQueueAsync(new InstallAppsRequest(appIds, allRuntimes, allowNotReviewed), progress, cancellation);
+
+    public async Task<AppSearchReport> SearchAppsAsync(string query, CancellationToken cancellation = default) =>
+        (await SendAsync(new SearchAppsRequest(query), cancellation)).AppSearch ?? throw Missing("search results");
+
+    public async Task<InstalledAppsReport> ListInstalledAppsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListInstalledAppsRequest(), cancellation)).InstalledApps ?? throw Missing("installed apps");
+
+    public Task<InstallReport> UpdateAppsAsync(
+        IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        RunQueueAsync(new UpdateAppsRequest(appIds), progress, cancellation);
+
+    public Task<InstallReport> UpdateAllAppsAsync(IProgress<InstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        RunQueueAsync(new UpdateAllAppsRequest(), progress, cancellation);
+
+    public Task<InstallReport> UninstallAppsAsync(
+        IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        RunQueueAsync(new UninstallAppsRequest(appIds), progress, cancellation);
+
+    private async Task<InstallReport> RunQueueAsync(EngineRequest request, IProgress<InstallProgress>? progress, CancellationToken cancellation) =>
+        (await SendAsync(request, cancellation,
             e => { if (e is InstallProgressEvent p) progress?.Report(p.Progress); })).Install
-        ?? throw Missing("install report");
+        ?? throw Missing("report");
 
     public async Task<IReadOnlyList<RepairToolView>> ListRepairToolsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListRepairToolsRequest(), cancellation)).RepairTools ?? throw Missing("repair tools");
