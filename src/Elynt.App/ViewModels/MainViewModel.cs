@@ -40,6 +40,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
     private string? _installStatus;
     private BiosPageViewModel? _bios;
     private DriversPageViewModel? _drivers;
+    private GpuTuningPageViewModel? _gpu;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -119,7 +120,10 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
     public bool IsSectionPage => !IsHistoryPage;
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage;
+
+    /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
+    private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -154,7 +158,10 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage && !IsGamesPage;
+    /// <summary>Shows the "nothing here yet" note: a tweak page with no tweaks, or a panel page whose panel isn't available.</summary>
+    public bool IsEmpty =>
+        (IsTweakPage && Tweaks.Count == 0) ||
+        (IsPanelPage && !IsOverclockingPage && !IsDriversPage && !IsGamesPage);
 
     /// <summary>Installed games, shown on the per-game profiles page.</summary>
     public GamesPageViewModel Games { get; } = new();
@@ -186,6 +193,21 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
     }
 
     public bool IsDriversPage => Drivers is not null && SelectedPage == Sections.Drivers;
+    /// <summary>GPU tuning, shown on the Overclocking page. Null until the service sends it.</summary>
+    public GpuTuningPageViewModel? Gpu
+    {
+        get => _gpu;
+        private set
+        {
+            _gpu?.Stop();
+            if (Set(ref _gpu, value))
+                OnPropertyChanged(nameof(IsGpuPage));
+        }
+    }
+
+    public bool IsGpuPage => Gpu is not null && SelectedPage == Sections.Overclocking;
+
+    public bool IsOverclockingPage => IsBiosPage || IsGpuPage;
 
     public string Status
     {
@@ -278,6 +300,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
             Bios = await LoadBiosAsync(_client);
             Drivers = await LoadDriversAsync(_client);
             Games.Show(await _client.ListGamesAsync());
+            Gpu = await LoadGpuAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -344,9 +367,23 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
         }
     }
 
+    private static async Task<GpuTuningPageViewModel?> LoadGpuAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new GpuTuningPageViewModel(client, await client.GetGpuTuningAsync());
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't read GPU tuning");
+            return null;
+        }
+    }
+
     private async Task DisconnectAsync()
     {
         IsConnected = false;
+        Gpu = null;
         var client = _client;
         _client = null;
         if (client is not null)
@@ -504,6 +541,8 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsDriversPage));
         OnPropertyChanged(nameof(IsGamesPage));
+        OnPropertyChanged(nameof(IsGpuPage));
+        OnPropertyChanged(nameof(IsOverclockingPage));
     }
 
     public Task AddGameAsync(string exePath) => ChangeGamesAsync(client => client.AddGameAsync(exePath));

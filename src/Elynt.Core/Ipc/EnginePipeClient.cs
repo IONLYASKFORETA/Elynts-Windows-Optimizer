@@ -4,6 +4,7 @@ using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
+using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
 
@@ -108,6 +109,24 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
         (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
 
+    public async Task<GpuTuningReport> GetGpuTuningAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetGpuTuningRequest(), cancellation)).GpuTuning ?? throw Missing("GPU tuning");
+
+    public Task<TuningResult> SetGpuTuningAsync(string deviceId, IReadOnlyDictionary<string, int> values, CancellationToken cancellation = default) =>
+        TuneAsync(new SetGpuTuningRequest(deviceId, values), cancellation);
+
+    public Task<TuningResult> AutoTuneGpuAsync(string deviceId, AutoTuneKind kind, CancellationToken cancellation = default) =>
+        TuneAsync(new AutoTuneGpuRequest(deviceId, kind), cancellation);
+
+    public Task<TuningResult> ConfirmGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new ConfirmGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> RevertGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new RevertGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> ResetGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new ResetGpuTuningRequest(deviceId), cancellation);
+
     public async ValueTask DisposeAsync()
     {
         _reader.Dispose();
@@ -142,6 +161,9 @@ public sealed class EnginePipeClient : IAsyncDisposable
             _oneAtATime.Release();
         }
     }
+
+    private async Task<TuningResult> TuneAsync(EngineRequest request, CancellationToken cancellation) =>
+        (await SendAsync(request, cancellation)).Tuning ?? throw Missing("result");
 
     private static EngineServiceException Missing(string what) => new($"The service's reply had no {what}.");
 }

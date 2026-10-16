@@ -5,6 +5,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Repair;
+using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
 
@@ -27,6 +28,12 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListGamesRequest), "listGames")]
 [JsonDerivedType(typeof(AddGameRequest), "addGame")]
 [JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
+[JsonDerivedType(typeof(GetGpuTuningRequest), "getGpuTuning")]
+[JsonDerivedType(typeof(SetGpuTuningRequest), "setGpuTuning")]
+[JsonDerivedType(typeof(AutoTuneGpuRequest), "autoTuneGpu")]
+[JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
+[JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
+[JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -66,6 +73,18 @@ public sealed record AddGameRequest(string ExePath) : EngineRequest;
 
 public sealed record RemoveGameRequest(string ExePath) : EngineRequest;
 
+public sealed record GetGpuTuningRequest : EngineRequest;
+
+public sealed record SetGpuTuningRequest(string DeviceId, IReadOnlyDictionary<string, int> Values) : EngineRequest;
+
+public sealed record AutoTuneGpuRequest(string DeviceId, AutoTuneKind Kind) : EngineRequest;
+
+public sealed record ConfirmGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -102,6 +121,8 @@ public sealed record EngineResponse(
     DriverInstallResult? DriverInstall = null,
     IReadOnlyList<InstalledGame>? Games = null,
     GameCommandResult? GameResult = null,
+    GpuTuningReport? GpuTuning = null,
+    TuningResult? Tuning = null,
     EngineEvent? Event = null)
 {
     [JsonIgnore]
@@ -152,6 +173,12 @@ public static class EngineProtocol
         ListGamesRequest => new(Games: engine.ListGames()),
         AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
         RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
+        GetGpuTuningRequest => new(GpuTuning: engine.GetGpuTuning()),
+        SetGpuTuningRequest set => new(Tuning: engine.SetGpuTuning(set.DeviceId, set.Values)),
+        AutoTuneGpuRequest auto => new(Tuning: engine.AutoTuneGpu(auto.DeviceId, auto.Kind)),
+        ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
+        RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
+        ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

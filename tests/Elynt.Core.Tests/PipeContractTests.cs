@@ -6,6 +6,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Repair;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -277,6 +278,32 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetGpuTuning_arrives_unchanged()
+    {
+        var report = await _client.GetGpuTuningAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetGpuTuning(), report);
+    }
+
+    [Fact]
+    public async Task GPU_tuning_commands_arrive_unchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var values = new Dictionary<string, int> { [GpuControls.MaxClock] = 2600, [GpuControls.PowerLimit] = -5 };
+
+        AssertSameJson(_engine.SetGpuTuning("amd:0", values), await _client.SetGpuTuningAsync("amd:0", values, ct));
+        Assert.Equal("SetGpuTuning amd:0 gpuMaxClock=2600,powerLimit=-5", _engine.LastCall);
+        await _client.AutoTuneGpuAsync("amd:0", AutoTuneKind.UndervoltGpu, ct);
+        Assert.Equal("AutoTuneGpu amd:0 UndervoltGpu", _engine.LastCall);
+        await _client.ConfirmGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ConfirmGpuTuning amd:0", _engine.LastCall);
+        await _client.RevertGpuTuningAsync("amd:0", ct);
+        Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
+        await _client.ResetGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -414,6 +441,46 @@ public sealed class PipeContractTests : IAsyncLifetime
         {
             LastCall = $"RemoveGame {exePath}";
             return new GameCommandResult(true, "Removed.", null);
+        }
+
+        private static readonly GpuTuningView Gpu = new(
+            "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,
+            [new TuningControl(GpuControls.MaxClock, "Max GPU clock", "MHz", 500, 3000, 5, 2500, 2600)],
+            [AutoTuneKind.OverclockGpu, AutoTuneKind.UndervoltGpu],
+            AtDefaults: false,
+            RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
+            Notice: "Waiting.");
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+
+        public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
+        {
+            LastCall = $"SetGpuTuning {deviceId} " + string.Join(",", values.OrderBy(v => v.Key).Select(v => $"{v.Key}={v.Value}"));
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind)
+        {
+            LastCall = $"AutoTuneGpu {deviceId} {kind}";
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult ConfirmGpuTuning(string deviceId)
+        {
+            LastCall = $"ConfirmGpuTuning {deviceId}";
+            return new TuningResult(true, "Kept.", Gpu);
+        }
+
+        public TuningResult RevertGpuTuning(string deviceId)
+        {
+            LastCall = $"RevertGpuTuning {deviceId}";
+            return new TuningResult(true, "Put back.", Gpu);
+        }
+
+        public TuningResult ResetGpuTuning(string deviceId)
+        {
+            LastCall = $"ResetGpuTuning {deviceId}";
+            return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
         }
 
         public CommandResult Revert(string tweakId)

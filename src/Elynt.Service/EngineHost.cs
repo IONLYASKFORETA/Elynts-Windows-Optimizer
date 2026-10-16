@@ -8,6 +8,7 @@ using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Windows;
 
@@ -19,6 +20,7 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -96,6 +98,7 @@ internal sealed class EngineHost(
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
-            gameStore: _gameStore);
+            gameStore: _gameStore,
+            gpuTuning: gpuTuning);
     }
 }
