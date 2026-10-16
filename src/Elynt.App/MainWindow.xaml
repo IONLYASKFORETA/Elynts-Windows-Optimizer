@@ -115,6 +115,50 @@
                     </ListBox>
                 </DockPanel>
 
+                <!-- Services: every service and driver; reviewed ones editable, Advanced unlocks the rest but never protected ones. -->
+                <DockPanel Visibility="{Binding IsServicesPage, Converter={StaticResource Visible}}" DataContext="{Binding ServicesPage}">
+                    <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8">
+                        <TextBlock Text="{Binding Summary}" Opacity="0.7" TextWrapping="Wrap" />
+                        <DockPanel Margin="0,6,0,0">
+                            <CheckBox DockPanel.Dock="Right" Content="Advanced" IsChecked="{Binding Advanced}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                      ToolTip="Unlocks Disabled and services that aren't on the reviewed list. Anti-cheat, Windows Update and boot drivers stay locked." />
+                            <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search every service by name" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    </StackPanel>
+                    <ListBox ItemsSource="{Binding Services}" HorizontalContentAlignment="Stretch" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ServiceItemViewModel}">
+                                <Grid Margin="4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontSize="14" TextWrapping="Wrap" />
+                                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap">
+                                            <Run Text="{Binding Badge, Mode=OneWay}" /> · <Run Text="{Binding StartText, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding View.Explanation}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        <TextBlock Text="{Binding RecommendationText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                   Visibility="{Binding HasRecommendation, Converter={StaticResource Visible}}" />
+                                        <TextBlock Text="{Binding View.LockReason}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                   Visibility="{Binding IsProtected, Converter={StaticResource Visible}}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                        <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" MinWidth="100"
+                                                  IsEnabled="{Binding CanChange}" />
+                                        <Button Content="Set" Click="SetServiceStart" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanChange}" />
+                                        <Button Content="Undo" Click="UndoServiceChange" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanUndo}"
+                                                ToolTip="Puts back the whole configuration this service had before the app changed it." />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
                          Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">

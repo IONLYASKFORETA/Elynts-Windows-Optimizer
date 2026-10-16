@@ -116,7 +116,15 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
     public bool IsSectionPage => !IsHistoryPage;
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsServicesPage;
+
+    /// <summary>The Services page, set by the window. Null until then.</summary>
+    public ServicesPageViewModel? ServicesPage { get; set; }
+
+    public bool IsServicesPage => ServicesPage is not null && SelectedPage == Sections.StartupAndServices;
+
+    /// <summary>The current connection to the service, for pages that send their own commands.</summary>
+    internal EnginePipeClient? Client => _client;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -254,6 +262,8 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            if (ServicesPage is not null)
+                await ServicesPage.LoadAsync();
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -465,6 +475,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive) : Ob
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsServicesPage));
     }
 
     /// <summary>Installs the ticked apps one at a time, showing each app's progress as the service reports it.</summary>

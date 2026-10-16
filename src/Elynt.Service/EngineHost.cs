@@ -21,6 +21,8 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsServiceManager _services = new();
+    private readonly WindowsDevicePresence _devices = new();
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -76,7 +78,11 @@ internal sealed class EngineHost(
                 _systemInfo,
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
-                new WindowsRepairSystem(sid)),
+                new WindowsRepairSystem(sid))
+            {
+                Services = _services,
+                Devices = _devices,
+            },
             journal,
             sid,
             safetyNet,

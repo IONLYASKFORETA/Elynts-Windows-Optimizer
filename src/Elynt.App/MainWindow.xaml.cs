@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _model = new MainViewModel(ConfirmDestructive);
+        _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) =>
@@ -86,6 +87,29 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>Drivers can stop Windows from starting, so changing one is asked about first. "No" is the default.</summary>
+    private bool ConfirmDriverChange(ServiceItemViewModel item, Elynt.Core.Tweaks.ServiceStart start) =>
+        MessageBox.Show(
+            this,
+            $"{item.Title} is a driver. Setting it to {start} can stop Windows from starting if it is needed for your hardware.\n\n" +
+            "The previous configuration is saved and can be put back from the Services page or the Undo history.\n\nChange it anyway?",
+            "Change a driver",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void SetServiceStart(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.SetAsync(item);
+    }
+
+    private async void UndoServiceChange(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.UndoAsync(item);
+    }
 
     private async void UndoChange(object sender, RoutedEventArgs e)
     {
