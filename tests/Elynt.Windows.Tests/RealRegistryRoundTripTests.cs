@@ -47,9 +47,12 @@ public sealed class RealRegistryRoundTripTests : IDisposable
             "This machine doesn't have that power plan.");
 
         var engine = NewEngine(Catalogue.Default);
-        var view = engine.ListTweaks().Single(t => t.Id == tweakId);
-        Assert.SkipWhen(!view.Applicable, $"Doesn't apply to this machine: {view.NotApplicableReason}");
-        Assert.SkipWhen(view.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
+        // Hidden tweaks (e.g. a version pin for another build) aren't listed; a per-game copy is listed only once applied.
+        var view = engine.ListTweaks().SingleOrDefault(t => t.Id == tweakId);
+        var perGameCopy = tweakId.Contains('|');
+        Assert.SkipWhen(view is null && !perGameCopy, "Hidden on this machine because it doesn't apply here.");
+        Assert.SkipWhen(view is { Applicable: false }, $"Doesn't apply to this machine: {view?.NotApplicableReason}");
+        Assert.SkipWhen(view?.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
 
         CatalogueRoundTrip.Run(engine, Adapters(), tweak);
     }
