@@ -352,4 +352,15 @@ public class GamingTweakTests
         Assert.False(engine.Revert(GamingTweaks.WindowedGamesOptimizationsOn.Id).Succeeded);
         Assert.Equal(RegistryValue.String("AutoHDREnable=1;SwapEffectUpgradeEnable=0;"), _registry.GetValue(DirectXSettings));
     }
+
+    [Fact]
+    public void A_tweak_whose_setting_cant_be_read_still_lists_as_off_and_the_rest_of_the_list_works()
+    {
+        var engine = new Engine(Catalogue.Default, new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test");
+
+        var views = engine.ListTweaks();
+
+        Assert.Equal(TweakState.Off, views.Single(t => t.Id == GamingTweaks.UsePlatformClockRemoved.Id).State);
+        Assert.False(engine.Apply(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+    }
 }

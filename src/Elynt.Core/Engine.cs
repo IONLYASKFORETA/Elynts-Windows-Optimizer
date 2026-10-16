@@ -384,6 +384,20 @@ public sealed class Engine(
             records[i].Revert(system);
     }
 
+    /// <summary>For the list: a setting that can't be read right now (e.g. bcdedit failing) shows as off, not as an error.</summary>
+    private TweakState SafeDetect(TweakDefinition tweak)
+    {
+        try
+        {
+            return Detect(tweak);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the state of {Tweak}", tweak.Id);
+            return TweakState.Off;
+        }
+    }
+
     private TweakState Detect(TweakDefinition tweak) =>
         !tweak.PerGame && tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
 
@@ -398,7 +412,7 @@ public sealed class Engine(
         tweak.Steps.Select(step => step.DescribeChange()).ToList(),
         tweak.Undo,
         tweak.Refresh,
-        Detect(tweak),
+        SafeDetect(tweak),
         journal.LatestUndoable(tweak.Id, user) is not null)
     {
         Reversibility = tweak.Reversibility,
