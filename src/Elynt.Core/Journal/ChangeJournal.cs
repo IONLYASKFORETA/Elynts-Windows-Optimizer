@@ -112,6 +112,23 @@ public sealed class ChangeJournal
         }
     }
 
+    /// <summary>When this tweak was last applied or undone for this user, or null if it never was.</summary>
+    public DateTimeOffset? LastChangedAt(string tweakId, string user)
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Where(e => e.TweakId == tweakId && e.User == user)
+                .Select(e => e.Status switch
+                {
+                    EntryStatus.Applying or EntryStatus.Applied => e.AppliedAt,
+                    EntryStatus.Reverted => e.ClosedAt,
+                    _ => null,
+                })
+                .Max();
+        }
+    }
+
     /// <summary>The newest change to this tweak for this user that has not been undone.</summary>
     public JournalEntry? LatestUndoable(string tweakId, string user)
     {

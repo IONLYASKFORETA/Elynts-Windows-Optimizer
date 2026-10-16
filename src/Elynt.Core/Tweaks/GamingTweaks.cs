@@ -33,7 +33,15 @@ public static class GamingTweaks
             new RegistryValueStep(new(RegistryRoot.CurrentUser, MouseKey, "MouseThreshold1"), RegistryValue.String("0")),
             new RegistryValueStep(new(RegistryRoot.CurrentUser, MouseKey, "MouseThreshold2"), RegistryValue.String("0")),
         ],
-        Refresh: SessionRefresh.MouseSettings);
+        Refresh: SessionRefresh.MouseSettings)
+    {
+        Reversibility = Reversibility.Reversible,
+        Risks = RiskFlags.None,
+        Applicability = Applicability.Always,
+        // Instant, but the signed-in session must re-read the mouse settings, which a profile running in the
+        // service can't do.
+        ProfileEligible = false,
+    };
 
     public static IReadOnlyList<TweakDefinition> All { get; } = [EnhancePointerPrecisionOff];
 }

@@ -1,3 +1,4 @@
+using Elynt.Core.Bios;
 using Elynt.Core.Journal;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -24,7 +25,36 @@ public sealed record TweakView(
     string Undo,
     SessionRefresh Refresh,
     TweakState State,
-    bool CanUndo);
+    bool CanUndo)
+{
+    public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
+
+    /// <summary>For a destructive tweak: what cannot be undone, shown in the confirmation.</summary>
+    public string? DestructiveWarning { get; init; }
+
+    public RiskFlags Risks { get; init; } = RiskFlags.None;
+
+    public IReadOnlyList<AntiCheatConflict> AntiCheat { get; init; } = [];
+
+    /// <summary>The tweak needs a reboot and was applied or undone since Windows last started.</summary>
+    public bool PendingReboot { get; init; }
+
+    /// <summary>Why the tweak doesn't fit this PC's hardware, edition or build, or null when it does.</summary>
+    public string? NotApplicableReason { get; init; }
+
+    public bool Applicable => NotApplicableReason is null;
+
+    /// <summary>Instant, so a per-game profile may include it.</summary>
+    public bool ProfileEligible { get; init; }
+}
+
+/// <summary>How the user asked for a tweak to be applied.</summary>
+/// <param name="ConfirmDestructive">The user confirmed, in a separate step, that a destructive change can't be undone.</param>
+/// <param name="Advanced">Advanced mode is on. It unlocks more, but never the hard never-touch rules.</param>
+public sealed record ApplyOptions(bool ConfirmDestructive = false, bool Advanced = false)
+{
+    public static ApplyOptions Default { get; } = new();
+}
 
 public sealed record CommandResult(bool Succeeded, string Message, TweakView? Tweak);
 
@@ -35,8 +65,9 @@ public sealed record CommandResult(bool Succeeded, string Message, TweakView? Tw
 public interface IEngine
 {
     IReadOnlyList<TweakView> ListTweaks();
-    CommandResult Apply(string tweakId);
+    CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
+    BiosReport GetBiosReport();
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -51,12 +82,33 @@ public sealed class Engine(
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
 
-    public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks.Select(Describe).ToList();
+    /// <summary>
+    /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
+    /// still shows while it has a change to undo.
+    /// </summary>
+    public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks
+        .Select(Describe)
+        .Where(view => view.Applicable || view.CanUndo || !catalogue.Get(view.Id).Applicability.Hide)
+        .ToList();
 
-    public CommandResult Apply(string tweakId)
+    public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
+        options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
+
+        if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
+            return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
+
+        // Hard rules hold in every mode, Advanced included.
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target)).FirstOrDefault(v => v is not null) is { } violation)
+        {
+            _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
+            return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
+        }
+
+        if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
+            return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
 
         try
         {
@@ -124,6 +176,21 @@ public sealed class Engine(
         }
     }
 
+    public BiosReport GetBiosReport()
+    {
+        HardwareSnapshot? hardware = null;
+        try
+        {
+            hardware = system.Hardware?.Read();
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
+        }
+
+        return BiosAdvisor.Build(hardware);
+    }
+
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {
         for (var i = records.Count - 1; i >= 0; i--)
@@ -145,7 +212,17 @@ public sealed class Engine(
         tweak.Undo,
         tweak.Refresh,
         Detect(tweak),
-        journal.LatestUndoable(tweak.Id, user) is not null);
+        journal.LatestUndoable(tweak.Id, user) is not null)
+    {
+        Reversibility = tweak.Reversibility,
+        DestructiveWarning = tweak.DestructiveWarning,
+        Risks = tweak.Risks,
+        AntiCheat = tweak.AntiCheat,
+        PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
+                        journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
+        NotApplicableReason = tweak.Applicability.WhyNot(system.System),
+        ProfileEligible = tweak.ProfileEligible,
+    };
 
     private CommandResult Done(TweakDefinition tweak, string message) => new(true, message, Describe(tweak));
 

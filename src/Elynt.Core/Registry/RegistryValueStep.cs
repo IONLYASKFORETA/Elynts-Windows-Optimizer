@@ -6,6 +6,8 @@ namespace Elynt.Core.Registry;
 /// <summary>A tweak step that sets one registry value.</summary>
 public sealed record RegistryValueStep(RegistryLocation Location, RegistryValue Desired) : TweakStep
 {
+    public override ChangeTarget Target => new RegistryTarget(Location, Desired);
+
     public override string DescribeChange() => $"Set {Location} to {Desired}";
 
     public override bool IsApplied(SystemAdapters system) => Desired.Equals(system.Registry.GetValue(Location));

@@ -33,7 +33,28 @@ public sealed record TweakDefinition(
     EvidenceTier Tier,
     string Undo,
     IReadOnlyList<TweakStep> Steps,
-    SessionRefresh Refresh = SessionRefresh.None);
+    SessionRefresh Refresh = SessionRefresh.None)
+{
+    /// <summary>What undo can and cannot do. Destructive tweaks need an explicit confirmation to apply.</summary>
+    public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
+
+    /// <summary>For a destructive tweak: what cannot be undone, spelled out in the confirmation.</summary>
+    public string? DestructiveWarning { get; init; }
+
+    public RiskFlags Risks { get; init; } = RiskFlags.None;
+
+    /// <summary>Anti-cheats that object to this tweak. The app warns and never blocks.</summary>
+    public IReadOnlyList<AntiCheatConflict> AntiCheat { get; init; } = [];
+
+    /// <summary>The hardware, edition and build this tweak fits.</summary>
+    public Applicability Applicability { get; init; } = Applicability.Always;
+
+    /// <summary>
+    /// Takes effect immediately with no reboot and no signed-in session step, so a per-game profile may apply and
+    /// undo it. Never true for reboot-needing, destructive or Security tweaks.
+    /// </summary>
+    public bool ProfileEligible { get; init; }
+}
 
 /// <summary>
 /// One declarative piece of a tweak. Behaviour comes from shared step types (registry value today;
@@ -41,6 +62,9 @@ public sealed record TweakDefinition(
 /// </summary>
 public abstract record TweakStep
 {
+    /// <summary>What this step changes, checked against <see cref="HardRules"/> before anything runs.</summary>
+    public abstract ChangeTarget Target { get; }
+
     /// <summary>The exact change, as shown in the detail pane.</summary>
     public abstract string DescribeChange();
 
