@@ -18,6 +18,8 @@ public partial class MainWindow : Window
 
     private async void Retry(object sender, RoutedEventArgs e) => await _model.ConnectAsync();
 
+    private async void InstallApps(object sender, RoutedEventArgs e) => await _model.InstallTickedAsync();
+
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {
         Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
