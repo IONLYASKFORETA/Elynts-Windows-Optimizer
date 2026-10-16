@@ -210,14 +210,15 @@ public class EngineTests
 
     private void Seed(TweakDefinition tweak, StartingState start)
     {
-        foreach (var step in tweak.Steps.OfType<RegistryValueStep>())
+        foreach (var step in tweak.Steps.Select(s => s.Target).OfType<RegistryTarget>())
         {
             var location = step.Location;
             switch (start)
             {
                 case StartingState.OtherValue:
-                    // Extra bytes after the terminator also check that raw bytes survive, not a parsed string.
-                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [.. step.Desired.Data, 0x31, 0x00]));
+                    // A leading "1" makes it a different value (also inside a list of settings); the extra bytes after
+                    // the terminator check that raw bytes survive, not a parsed string.
+                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [0x31, 0x00, .. step.Desired.Data, 0x31, 0x00]));
                     break;
                 case StartingState.ValuesAbsent:
                     _registry.CreateKey(location.Root, location.KeyPath);

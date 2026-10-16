@@ -49,6 +49,9 @@ public sealed record TweakDefinition(
     /// <summary>The hardware, edition and build this tweak fits.</summary>
     public Applicability Applicability { get; init; } = Applicability.Always;
 
+    /// <summary>Warnings that only show on PCs with particular hardware, e.g. dual-CCD X3D CPUs.</summary>
+    public IReadOnlyList<HardwareNote> HardwareNotes { get; init; } = [];
+
     /// <summary>
     /// Takes effect immediately with no reboot and no signed-in session step, so a per-game profile may apply and
     /// undo it. Never true for reboot-needing, destructive or Security tweaks.

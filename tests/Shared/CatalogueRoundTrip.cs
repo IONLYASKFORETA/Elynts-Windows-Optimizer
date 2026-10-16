@@ -31,8 +31,8 @@ public static class CatalogueRoundTrip
 public static class RegistrySnapshot
 {
     public static IReadOnlyList<string> Take(IRegistry registry, TweakDefinition tweak) =>
-        tweak.Steps.OfType<RegistryValueStep>()
-            .Select(step => step.Location)
+        tweak.Steps.Select(step => step.Target).OfType<RegistryTarget>()
+            .Select(target => target.Location)
             .Select(location =>
             {
                 var parts = location.KeyPath.Split('\\');

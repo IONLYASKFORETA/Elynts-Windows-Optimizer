@@ -44,6 +44,9 @@ public sealed record TweakView(
 
     public bool Applicable => NotApplicableReason is null;
 
+    /// <summary>Warnings that fit this PC's hardware, e.g. the X3D core-parking warning.</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     /// <summary>Instant, so a per-game profile may include it.</summary>
     public bool ProfileEligible { get; init; }
 }
@@ -221,6 +224,10 @@ public sealed class Engine(
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
         NotApplicableReason = tweak.Applicability.WhyNot(system.System),
+        Warnings = tweak.HardwareNotes
+            .Where(note => (system.System.Hardware & note.When) == note.When)
+            .Select(note => note.Text)
+            .ToList(),
         ProfileEligible = tweak.ProfileEligible,
     };
 

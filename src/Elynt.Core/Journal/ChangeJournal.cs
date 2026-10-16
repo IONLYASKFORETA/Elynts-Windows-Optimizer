@@ -6,6 +6,7 @@ namespace Elynt.Core.Journal;
 /// <summary>The exact prior state of one step, captured before the change, that knows how to put it back.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
+[JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
 public abstract record StepRecord
 {
     public abstract void Revert(SystemAdapters system);
