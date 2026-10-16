@@ -1,7 +1,9 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Boot;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Power;
 using Elynt.Core.Registry;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
@@ -24,6 +26,12 @@ public sealed record SystemAdapters(
     IGameSources? Games = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+
+    /// <summary>The current boot entry's settings (BCD). Tweaks with boot steps fail without it.</summary>
+    public IBootConfig? Boot { get; init; }
+
+    /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
+    public IPowerPlans? Power { get; init; }
 }
 
 public interface ISystemInfo

@@ -1,4 +1,5 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Power;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Registry;
 using Elynt.Tests.Shared;
@@ -8,6 +9,8 @@ namespace Elynt.Core.Tests;
 public class EngineTests
 {
     private readonly FakeRegistry _registry = new();
+    private readonly FakeBootConfig _boot = new();
+    private readonly FakePowerPlans _power = new();
     private readonly InMemoryJournalStore _store = new();
 
     private Engine NewEngine() => NewEngineWith(_store);
@@ -15,9 +18,9 @@ public class EngineTests
     public static TheoryData<string, StartingState> EveryTweakFromEveryStartingState()
     {
         var data = new TheoryData<string, StartingState>();
-        foreach (var tweak in Catalogue.Default.Tweaks)
+        foreach (var id in CatalogueRoundTrip.ApplicableIds(Catalogue.Default))
             foreach (var state in Enum.GetValues<StartingState>())
-                data.Add(tweak.Id, state);
+                data.Add(id, state);
         return data;
     }
 
@@ -28,7 +31,7 @@ public class EngineTests
         var tweak = Catalogue.Default.Get(tweakId);
         Seed(tweak, start);
 
-        CatalogueRoundTrip.Run(NewEngine(), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(), Adapters(), tweak);
     }
 
     [Fact]
@@ -192,7 +195,7 @@ public class EngineTests
         Assert.True(applied.Tweak.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
+    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo()) { Boot = _boot, Power = _power };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 
@@ -210,14 +213,24 @@ public class EngineTests
 
     private void Seed(TweakDefinition tweak, StartingState start)
     {
-        foreach (var step in tweak.Steps.OfType<RegistryValueStep>())
+        // Boot settings and power plans start away from what the tweak wants, so there is something to undo.
+        foreach (var target in tweak.Steps.Select(s => s.Target))
+        {
+            if (target is BootSettingTarget boot)
+                _boot.Set(boot.Element, boot.Value is null ? "Yes" : "Other");
+            if (target is PowerPlanTarget)
+                _power.Active = start == StartingState.OtherValue ? PowerPlans.PowerSaver : PowerPlans.Balanced;
+        }
+
+        foreach (var step in tweak.Steps.Select(s => s.Target).OfType<RegistryTarget>())
         {
             var location = step.Location;
             switch (start)
             {
                 case StartingState.OtherValue:
-                    // Extra bytes after the terminator also check that raw bytes survive, not a parsed string.
-                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [.. step.Desired.Data, 0x31, 0x00]));
+                    // A leading "1" makes it a different value (also inside a list of settings); the extra bytes after
+                    // the terminator check that raw bytes survive, not a parsed string.
+                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [0x31, 0x00, .. step.Desired.Data, 0x31, 0x00]));
                     break;
                 case StartingState.ValuesAbsent:
                     _registry.CreateKey(location.Root, location.KeyPath);

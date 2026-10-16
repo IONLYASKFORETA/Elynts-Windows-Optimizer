@@ -15,7 +15,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive, AskToReboot);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) =>
@@ -114,6 +114,17 @@ public partial class MainWindow : Window
             Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
     }
 
+    private string? PickGame()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
     private async void AddGame(object sender, RoutedEventArgs e)
     {
         var picker = new Microsoft.Win32.OpenFileDialog
@@ -129,6 +140,12 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: GamesPageViewModel.GameItem item })
             await _model.RemoveGameAsync(item);
+    }
+
+    private async void AddGameForTweak(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
+            await _model.AddGameAsync(item);
     }
 
     private async void UndoChange(object sender, RoutedEventArgs e)

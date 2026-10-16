@@ -55,8 +55,17 @@ public sealed record TweakView(
 
     public bool Applicable => NotApplicableReason is null;
 
+    /// <summary>Warnings that fit this PC's hardware, e.g. the X3D core-parking warning.</summary>
+    public IReadOnlyList<string> Warnings { get; init; } = [];
+
     /// <summary>Instant, so a per-game profile may include it.</summary>
     public bool ProfileEligible { get; init; }
+
+    /// <summary>Set for one game at a time: the app asks for the game's .exe and applies the id from <see cref="ForGame"/>.</summary>
+    public bool PerGame { get; init; }
+
+    /// <summary>The id of this per-game tweak's instance for one game.</summary>
+    public string ForGame(string exePath) => $"{Id}{PerGameTweak.Separator}{exePath}";
 }
 
 /// <summary>How the user asked for a tweak to be applied.</summary>
@@ -194,15 +203,25 @@ public sealed class Engine(
     /// still shows while it has a change to undo.
     /// </summary>
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks
+        .Concat(GamesWithChanges())
         .Select(Describe)
         .Where(view => view.Applicable || view.CanUndo || !catalogue.Get(view.Id).Applicability.Hide)
         .ToList();
+
+    /// <summary>One game's instance of a per-game tweak is listed while it has a change to undo.</summary>
+    private IEnumerable<TweakDefinition> GamesWithChanges() => journal.UndoableTweakIds(user)
+        .Where(id => id.Contains(PerGameTweak.Separator))
+        .Select(id => catalogue.TryGet(id, out var tweak) ? tweak : null)
+        .OfType<TweakDefinition>();
 
     public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
         options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
+
+        if (tweak.PerGame)
+            return Failed(tweak, "Choose a game first: this is set for one game at a time. Nothing was changed.");
 
         if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
@@ -415,8 +434,22 @@ public sealed class Engine(
             records[i].Revert(system);
     }
 
+    /// <summary>For the list: a setting that can't be read right now (e.g. bcdedit failing) shows as off, not as an error.</summary>
+    private TweakState SafeDetect(TweakDefinition tweak)
+    {
+        try
+        {
+            return Detect(tweak);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the state of {Tweak}", tweak.Id);
+            return TweakState.Off;
+        }
+    }
+
     private TweakState Detect(TweakDefinition tweak) =>
-        tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
+        !tweak.PerGame && tweak.Steps.All(step => step.IsApplied(system)) ? TweakState.On : TweakState.Off;
 
     private TweakView Describe(TweakDefinition tweak)
     {
@@ -432,7 +465,7 @@ public sealed class Engine(
         tweak.Steps.Select(step => step.DescribeChange()).ToList(),
         tweak.Undo,
         tweak.Refresh,
-        Detect(tweak),
+        SafeDetect(tweak),
         journal.LatestUndoable(tweak.Id, user) is not null)
     {
         Reversibility = tweak.Reversibility,
@@ -444,7 +477,12 @@ public sealed class Engine(
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
         NotApplicableReason = tweak.Applicability.WhyNot(system.System),
+        Warnings = tweak.HardwareNotes
+            .Where(note => (system.System.Hardware & note.When) == note.When)
+            .Select(note => note.Text)
+            .ToList(),
         ProfileEligible = tweak.ProfileEligible,
+        PerGame = tweak.PerGame,
     };
     }
 
