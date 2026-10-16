@@ -1,4 +1,5 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
 using Serilog;
@@ -22,6 +23,7 @@ try
     builder.Services.AddSerilog();
     builder.Services.AddSingleton(Catalogue.Default);
     builder.Services.AddSingleton(new ChangeJournal(new JsonFileJournalStore(ServicePaths.Journal)));
+    builder.Services.AddSingleton<IRepairLogStore>(new FileRepairLogStore(ServicePaths.RepairLogs));
     builder.Services.AddHostedService<EngineHost>();
 
     builder.Build().Run();

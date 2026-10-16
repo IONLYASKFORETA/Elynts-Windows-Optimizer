@@ -177,7 +177,7 @@ public class EngineTests
         Assert.NotEmpty(view.Sources);
     }
 
-    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
+    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo(), new FakeRepairSystem());
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 

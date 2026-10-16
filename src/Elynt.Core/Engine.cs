@@ -1,4 +1,5 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,6 +38,13 @@ public interface IEngine
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId);
     CommandResult Revert(string tweakId);
+
+    /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
+    IReadOnlyList<RepairToolView> ListRepairTools();
+
+    /// <summary>Runs one repair tool, streaming progress, and saves a log of the run.</summary>
+    /// <param name="confirmed">The user confirmed an opt-in tool's warning. Opt-in tools refuse to run without it.</param>
+    Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
 }
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
@@ -46,10 +54,19 @@ public sealed class Engine(
     ChangeJournal journal,
     string user,
     TimeProvider? clock = null,
-    ILogger<Engine>? logger = null) : IEngine
+    ILogger<Engine>? logger = null,
+    IRepairLogStore? repairLogs = null,
+    RepairCatalogue? repairs = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
+    private readonly RepairBench _repair = new(
+        repairs ?? RepairCatalogue.Default,
+        system,
+        repairLogs ?? new InMemoryRepairLogStore(),
+        user,
+        clock ?? TimeProvider.System,
+        logger ?? (ILogger)NullLogger<Engine>.Instance);
 
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks.Select(Describe).ToList();
 
@@ -123,6 +140,11 @@ public sealed class Engine(
             return Failed(tweak, $"Couldn't undo this: {ex.Message}");
         }
     }
+
+    public IReadOnlyList<RepairToolView> ListRepairTools() => _repair.List();
+
+    public Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        _repair.RunAsync(toolId, confirmed, progress, cancellation);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

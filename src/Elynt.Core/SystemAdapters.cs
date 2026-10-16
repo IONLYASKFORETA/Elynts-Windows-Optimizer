@@ -1,9 +1,10 @@
 using Elynt.Core.Registry;
+using Elynt.Core.Repair;
 
 namespace Elynt.Core;
 
 /// <summary>Everything the engine may touch on the PC. Real adapters wrap Windows; fakes hold in-memory state.</summary>
-public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System);
+public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System, IRepairSystem Repair);
 
 public interface ISystemInfo
 {

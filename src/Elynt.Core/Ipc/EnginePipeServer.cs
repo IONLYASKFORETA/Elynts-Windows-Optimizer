@@ -17,6 +17,9 @@ public sealed class EnginePipeServer(
     private readonly ILogger _log = logger ?? NullLogger<EnginePipeServer>.Instance;
     private readonly SemaphoreSlim _oneCommandAtATime = new(1, 1);
 
+    // Repairs run for minutes; they queue behind each other but never hold up tweak commands.
+    private readonly SemaphoreSlim _oneRepairAtATime = new(1, 1);
+
     public async Task RunAsync(CancellationToken cancellation)
     {
         var clients = new List<Task>();
@@ -58,7 +61,7 @@ public sealed class EnginePipeServer(
             while (await reader.ReadLineAsync(cancellation) is { } line)
             {
                 engine ??= engineFor(pipe);
-                var response = await HandleAsync(engine, line, cancellation);
+                var response = await HandleAsync(engine, line, interim => writer.WriteLine(EngineProtocol.Serialize(interim)), cancellation);
                 await writer.WriteLineAsync(EngineProtocol.Serialize(response).AsMemory(), cancellation);
             }
         }
@@ -75,14 +78,25 @@ public sealed class EnginePipeServer(
         }
     }
 
-    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, CancellationToken cancellation)
+    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, Action<EngineResponse> sendInterim, CancellationToken cancellation)
     {
-        await _oneCommandAtATime.WaitAsync(cancellation);
+        EngineRequest request;
         try
         {
-            var request = EngineProtocol.Deserialize<EngineRequest>(line);
+            request = EngineProtocol.Deserialize<EngineRequest>(line);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Couldn't read a command");
+            return new EngineResponse(Error: ex.Message);
+        }
+
+        var gate = EngineProtocol.IsLongRunning(request) ? _oneRepairAtATime : _oneCommandAtATime;
+        await gate.WaitAsync(cancellation);
+        try
+        {
             _log.LogInformation("Command {Request}", request);
-            return EngineProtocol.Dispatch(engine, request);
+            return await EngineProtocol.DispatchAsync(engine, request, sendInterim, cancellation);
         }
         catch (Exception ex)
         {
@@ -91,7 +105,7 @@ public sealed class EnginePipeServer(
         }
         finally
         {
-            _oneCommandAtATime.Release();
+            gate.Release();
         }
     }
 }

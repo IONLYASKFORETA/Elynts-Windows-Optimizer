@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Ipc;
+using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -57,6 +58,46 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListRepairTools_arrives_unchanged()
+    {
+        var tools = await _client.ListRepairToolsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListRepairTools(), tools);
+    }
+
+    [Fact]
+    public async Task RunRepair_streams_every_progress_line_then_the_result_unchanged()
+    {
+        var progress = new List<RepairProgress>();
+
+        var result = await _client.RunRepairAsync("some.repair", confirmed: true, new Collect(progress), TestContext.Current.CancellationToken);
+
+        Assert.Equal("RunRepair some.repair True", _engine.LastCall);
+        AssertSameJson(StubEngine.Progress, progress);
+        AssertSameJson(StubEngine.Repaired, result);
+    }
+
+    [Fact]
+    public async Task Other_commands_still_answer_while_a_repair_runs()
+    {
+        _engine.HoldRepair = new TaskCompletionSource();
+        await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        var repair = _client.RunRepairAsync("some.repair", confirmed: false, null, TestContext.Current.CancellationToken);
+
+        var tweaks = await second.ListTweaksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Single(tweaks);
+        Assert.False(repair.IsCompleted);
+        _engine.HoldRepair.SetResult();
+        Assert.True((await repair).Succeeded);
+    }
+
+    private sealed class Collect(List<RepairProgress> into) : IProgress<RepairProgress>
+    {
+        public void Report(RepairProgress value) => into.Add(value);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -69,7 +110,7 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public void Every_engine_command_has_a_client_method()
     {
-        var commands = typeof(IEngine).GetMethods().Select(m => m.Name + "Async");
+        var commands = typeof(IEngine).GetMethods().Select(m => m.Name.EndsWith("Async") ? m.Name : m.Name + "Async");
         var clientMethods = typeof(EnginePipeClient).GetMethods().Select(m => m.Name);
 
         Assert.Empty(commands.Except(clientMethods));
@@ -102,6 +143,34 @@ public sealed class PipeContractTests : IAsyncLifetime
         {
             LastCall = $"Revert {tweakId}";
             return new CommandResult(false, "Nothing to undo.", View with { State = TweakState.Off });
+        }
+
+        public TaskCompletionSource? HoldRepair { get; set; }
+
+        public static readonly IReadOnlyList<RepairProgress> Progress =
+        [
+            new("some.repair", 1, 2, "First", null, null),
+            new("some.repair", 1, 2, "First", 42.5, "[=== 42.5% ===]"),
+            new("some.repair", 2, 2, "Second", null, "Done with it."),
+        ];
+
+        public static readonly RepairResult Repaired = new(
+            "some.repair", true, "Done. Restart the PC to finish.\n• First: ok", true, "some.follow-up", @"C:\logs\repair.log", "the log");
+
+        public IReadOnlyList<RepairToolView> ListRepairTools() =>
+        [
+            new("some.repair", Sections.Repair, "Some repair", "Repairs a thing.", ["Run thing.exe /fix"], RestartNeed.Restart,
+                "Needs a restart.", "Are you sure?", IsFollowUp: false, Available: false, "Not on this PC."),
+        ];
+
+        public async Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = $"RunRepair {toolId} {confirmed}";
+            foreach (var p in Progress)
+                progress?.Report(p);
+            if (HoldRepair is not null)
+                await HoldRepair.Task.WaitAsync(cancellation);
+            return Repaired;
         }
     }
 }

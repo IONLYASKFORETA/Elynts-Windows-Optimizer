@@ -62,7 +62,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 
     private Engine NewEngine(Catalogue catalogue) => new(
         catalogue,
-        new SystemAdapters(_registry, new WindowsSystemInfo()),
+        new SystemAdapters(_registry, new WindowsSystemInfo(), new WindowsRepairSystem(CurrentUserSid)),
         new ChangeJournal(new InMemoryJournalStore()),
         CurrentUserSid);
 }

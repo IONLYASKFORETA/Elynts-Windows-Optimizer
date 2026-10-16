@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using Elynt.Core.Repair;
 
 namespace Elynt.Core.Ipc;
 
@@ -44,6 +45,17 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<CommandResult> RevertAsync(string tweakId, CancellationToken cancellation = default) =>
         (await SendAsync(new RevertRequest(tweakId), cancellation)).Result ?? throw Missing("result");
 
+    public async Task<IReadOnlyList<RepairToolView>> ListRepairToolsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListRepairToolsRequest(), cancellation)).RepairTools ?? throw Missing("repair tools");
+
+    /// <summary>
+    /// Runs a repair tool; <paramref name="progress"/> gets every progress line as it arrives. Holds this connection
+    /// until the tool finishes, so the UI uses a second connection for other commands meanwhile.
+    /// </summary>
+    public async Task<RepairResult> RunRepairAsync(
+        string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new RunRepairRequest(toolId, confirmed), cancellation, progress)).RepairResult ?? throw Missing("repair result");
+
     public async ValueTask DisposeAsync()
     {
         _reader.Dispose();
@@ -51,14 +63,22 @@ public sealed class EnginePipeClient : IAsyncDisposable
         await _pipe.DisposeAsync();
     }
 
-    private async Task<EngineResponse> SendAsync(EngineRequest request, CancellationToken cancellation)
+    private async Task<EngineResponse> SendAsync(
+        EngineRequest request, CancellationToken cancellation, IProgress<RepairProgress>? progress = null)
     {
         await _oneAtATime.WaitAsync(cancellation);
         try
         {
             await _writer.WriteLineAsync(EngineProtocol.Serialize(request).AsMemory(), cancellation);
-            var line = await _reader.ReadLineAsync(cancellation) ?? throw new IOException("The service closed the connection.");
-            var response = EngineProtocol.Deserialize<EngineResponse>(line);
+            EngineResponse response;
+            while (true)
+            {
+                var line = await _reader.ReadLineAsync(cancellation) ?? throw new IOException("The service closed the connection.");
+                response = EngineProtocol.Deserialize<EngineResponse>(line);
+                if (response.RepairProgress is not { } interim)
+                    break;
+                progress?.Report(interim);
+            }
             if (response.Error is not null)
                 throw new EngineServiceException(response.Error);
             return response;
