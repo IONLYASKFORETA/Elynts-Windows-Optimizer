@@ -28,7 +28,10 @@ dotnet test --solution ElyntOptimizer.slnx
 
 ## Try it on Windows
 
-Until the installer lands, register the service by hand from an elevated terminal:
+Every CI run publishes a ready-to-run test build (`ElyntOptimizer-test-build` under the run's Artifacts) with
+`install.cmd` and `uninstall.cmd`; its `README.txt` has the steps. No developer tools needed.
+
+Or, from source, register the service by hand from an elevated terminal:
 
 ```
 dotnet publish src/Elynt.Service -c Release -r win-x64 --self-contained -o C:\ElyntOptimizer\service

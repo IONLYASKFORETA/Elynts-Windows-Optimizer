@@ -20,3 +20,16 @@ jobs:
 
       - name: Test
         run: dotnet test --solution ElyntOptimizer.slnx --configuration Release --no-build
+
+      # A ready-to-run build for trying the app in a VM, downloadable from the run's Artifacts.
+      - name: Publish test build
+        run: |
+          dotnet publish src/Elynt.Service --configuration Release --runtime win-x64 --self-contained --output out/ElyntOptimizer/service
+          dotnet publish src/Elynt.App --configuration Release --runtime win-x64 --self-contained --output out/ElyntOptimizer/app
+          Copy-Item build/test-install/* out/ElyntOptimizer/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ElyntOptimizer-test-build
+          path: out/ElyntOptimizer
+          retention-days: 30
