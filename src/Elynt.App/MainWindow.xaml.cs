@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         _model = new MainViewModel(ConfirmDestructive);
+        _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) =>
@@ -82,6 +83,20 @@ public partial class MainWindow : Window
         MessageBox.Show(
             this,
             $"{tweak.Name}\n\nThis can't be undone. {tweak.DestructiveWarning}\n\nDo it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void ScanCleanup(object sender, RoutedEventArgs e) => await _model.Cleanup.ScanAsync();
+
+    private async void CleanTicked(object sender, RoutedEventArgs e) => await _model.Cleanup.CleanAsync();
+
+    /// <summary>The separate confirmation destructive cleanup categories need. "No" is the default button.</summary>
+    private bool ConfirmDestructiveCleanup(string warnings) =>
+        MessageBox.Show(
+            this,
+            $"These can't be undone:\n\n{warnings}\n\nClean them anyway?",
             "This can't be undone",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,

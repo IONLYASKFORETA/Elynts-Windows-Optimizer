@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Repair;
 
 namespace Elynt.Core.Ipc;
@@ -19,6 +20,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(ScanCleanupRequest), "scanCleanup")]
+[JsonDerivedType(typeof(CleanRequest), "clean")]
+[JsonDerivedType(typeof(GetCleanupScheduleRequest), "getCleanupSchedule")]
+[JsonDerivedType(typeof(SetWeeklyCleanupRequest), "setWeeklyCleanup")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -45,6 +50,16 @@ public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineReq
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category measured, then the scan.</summary>
+public sealed record ScanCleanupRequest : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category cleaned, then the report.</summary>
+public sealed record CleanRequest(IReadOnlyList<string> CategoryIds, bool ConfirmDestructive) : EngineRequest;
+
+public sealed record GetCleanupScheduleRequest : EngineRequest;
+
+public sealed record SetWeeklyCleanupRequest(bool Enabled) : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -52,11 +67,14 @@ public sealed record GetBiosReportRequest : EngineRequest;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
 [JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
 [JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(CleanupProgressEvent), "cleanupProgress")]
 public abstract record EngineEvent;
 
 public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEvent;
 
 public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
+
+public sealed record CleanupProgressEvent(CleanupProgress Progress) : EngineEvent;
 
 /// <summary>
 /// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
@@ -73,7 +91,10 @@ public sealed record EngineResponse(
     InstallReport? Install = null,
     IReadOnlyList<RepairToolView>? RepairTools = null,
     RepairResult? RepairResult = null,
-    EngineEvent? Event = null)
+    EngineEvent? Event = null,
+    CleanupScan? CleanupScan = null,
+    CleanupReport? CleanupReport = null,
+    CleanupSchedule? CleanupSchedule = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -116,11 +137,17 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        ScanCleanupRequest => new(CleanupScan: await engine.ScanCleanupAsync(
+            Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        CleanRequest clean => new(CleanupReport: await engine.CleanAsync(
+            clean.CategoryIds, clean.ConfirmDestructive, Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        GetCleanupScheduleRequest => new(CleanupSchedule: engine.GetCleanupSchedule()),
+        SetWeeklyCleanupRequest weekly => new(CleanupSchedule: engine.SetWeeklyCleanup(weekly.Enabled)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest;
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or ScanCleanupRequest or CleanRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install queue).</summary>
     public static bool IsExclusive(EngineRequest request) => request is InstallAppsRequest;

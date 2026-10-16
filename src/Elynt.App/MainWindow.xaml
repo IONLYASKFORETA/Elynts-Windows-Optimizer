@@ -115,8 +115,47 @@
                     </ListBox>
                 </DockPanel>
 
+                <DockPanel Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}">
+                <!-- Cleanup: always scan first, show sizes per category, then clean what's ticked. -->
+                <DockPanel DockPanel.Dock="Top" DataContext="{Binding Cleanup}" Margin="0,0,0,12"
+                           Visibility="{Binding DataContext.IsCleanupPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,4,8">
+                        <Button Content="Scan" Click="ScanCleanup" IsEnabled="{Binding CanScan}" Padding="16,4" Margin="0,0,8,0" />
+                        <Button Content="Clean ticked" Click="CleanTicked" IsEnabled="{Binding CanClean}" Padding="16,4" Margin="0,0,16,0" />
+                        <CheckBox Content="Clean safe caches automatically once a week" IsChecked="{Binding WeeklyEnabled, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" TextWrapping="Wrap" Margin="4,0,4,4" />
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding TickedSummary}" Opacity="0.7" Margin="4,0,4,8" />
+                    <ListBox ItemsSource="{Binding Categories}" MaxHeight="380" HorizontalContentAlignment="Stretch" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:CleanupCategoryItemViewModel}">
+                                <Grid Margin="4,4" ToolTip="{Binding LocationsText}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding IsTicked, Mode=TwoWay}" IsEnabled="{Binding CanTick}"
+                                              VerticalAlignment="Top" Margin="0,2,8,0" AutomationProperties.Name="{Binding Name}" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding WhatItDoes}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Note}" FontSize="12" TextWrapping="Wrap" Foreground="DarkOrange"
+                                                   Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
+                                        <TextBlock Text="{Binding Result}" FontSize="12" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasResult, Converter={StaticResource Visible}}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding SizeText}" HorizontalAlignment="Right" />
+                                        <TextBlock Text="{Binding KindText}" Opacity="0.7" FontSize="12" HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
-                         Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
@@ -138,6 +177,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                </DockPanel>
                 <TextBlock Text="Nothing here yet. This section arrives in a later build."
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />

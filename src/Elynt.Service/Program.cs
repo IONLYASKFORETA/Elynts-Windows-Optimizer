@@ -1,3 +1,4 @@
+using Elynt.Core.Cleanup;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
@@ -39,7 +40,9 @@ try
         new WindowsStoreBackups(ServicePaths.Backups),
         logger: services.GetRequiredService<ILogger<SafetyNet>>()));
     builder.Services.AddSingleton<IRepairLogStore>(new FileRepairLogStore(ServicePaths.RepairLogs));
+    builder.Services.AddSingleton<ICleanupScheduleStore>(new JsonFileCleanupScheduleStore(ServicePaths.CleanupSchedule));
     builder.Services.AddHostedService<EngineHost>();
+    builder.Services.AddHostedService<WeeklyCleanupService>();
 
     builder.Build().Run();
     return 0;

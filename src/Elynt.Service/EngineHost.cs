@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
@@ -17,6 +18,7 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    ICleanupScheduleStore cleanupSchedules,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -76,11 +78,13 @@ internal sealed class EngineHost(
                 _systemInfo,
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
-                new WindowsRepairSystem(sid)),
+                new WindowsRepairSystem(sid),
+                new WindowsCleanupSystem(sid)),
             journal,
             sid,
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
-            repairLogs: repairLogs);
+            repairLogs: repairLogs,
+            cleanupSchedules: cleanupSchedules);
     }
 }

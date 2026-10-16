@@ -1,5 +1,6 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
@@ -120,6 +121,21 @@ public interface IEngine
     Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
 
     BiosReport GetBiosReport();
+
+    /// <summary>
+    /// Measures every cleanup category without deleting anything. Safe categories come back ticked; shader caches
+    /// and destructive ones don't. Long-running: streams which category it is on.
+    /// </summary>
+    Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default);
+
+    /// <summary>Cleans the ticked categories, streaming progress.</summary>
+    /// <param name="confirmDestructive">The user confirmed, in a separate step, that the destructive categories can't be undone.</param>
+    Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default);
+
+    CleanupSchedule GetCleanupSchedule();
+
+    /// <summary>Turns weekly cleaning of safe categories on or off. Off by default.</summary>
+    CleanupSchedule SetWeeklyCleanup(bool enabled);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -138,7 +154,9 @@ public sealed class Engine(
     ILogger<Engine>? logger = null,
     AppCatalogue? apps = null,
     IRepairLogStore? repairLogs = null,
-    RepairCatalogue? repairs = null) : IEngine
+    RepairCatalogue? repairs = null,
+    CleanupCatalogue? cleanup = null,
+    ICleanupScheduleStore? cleanupSchedules = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -147,6 +165,14 @@ public sealed class Engine(
         repairs ?? RepairCatalogue.Default,
         system,
         repairLogs ?? new InMemoryRepairLogStore(),
+        user,
+        clock ?? TimeProvider.System,
+        logger ?? (ILogger)NullLogger<Engine>.Instance);
+
+    private readonly CleanupBench _cleanup = new(
+        cleanup ?? CleanupCatalogue.Default,
+        system,
+        cleanupSchedules ?? new InMemoryCleanupScheduleStore(),
         user,
         clock ?? TimeProvider.System,
         logger ?? (ILogger)NullLogger<Engine>.Instance);
@@ -358,6 +384,23 @@ public sealed class Engine(
 
         return BiosAdvisor.Build(hardware);
     }
+
+    public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        _cleanup.ScanAsync(progress, cancellation);
+
+    public Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        _cleanup.CleanAsync(categoryIds, confirmDestructive, progress, cancellation);
+
+    public CleanupSchedule GetCleanupSchedule() => _cleanup.GetSchedule();
+
+    public CleanupSchedule SetWeeklyCleanup(bool enabled) => _cleanup.SetWeekly(enabled);
+
+    /// <summary>
+    /// The service calls this regularly. When this user turned weekly cleaning on and a week has passed, cleans the
+    /// safe categories only; otherwise does nothing and returns null.
+    /// </summary>
+    public Task<CleanupReport?> RunWeeklyCleanupIfDueAsync(CancellationToken cancellation = default) =>
+        _cleanup.RunWeeklyIfDueAsync(cancellation);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

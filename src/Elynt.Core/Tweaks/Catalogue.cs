@@ -13,7 +13,7 @@ public sealed class Catalogue
         _byId = Tweaks.ToDictionary(t => t.Id, StringComparer.Ordinal);
     }
 
-    public static Catalogue Default { get; } = new([.. GamingTweaks.All, .. DebloatTweaks.All]);
+    public static Catalogue Default { get; } = new([.. GamingTweaks.All, .. DebloatTweaks.All, .. CleanupTweaks.All]);
 
     public IReadOnlyList<TweakDefinition> Tweaks { get; }
 

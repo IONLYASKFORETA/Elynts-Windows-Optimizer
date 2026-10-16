@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 
 namespace Elynt.Core.Ipc;
 
@@ -84,6 +85,25 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
+
+    /// <summary>Measures every cleanup category; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new ScanCleanupRequest(), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupScan
+        ?? throw Missing("cleanup scan");
+
+    /// <summary>Cleans the ticked categories; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupReport> CleanAsync(
+        IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new CleanRequest(categoryIds, confirmDestructive), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupReport
+        ?? throw Missing("cleanup report");
+
+    public async Task<CleanupSchedule> GetCleanupScheduleAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetCleanupScheduleRequest(), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
+
+    public async Task<CleanupSchedule> SetWeeklyCleanupAsync(bool enabled, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetWeeklyCleanupRequest(enabled), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
 
     public async ValueTask DisposeAsync()
     {
