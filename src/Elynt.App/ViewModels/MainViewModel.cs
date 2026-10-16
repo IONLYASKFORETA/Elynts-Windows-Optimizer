@@ -18,11 +18,16 @@ public sealed class MainViewModel : ObservableObject
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
     private bool _isConnecting;
+    private string? _historyMessage;
+    private bool _isRestoring;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
 
     public ObservableCollection<TweakItemViewModel> Tweaks { get; } = [];
+
+    /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
+    public ObservableCollection<HistoryItemViewModel> History { get; } = [];
 
     public string SelectedPage
     {
@@ -30,9 +35,38 @@ public sealed class MainViewModel : ObservableObject
         set
         {
             if (Set(ref _selectedPage, value))
+            {
+                OnPropertyChanged(nameof(IsHistoryPage));
+                OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
+            }
         }
     }
+
+    public bool IsHistoryPage => SelectedPage == UndoHistory;
+
+    public bool IsTweakPage => !IsHistoryPage;
+
+    public bool IsHistoryEmpty => History.Count == 0;
+
+    /// <summary>The answer to the last restore everything, shown above the history.</summary>
+    public string? HistoryMessage
+    {
+        get => _historyMessage;
+        private set => Set(ref _historyMessage, value);
+    }
+
+    public bool IsRestoring
+    {
+        get => _isRestoring;
+        private set
+        {
+            if (Set(ref _isRestoring, value))
+                OnPropertyChanged(nameof(CanRestoreEverything));
+        }
+    }
+
+    public bool CanRestoreEverything => IsConnected && !IsRestoring && History.Any(h => h.Change.CanUndo);
 
     public TweakItemViewModel? SelectedTweak
     {
@@ -60,7 +94,10 @@ public sealed class MainViewModel : ObservableObject
         private set
         {
             if (Set(ref _isConnected, value))
+            {
                 OnPropertyChanged(nameof(IsDisconnected));
+                OnPropertyChanged(nameof(CanRestoreEverything));
+            }
         }
     }
 
@@ -104,8 +141,130 @@ public sealed class MainViewModel : ObservableObject
             await client.DisposeAsync();
     }
 
+    /// <summary>Undoes one change from the history. A refusal (e.g. something else changed it since) shows on that row.</summary>
+    public async Task UndoAsync(HistoryItemViewModel item)
+    {
+        if (_client is not { } client || !item.CanUndo)
+            return;
+
+        item.IsBusy = true;
+        try
+        {
+            var result = await client.UndoChangeAsync(item.Change.Id);
+            Log.Information("Undo change {Change} ({Tweak}): {Succeeded} {Message}", item.Change.Id, item.Change.TweakId, result.Succeeded, result.Message);
+            HistoryMessage = null;
+            if (result.Succeeded)
+            {
+                ReloadSessionSettings(result.Tweak?.Refresh);
+                await ReloadAsync(client);
+            }
+            else
+            {
+                item.Message = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            await CommandFailedAsync(ex, "Undoing a change");
+            item.Message = $"Couldn't do this: {ex.Message}";
+        }
+        finally
+        {
+            item.IsBusy = false;
+        }
+    }
+
+    /// <summary>Undoes every change still in place, newest first, and says which ones couldn't be undone and why.</summary>
+    public async Task RestoreEverythingAsync()
+    {
+        if (_client is not { } client || IsRestoring)
+            return;
+
+        IsRestoring = true;
+        try
+        {
+            var result = await client.RestoreEverythingAsync();
+            Log.Information("Restore everything: {Succeeded} {Message}", result.Succeeded, result.Message);
+            var problems = result.Changes.Where(c => !c.Succeeded).Select(c => $"{c.TweakName}: {c.Message}");
+            HistoryMessage = string.Join(Environment.NewLine + Environment.NewLine, [result.Message, .. problems]);
+            if (result.Changes.Any(c => c.Succeeded))
+            {
+                // Any of them may have been a session setting; re-reading is cheap.
+                ReloadSessionSettings(SessionRefresh.MouseSettings);
+            }
+            await ReloadAsync(client);
+        }
+        catch (Exception ex)
+        {
+            await CommandFailedAsync(ex, "Restore everything");
+            HistoryMessage = $"Couldn't do this: {ex.Message}";
+        }
+        finally
+        {
+            IsRestoring = false;
+        }
+    }
+
+    /// <summary>Re-reads the switches and the history after an undo, so both show the PC as it is now.</summary>
+    private async Task ReloadAsync(EnginePipeClient client)
+    {
+        var views = await client.ListTweaksAsync();
+        _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+        await LoadHistoryAsync(client);
+        if (!IsHistoryPage)
+            ShowPage();
+    }
+
+    private async Task LoadHistoryAsync(EnginePipeClient client)
+    {
+        var history = await client.ListHistoryAsync();
+        History.Clear();
+        foreach (var change in history)
+            History.Add(new HistoryItemViewModel(change));
+        OnPropertyChanged(nameof(IsHistoryEmpty));
+        OnPropertyChanged(nameof(CanRestoreEverything));
+    }
+
+    private async Task ShowHistoryAsync()
+    {
+        if (_client is not { } client)
+            return;
+        try
+        {
+            await LoadHistoryAsync(client);
+        }
+        catch (Exception ex)
+        {
+            await CommandFailedAsync(ex, "Loading the undo history");
+        }
+    }
+
+    private async Task CommandFailedAsync(Exception ex, string what)
+    {
+        if (ex is EngineServiceException)
+        {
+            Log.Error(ex, "{What}: the service couldn't run the command", what);
+            return;
+        }
+        Log.Error(ex, "{What} failed", what);
+        await DisconnectAsync();
+        Status = "Lost the connection to the service. Press Retry.";
+    }
+
+    private static void ReloadSessionSettings(SessionRefresh? refresh)
+    {
+        if (refresh == SessionRefresh.MouseSettings)
+            MouseSettings.ReloadFromRegistry();
+    }
+
     private void ShowPage()
     {
+        if (IsHistoryPage)
+        {
+            HistoryMessage = null;
+            _ = ShowHistoryAsync();
+        }
+
         Tweaks.Clear();
         foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage))
             Tweaks.Add(tweak);

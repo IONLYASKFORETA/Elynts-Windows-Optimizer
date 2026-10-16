@@ -44,6 +44,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<CommandResult> RevertAsync(string tweakId, CancellationToken cancellation = default) =>
         (await SendAsync(new RevertRequest(tweakId), cancellation)).Result ?? throw Missing("result");
 
+    public async Task<IReadOnlyList<ChangeView>> ListHistoryAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListHistoryRequest(), cancellation)).History ?? throw Missing("history");
+
+    public async Task<CommandResult> UndoChangeAsync(Guid changeId, CancellationToken cancellation = default) =>
+        (await SendAsync(new UndoChangeRequest(changeId), cancellation)).Result ?? throw Missing("result");
+
+    public async Task<RestoreResult> RestoreEverythingAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new RestoreEverythingRequest(), cancellation)).Restore ?? throw Missing("restore result");
+
     public async ValueTask DisposeAsync()
     {
         _reader.Dispose();

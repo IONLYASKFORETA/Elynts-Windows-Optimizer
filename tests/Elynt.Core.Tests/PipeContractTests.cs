@@ -57,6 +57,32 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListHistory_arrives_unchanged()
+    {
+        var history = await _client.ListHistoryAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListHistory(), history);
+    }
+
+    [Fact]
+    public async Task UndoChange_arrives_unchanged()
+    {
+        var result = await _client.UndoChangeAsync(StubEngine.Change, TestContext.Current.CancellationToken);
+
+        Assert.Equal($"UndoChange {StubEngine.Change}", _engine.LastCall);
+        AssertSameJson(_engine.UndoChange(StubEngine.Change), result);
+    }
+
+    [Fact]
+    public async Task RestoreEverything_arrives_unchanged()
+    {
+        var result = await _client.RestoreEverythingAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("RestoreEverything", _engine.LastCall);
+        AssertSameJson(_engine.RestoreEverything(), result);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -83,6 +109,8 @@ public sealed class PipeContractTests : IAsyncLifetime
         public string? LastCall { get; private set; }
         public bool Throw { get; set; }
 
+        public static readonly Guid Change = Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+
         private static readonly TweakView View = new(
             "some.tweak", Sections.Gaming, "Some tweak", "Does a thing.", "Measured.",
             [new Source("A source", "https://example.com")], EvidenceTier.Situational,
@@ -103,5 +131,27 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastCall = $"Revert {tweakId}";
             return new CommandResult(false, "Nothing to undo.", View with { State = TweakState.Off });
         }
+
+        public CommandResult UndoChange(Guid changeId)
+        {
+            LastCall = $"UndoChange {changeId}";
+            return new CommandResult(true, "Turned off.", View with { State = TweakState.Off, CanUndo = false });
+        }
+
+        public RestoreResult RestoreEverything()
+        {
+            LastCall = "RestoreEverything";
+            return new RestoreResult(false, "Put back 1 of 2 changes.",
+            [
+                new(Change, "Some tweak", true, "Turned off."),
+                new(Guid.Empty, "Other tweak", false, "Something else changed it since."),
+            ]);
+        }
+
+        public IReadOnlyList<ChangeView> ListHistory() =>
+        [
+            new(Change, "some.tweak", "Some tweak", new DateTimeOffset(2026, 10, 16, 9, 0, 0, TimeSpan.FromHours(2)),
+                ChangeState.Undone, new DateTimeOffset(2026, 10, 16, 9, 5, 0, TimeSpan.FromHours(2)), CanUndo: false),
+        ];
     }
 }
