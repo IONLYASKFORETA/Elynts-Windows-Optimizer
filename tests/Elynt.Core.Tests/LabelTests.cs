@@ -324,7 +324,7 @@ public class LabelTests
         Steps: steps.Length > 0 ? steps : [new RegistryValueStep(TestValue, RegistryValue.DWord(1))]);
 
     private Engine EngineFor(params TweakDefinition[] tweaks) =>
-        new(new Catalogue(tweaks), new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test", _clock);
+        new(new Catalogue(tweaks), new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test", clock: _clock);
 
     private static TweakView Single(Engine engine) => Assert.Single(engine.ListTweaks());
 

@@ -1,3 +1,4 @@
+using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Games;
 using Elynt.Core.Registry;
@@ -7,8 +8,17 @@ namespace Elynt.Core;
 
 /// <summary>Everything the engine may touch on the PC. Real adapters wrap Windows; fakes hold in-memory state.</summary>
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
+/// <param name="Packages">winget. Without it, app installs report winget as missing.</param>
 /// <param name="Games">Where launchers record installed games. Without it, only games added by hand are known.</param>
-public sealed record SystemAdapters(IRegistry Registry, ISystemInfo System, IHardwareInfo? Hardware = null, IGameSources? Games = null);
+public sealed record SystemAdapters(
+    IRegistry Registry,
+    ISystemInfo System,
+    IHardwareInfo? Hardware = null,
+    IPackageManager? Packages = null,
+    IGameSources? Games = null)
+{
+    public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+}
 
 public interface ISystemInfo
 {
