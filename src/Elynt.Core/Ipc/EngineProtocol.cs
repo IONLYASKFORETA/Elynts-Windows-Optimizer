@@ -1,6 +1,7 @@
 using System.Text.Json;
-using Elynt.Core.Apps;
 using System.Text.Json.Serialization;
+using Elynt.Core.Apps;
+using Elynt.Core.Bios;
 
 namespace Elynt.Core.Ipc;
 
@@ -11,17 +12,20 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RevertRequest), "revert")]
 [JsonDerivedType(typeof(ListAppsRequest), "listApps")]
 [JsonDerivedType(typeof(InstallAppsRequest), "installApps")]
+[JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
 
-public sealed record ApplyRequest(string TweakId) : EngineRequest;
+public sealed record ApplyRequest(string TweakId, ApplyOptions? Options = null) : EngineRequest;
 
 public sealed record RevertRequest(string TweakId) : EngineRequest;
 
 public sealed record ListAppsRequest : EngineRequest;
 
 public sealed record InstallAppsRequest(IReadOnlyList<string> AppIds, bool AllRuntimes) : EngineRequest;
+
+public sealed record GetBiosReportRequest : EngineRequest;
 
 /// <summary>
 /// The reply to one request. <see cref="Error"/> is set only when the service itself failed. A line carrying
@@ -31,6 +35,7 @@ public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
     CommandResult? Result = null,
     string? Error = null,
+    BiosReport? Bios = null,
     IReadOnlyList<AppView>? Apps = null,
     InstallReport? Install = null,
     InstallProgress? Progress = null)
@@ -58,11 +63,12 @@ public static class EngineProtocol
     public static EngineResponse Dispatch(IEngine engine, EngineRequest request, Action<EngineResponse>? sendEvent = null) => request switch
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
-        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId)),
+        ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
         ListAppsRequest => new(Apps: engine.ListApps()),
         InstallAppsRequest install => new(Install: engine.InstallApps(
             install.AppIds, install.AllRuntimes, new Relay<InstallProgress>(p => sendEvent?.Invoke(new(Progress: p))))),
+        GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

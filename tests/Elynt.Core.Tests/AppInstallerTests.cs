@@ -10,7 +10,7 @@ public class AppInstallerTests
 
     private Engine NewEngine() => new(
         Catalogue.Default,
-        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), _winget),
+        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), Packages: _winget),
         new ChangeJournal(new InMemoryJournalStore()),
         "S-1-5-21-test");
 

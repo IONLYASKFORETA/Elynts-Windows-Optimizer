@@ -94,7 +94,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding TierText}" Opacity="0.7" FontSize="12" />
+                                    <TextBlock Text="{Binding LabelLine}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding StateText}" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -108,6 +108,76 @@
                 <TextBlock Text="Nothing here yet. This section arrives in a later build."
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />
+
+                <!-- BIOS page: settings only the BIOS can change, read from Windows, with guides for this board and CPU. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding IsBiosPage, Converter={StaticResource Visible}}">
+                    <StackPanel DataContext="{Binding Bios}" Margin="4">
+                        <TextBlock Text="BIOS settings" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Hardware}" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
+                        <TextBlock Text="The app only reads these. Changing them happens in the BIOS, with the guides below."
+                                   TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <ItemsControl ItemsSource="{Binding Readouts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,4">
+                                        <TextBlock>
+                                            <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding State, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Detail}" Opacity="0.8" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Guides for this PC" FontSize="16" FontWeight="SemiBold" Margin="0,16,0,4" />
+                        <ItemsControl ItemsSource="{Binding Guides}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Expander Header="{Binding Title}" Margin="0,4">
+                                        <StackPanel Margin="20,4,0,8">
+                                            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                            <ItemsControl ItemsSource="{Binding Steps}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <ItemsControl ItemsSource="{Binding Sources}" Margin="0,6,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock TextWrapping="Wrap" Margin="0,2">
+                                                            <Hyperlink NavigateUri="{Binding Url}" RequestNavigate="OpenLink">
+                                                                <Run Text="{Binding Title, Mode=OneWay}" />
+                                                            </Hyperlink>
+                                                        </TextBlock>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Expander>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Test stability after every change" FontSize="16" FontWeight="SemiBold" Margin="0,16,0,4" />
+                        <ItemsControl ItemsSource="{Binding StabilityTools}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,4">
+                                        <TextBlock>
+                                            <Hyperlink NavigateUri="{Binding Url}" RequestNavigate="OpenLink">
+                                                <Run Text="{Binding Name, Mode=OneWay}" />
+                                            </Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding WhatToRun}" Opacity="0.8" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
         </DockPanel>
 
@@ -121,6 +191,33 @@
                     <TextBlock Margin="0,4,0,0" Opacity="0.7">
                         <Run Text="Evidence:" /> <Run Text="{Binding TierText, Mode=OneWay}" />
                     </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7">
+                        <Run Text="Undo:" /> <Run Text="{Binding ReversibilityText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7" TextWrapping="Wrap">
+                        <Run Text="Risks:" /> <Run Text="{Binding RiskText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0" Opacity="0.7">
+                        <Run Text="State:" /> <Run Text="{Binding StateText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding NotApplicableReason}" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding IsNotApplicable, Converter={StaticResource Visible}}" />
+                    <TextBlock Text="Restart the PC for this change to take effect." Margin="0,8,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding PendingReboot, Converter={StaticResource Visible}}" />
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkRed"
+                               Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
+                        <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
+                    </TextBlock>
+                    <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAntiCheatWarnings, Converter={StaticResource Visible}}">
+                        <TextBlock Text="Anti-cheat warning (you can still turn it on)" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding AntiCheatWarnings}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                     <TextBlock Text="{Binding Message}" Margin="0,12,0,0" TextWrapping="Wrap" FontWeight="SemiBold" />
 
                     <TextBlock Text="What it does" FontWeight="SemiBold" Margin="0,16,0,4" />
