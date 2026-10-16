@@ -4,6 +4,8 @@ using System.Security.Principal;
 using Elynt.Core;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.Repair;
+using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Elynt.Windows;
 
@@ -13,6 +15,8 @@ namespace Elynt.Service;
 internal sealed class EngineHost(
     Catalogue catalogue,
     ChangeJournal journal,
+    SafetyNet safetyNet,
+    IRepairLogStore repairLogs,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -62,16 +66,23 @@ internal sealed class EngineHost(
     /// <summary>Commands act on the settings of the user who sent them, identified by impersonating the pipe client.</summary>
     private Engine EngineForClient(NamedPipeServerStream pipe)
     {
-        string? sid = null;
-        pipe.RunAsClient(() => sid = WindowsIdentity.GetCurrent().User?.Value);
-        if (sid is null)
-            throw new InvalidOperationException("Couldn't tell which user is connected.");
+        // The identity is kept for the connection's life: per-user app installs run winget with it.
+        WindowsIdentity? identity = null;
+        pipe.RunAsClient(() => identity = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed));
+        var sid = identity?.User?.Value ?? throw new InvalidOperationException("Couldn't tell which user is connected.");
 
         return new Engine(
             catalogue,
-            new SystemAdapters(new WindowsRegistry(sid), _systemInfo, _hardware) { Boot = _boot, Power = _power },
+            new SystemAdapters(
+                new WindowsRegistry(sid),
+                _systemInfo,
+                _hardware,
+                new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
+                new WindowsRepairSystem(sid)) { Boot = _boot, Power = _power },
             journal,
             sid,
-            logger: loggers.CreateLogger<Engine>());
+            safetyNet,
+            logger: loggers.CreateLogger<Engine>(),
+            repairLogs: repairLogs);
     }
 }

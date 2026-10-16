@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Repair;
 
 namespace Elynt.Core.Ipc;
 
@@ -9,6 +11,13 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListTweaksRequest), "listTweaks")]
 [JsonDerivedType(typeof(ApplyRequest), "apply")]
 [JsonDerivedType(typeof(RevertRequest), "revert")]
+[JsonDerivedType(typeof(ListHistoryRequest), "listHistory")]
+[JsonDerivedType(typeof(UndoChangeRequest), "undoChange")]
+[JsonDerivedType(typeof(RestoreEverythingRequest), "restoreEverything")]
+[JsonDerivedType(typeof(ListAppsRequest), "listApps")]
+[JsonDerivedType(typeof(InstallAppsRequest), "installApps")]
+[JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
+[JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
 public abstract record EngineRequest;
 
@@ -18,16 +27,61 @@ public sealed record ApplyRequest(string TweakId, ApplyOptions? Options = null) 
 
 public sealed record RevertRequest(string TweakId) : EngineRequest;
 
+public sealed record ListHistoryRequest : EngineRequest;
+
+public sealed record UndoChangeRequest(Guid ChangeId) : EngineRequest;
+
+public sealed record RestoreEverythingRequest : EngineRequest;
+
+public sealed record ListAppsRequest : EngineRequest;
+
+/// <summary>Streams an <see cref="InstallProgressEvent"/> per step of the queue, then the report.</summary>
+public sealed record InstallAppsRequest(IReadOnlyList<string> AppIds, bool AllRuntimes) : EngineRequest;
+
+public sealed record ListRepairToolsRequest : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="RepairProgressEvent"/> per step and output line, then the result.</summary>
+public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineRequest;
+
 public sealed record GetBiosReportRequest : EngineRequest;
 
-/// <summary>The reply to one request. <see cref="Error"/> is set only when the service itself failed.</summary>
+/// <summary>
+/// Something a running command reports before its reply. Every command that streams progress uses this one
+/// stream; each kind of event is one derived record.
+/// </summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
+[JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
+[JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+public abstract record EngineEvent;
+
+public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEvent;
+
+public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
+
+/// <summary>
+/// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
+/// <see cref="Event"/> is streamed while the command runs; any number of them come before the reply proper.
+/// </summary>
 public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
     CommandResult? Result = null,
     string? Error = null,
-    BiosReport? Bios = null);
+    IReadOnlyList<ChangeView>? History = null,
+    RestoreResult? Restore = null,
+    BiosReport? Bios = null,
+    IReadOnlyList<AppView>? Apps = null,
+    InstallReport? Install = null,
+    IReadOnlyList<RepairToolView>? RepairTools = null,
+    RepairResult? RepairResult = null,
+    EngineEvent? Event = null)
+{
+    [JsonIgnore]
+    public bool IsEvent => Event is not null;
+}
 
-/// <summary>Newline-delimited JSON over a named pipe: one request line, one response line.</summary>
+/// <summary>
+/// Newline-delimited JSON over a named pipe: one request line, then any number of event lines, then one response line.
+/// </summary>
 public static class EngineProtocol
 {
     public const string PipeName = "Elynt.Optimizer.Engine";
@@ -42,12 +96,41 @@ public static class EngineProtocol
     public static T Deserialize<T>(string line) =>
         JsonSerializer.Deserialize<T>(line, Options) ?? throw new JsonException("Empty message.");
 
-    public static EngineResponse Dispatch(IEngine engine, EngineRequest request) => request switch
+    /// <param name="sendEvent">Receives the command's events, in order, on the thread running the command.</param>
+    public static async Task<EngineResponse> DispatchAsync(
+        IEngine engine,
+        EngineRequest request,
+        Action<EngineEvent>? sendEvent = null,
+        CancellationToken cancellation = default) => request switch
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
         ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
         RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
+        ListHistoryRequest => new(History: engine.ListHistory()),
+        UndoChangeRequest undo => new(Result: engine.UndoChange(undo.ChangeId)),
+        RestoreEverythingRequest => new(Restore: engine.RestoreEverything()),
+        ListAppsRequest => new(Apps: engine.ListApps()),
+        InstallAppsRequest install => new(Install: engine.InstallApps(
+            install.AppIds, install.AllRuntimes, Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
+        ListRepairToolsRequest => new(RepairTools: engine.ListRepairTools()),
+        RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
+            run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
+
+    /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest;
+
+    /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install queue).</summary>
+    public static bool IsExclusive(EngineRequest request) => request is InstallAppsRequest;
+
+    private static IProgress<T> Relay<T>(Func<T, EngineEvent> toEvent, Action<EngineEvent>? sendEvent) =>
+        new SyncProgress<T>(value => sendEvent?.Invoke(toEvent(value)));
+
+    /// <summary>Passes progress on synchronously, so events keep their order (unlike <see cref="Progress{T}"/>).</summary>
+    private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
 }

@@ -63,6 +63,23 @@ public sealed record RegistryListItemRecord(
     string? ItemValueBefore,
     IReadOnlyList<string> CreatedKeys) : StepRecord
 {
+    /// <summary>
+    /// Only the app's own item counts: other items in the list (usually changed in Windows Settings) are kept on undo,
+    /// so changing them is not a conflict.
+    /// </summary>
+    public override string? FindConflict(SystemAdapters system)
+    {
+        var item = RegistryList.Parse(Format, system.Registry.GetValue(Location)).Get(Item);
+        var written = RegistryList.Parse(Format, After).Get(Item);
+        if (item is not null && item.Value == written?.Value)
+            return null;
+        if (ItemExisted ? item is not null && item.Value == ItemValueBefore : item is null)
+            return null;
+
+        var shown = item is null ? "removed" : item.Value is null ? item.Item : $"{item.Item}={item.Value}";
+        return $"Something else changed {Item} in {Location} since the app set it. It is now {shown}.";
+    }
+
     public override void Revert(SystemAdapters system)
     {
         var current = system.Registry.GetValue(Location);

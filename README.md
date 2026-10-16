@@ -28,10 +28,13 @@ dotnet test --solution ElyntOptimizer.slnx
 
 ## Try it on Windows
 
-Every CI run publishes a ready-to-run test build (`ElyntOptimizer-test-build` under the run's Artifacts) with
-`install.cmd` and `uninstall.cmd`; its `README.txt` has the steps. No developer tools needed.
+Every CI run packs a beta installer (`ElyntOptimizer-beta-setup` under the run's Artifacts). Pushes to the default
+branch also publish it to the public releases repo. Run the Setup file; the app installs and updates its own
+background service (one UAC prompt). Friends follow [docs/install-guide.md](docs/install-guide.md); channels and
+promotion to stable are in [docs/releasing.md](docs/releasing.md).
 
-Or, from source, register the service by hand from an elevated terminal:
+Or, from source, register the service by hand from an elevated terminal (a developer build doesn't manage the
+service itself):
 
 ```
 dotnet publish src/Elynt.Service -c Release -r win-x64 --self-contained -o C:\ElyntOptimizer\service
@@ -46,7 +49,19 @@ To remove it: `sc.exe stop ElyntOptimizer` then `sc.exe delete ElyntOptimizer`.
 ## Logs and journal
 
 - Service log: `%ProgramData%\ElyntOptimizer\logs\service-*.log`
+- Repair runs: `%ProgramData%\ElyntOptimizer\logs\repair\repair-*.log` (one per run)
 - App log: `%LocalAppData%\ElyntOptimizer\logs\app-*.log`
+
+The Repair section's "Copy app log" button copies the newest app, service and repair logs for a bug report.
 - Change journal: `%ProgramData%\ElyntOptimizer\journal\journal.json`
+- Whole-store backups (BCD, firewall, power plans, scheduled tasks, drivers, hosts), taken before the first change
+  of each kind after the service starts: `%ProgramData%\ElyntOptimizer\backups\<time>-<store>`
+
+## Undo
+
+Every change is journaled with the exact prior state before it is made. The Undo history page lists every change
+(time, tweak, state) and can undo any one of them or restore everything, newest first. Undo refuses to overwrite a
+value that something else changed since, and says which one. Before changes the service also attempts a System
+Restore point (at most once a day; Windows skips more anyway) and tells you when Windows skipped it.
 
 Logs roll daily and keep 14 days.

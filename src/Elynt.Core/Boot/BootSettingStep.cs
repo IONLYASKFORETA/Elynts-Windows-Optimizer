@@ -30,7 +30,7 @@ public sealed record BootSettingStep(string Element, string? Value) : TweakStep
         return Value is null ? current is null : string.Equals(current, Value, StringComparison.OrdinalIgnoreCase);
     }
 
-    public override StepRecord Capture(SystemAdapters system) => new BootSettingRecord(Element, Boot(system).Get(Element));
+    public override StepRecord Capture(SystemAdapters system) => new BootSettingRecord(Element, Boot(system).Get(Element), Value);
 
     public override void Apply(SystemAdapters system)
     {
@@ -45,8 +45,20 @@ public sealed record BootSettingStep(string Element, string? Value) : TweakStep
 }
 
 /// <summary>A boot setting as it was before the app changed it: its value, or null when it wasn't set.</summary>
-public sealed record BootSettingRecord(string Element, string? Before) : StepRecord
+/// <param name="After">What the app set it to, or null when the app removed it.</param>
+public sealed record BootSettingRecord(string Element, string? Before, string? After) : StepRecord
 {
+    public override string? FindConflict(SystemAdapters system)
+    {
+        var now = BootSettingStep.Boot(system).Get(Element);
+        if (Same(now, After) || Same(now, Before))
+            return null;
+        var what = After is null ? "removed it" : $"set it to {After}";
+        return $"Something else changed the boot setting {Element} since the app {what}. It is now {now ?? "not set"}.";
+    }
+
+    private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
     public override void Revert(SystemAdapters system)
     {
         var boot = BootSettingStep.Boot(system);

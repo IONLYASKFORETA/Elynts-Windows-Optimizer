@@ -314,4 +314,42 @@ public class GamingTweakTests
             File.Delete(file);
         }
     }
+
+    [Fact]
+    public void Undo_refuses_to_switch_a_power_plan_someone_else_chose_since()
+    {
+        _power.Active = PowerPlans.Balanced;
+        var engine = NewEngine();
+        engine.Apply(GamingTweaks.HighPerformancePlan.Id);
+        _power.Active = PowerPlans.PowerSaver;
+
+        var reverted = engine.Revert(GamingTweaks.HighPerformancePlan.Id);
+
+        Assert.False(reverted.Succeeded);
+        Assert.Equal(PowerPlans.PowerSaver, _power.Active);
+    }
+
+    [Fact]
+    public void Undo_refuses_when_something_else_set_useplatformclock_since()
+    {
+        _boot.Set("useplatformclock", "Yes");
+        var engine = NewEngine();
+        engine.Apply(GamingTweaks.UsePlatformClockRemoved.Id);
+        _boot.Set("useplatformclock", "No");
+
+        Assert.False(engine.Revert(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+        Assert.Equal("No", _boot.Get("useplatformclock"));
+    }
+
+    [Fact]
+    public void Undo_refuses_when_windowed_games_optimizations_were_switched_off_in_Settings_since()
+    {
+        _registry.SetValue(DirectXSettings, RegistryValue.String("AutoHDREnable=1;"));
+        var engine = NewEngine();
+        engine.Apply(GamingTweaks.WindowedGamesOptimizationsOn.Id);
+        _registry.SetValue(DirectXSettings, RegistryValue.String("AutoHDREnable=1;SwapEffectUpgradeEnable=0;"));
+
+        Assert.False(engine.Revert(GamingTweaks.WindowedGamesOptimizationsOn.Id).Succeeded);
+        Assert.Equal(RegistryValue.String("AutoHDREnable=1;SwapEffectUpgradeEnable=0;"), _registry.GetValue(DirectXSettings));
+    }
 }

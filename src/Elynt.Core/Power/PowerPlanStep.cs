@@ -72,6 +72,14 @@ public sealed record PowerPlanStep(Guid Plan, string PlanName, Guid? CreateFrom 
 /// <summary>The plan that was active before, and whether the app created <paramref name="Plan"/>.</summary>
 public sealed record PowerPlanRecord(Guid Before, Guid Plan, bool Created) : StepRecord
 {
+    public override string? FindConflict(SystemAdapters system)
+    {
+        var active = PowerPlanStep.Power(system).GetActive();
+        return active == Plan || active == Before
+            ? null
+            : $"Something else switched the power plan since the app made {Plan} active. The active plan is now {active}.";
+    }
+
     public override void Revert(SystemAdapters system)
     {
         var power = PowerPlanStep.Power(system);
