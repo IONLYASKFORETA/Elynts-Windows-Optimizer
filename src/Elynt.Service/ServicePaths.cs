@@ -22,6 +22,9 @@ internal static class ServicePaths
     /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
     public static string Downloads { get; } = Path.Combine(Root, "downloads");
 
+    /// <summary>Games each user added by hand, one file per user SID.</summary>
+    public static string Games { get; } = Path.Combine(Root, "games");
+
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
     /// (so the app can offer "copy log"), but cannot plant or edit files there.
@@ -50,5 +53,6 @@ internal static class ServicePaths
         Directory.CreateDirectory(Backups);
         Directory.CreateDirectory(RepairLogs);
         Directory.CreateDirectory(Downloads);
+        Directory.CreateDirectory(Games);
     }
 }

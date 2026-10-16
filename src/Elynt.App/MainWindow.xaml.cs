@@ -114,6 +114,23 @@ public partial class MainWindow : Window
             Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
     }
 
+    private async void AddGame(object sender, RoutedEventArgs e)
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Pick the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+        };
+        if (picker.ShowDialog(this) == true)
+            await _model.AddGameAsync(picker.FileName);
+    }
+
+    private async void RemoveGame(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: GamesPageViewModel.GameItem item })
+            await _model.RemoveGameAsync(item);
+    }
+
     private async void UndoChange(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is HistoryItemViewModel item)

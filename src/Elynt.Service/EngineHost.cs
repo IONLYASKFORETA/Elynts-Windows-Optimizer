@@ -3,6 +3,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
 using Elynt.Core.Drivers;
+using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
@@ -30,6 +31,8 @@ internal sealed class EngineHost(
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
         new ProcessInstallerRunner());
+    private readonly WindowsGameSources _games = new();
+    private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private bool _firstPipe = true;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -86,11 +89,13 @@ internal sealed class EngineHost(
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
-                _drivers),
+                _drivers,
+                _games),
             journal,
             sid,
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
-            repairLogs: repairLogs);
+            repairLogs: repairLogs,
+            gameStore: _gameStore);
     }
 }

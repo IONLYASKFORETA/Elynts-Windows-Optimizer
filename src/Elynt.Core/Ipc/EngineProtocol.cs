@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
+using Elynt.Core.Games;
 using Elynt.Core.Repair;
 
 namespace Elynt.Core.Ipc;
@@ -23,6 +24,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
 [JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
 [JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(ListGamesRequest), "listGames")]
+[JsonDerivedType(typeof(AddGameRequest), "addGame")]
+[JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -55,6 +59,12 @@ public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
 
 /// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
 public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
+public sealed record ListGamesRequest : EngineRequest;
+
+public sealed record AddGameRequest(string ExePath) : EngineRequest;
+
+public sealed record RemoveGameRequest(string ExePath) : EngineRequest;
 
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
@@ -90,6 +100,8 @@ public sealed record EngineResponse(
     DriverReport? Drivers = null,
     DriverCheck? DriverCheck = null,
     DriverInstallResult? DriverInstall = null,
+    IReadOnlyList<InstalledGame>? Games = null,
+    GameCommandResult? GameResult = null,
     EngineEvent? Event = null)
 {
     [JsonIgnore]
@@ -137,6 +149,9 @@ public static class EngineProtocol
         CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
         InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
             install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        ListGamesRequest => new(Games: engine.ListGames()),
+        AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
+        RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

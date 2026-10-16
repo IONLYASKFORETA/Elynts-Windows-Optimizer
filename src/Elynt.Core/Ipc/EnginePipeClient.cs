@@ -1,3 +1,4 @@
+using Elynt.Core.Games;
 using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
@@ -97,6 +98,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
         (await SendAsync(new InstallDriverRequest(request), cancellation,
             e => { if (e is DriverInstallProgressEvent p) progress?.Report(p.Progress); })).DriverInstall
             ?? throw Missing("driver install result");
+
+    public async Task<IReadOnlyList<InstalledGame>> ListGamesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListGamesRequest(), cancellation)).Games ?? throw Missing("games");
+
+    public async Task<GameCommandResult> AddGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new AddGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
+
+    public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
 
     public async ValueTask DisposeAsync()
     {

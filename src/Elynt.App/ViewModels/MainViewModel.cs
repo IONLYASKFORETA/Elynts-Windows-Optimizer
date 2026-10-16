@@ -154,7 +154,12 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage;
+    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage && !IsGamesPage;
+
+    /// <summary>Installed games, shown on the per-game profiles page.</summary>
+    public GamesPageViewModel Games { get; } = new();
+
+    public bool IsGamesPage => IsConnected && SelectedPage == PerGameProfiles;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
     public BiosPageViewModel? Bios
@@ -196,6 +201,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
             if (Set(ref _isConnected, value))
             {
                 OnPropertyChanged(nameof(IsDisconnected));
+                OnPropertyChanged(nameof(IsGamesPage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
                 OnPropertyChanged(nameof(CanInstall));
             }
@@ -271,6 +277,7 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
             Drivers = await LoadDriversAsync(_client);
+            Games.Show(await _client.ListGamesAsync());
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -496,6 +503,41 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsDriversPage));
+        OnPropertyChanged(nameof(IsGamesPage));
+    }
+
+    public Task AddGameAsync(string exePath) => ChangeGamesAsync(client => client.AddGameAsync(exePath));
+
+    public Task RemoveGameAsync(GamesPageViewModel.GameItem item) =>
+        ChangeGamesAsync(client => client.RemoveGameAsync(item.Game.ExePath ?? item.Game.InstallPath));
+
+    /// <summary>Adds or removes a game, then refreshes the games and every tweak's warning, which names them.</summary>
+    private async Task ChangeGamesAsync(Func<EnginePipeClient, Task<Elynt.Core.Games.GameCommandResult>> change)
+    {
+        if (_client is null)
+            return;
+        try
+        {
+            var result = await change(_client);
+            Games.Message = result.Message;
+            Games.Show(await _client.ListGamesAsync());
+            var views = (await _client.ListTweaksAsync()).ToDictionary(v => v.Id);
+            foreach (var item in _allTweaks)
+                if (views.TryGetValue(item.View.Id, out var view))
+                    item.View = view;
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Error(ex, "The service couldn't change the game list");
+            Games.Message = $"The service couldn't do this: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Changing the game list failed");
+            Games.Message = $"Couldn't reach the service: {ex.Message}";
+            await DisconnectAsync();
+            Status = "Lost the connection to the service. Press Retry.";
+        }
     }
 
     /// <summary>Installs the ticked apps one at a time, showing each app's progress as the service reports it.</summary>
