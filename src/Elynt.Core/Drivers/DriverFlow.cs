@@ -7,13 +7,15 @@ namespace Elynt.Core.Drivers;
 /// <param name="Inventory">Reads the display adapters and their installed drivers.</param>
 /// <param name="Sources">One latest-driver lookup per vendor. A vendor without one falls back to its download page.</param>
 /// <param name="DownloadFolder">Where installers are downloaded to; only the service can write there.</param>
+/// <param name="Extractor">Unpacks NVIDIA's package for a lean install. Without it, lean installs are unavailable.</param>
 public sealed record DriverAdapters(
     IDriverInventory Inventory,
     IReadOnlyList<IDriverSource> Sources,
     string DownloadFolder,
     IDownloader Downloader,
     ISignatureVerifier Signatures,
-    IInstallerRunner Installer);
+    IInstallerRunner Installer,
+    IPackageExtractor? Extractor = null);
 
 /// <summary>Detects GPUs, looks up their latest drivers, and downloads, verifies and installs them.</summary>
 internal sealed class DriverFlow(SystemAdapters system, ILogger log)
@@ -83,6 +85,7 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         var adapters = _adapters!;
         Directory.CreateDirectory(adapters.DownloadFolder);
         var path = Path.Combine(adapters.DownloadFolder, $"{gpu.Vendor}-{offer.Version}-{Guid.NewGuid():N}.exe");
+        string? leanFolder = null;
         try
         {
             try
@@ -104,13 +107,24 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
                 return Rejected($"{refusal} The download was deleted and nothing was installed.");
             }
 
+            var installer = path;
+            if (request.Lean && gpu.Vendor == GpuVendor.Nvidia)
+            {
+                progress?.Report(new(DriverInstallStage.Slimming, "Unpacking the driver and removing everything but the display driver…"));
+                leanFolder = Path.ChangeExtension(path, null);
+                var laptop = system.System.Hardware.HasFlag(HardwareTraits.Laptop);
+                if (LeanInstall.Prepare(adapters, path, leanFolder, laptop, profile, log) is { } leanRefusal)
+                    return Rejected($"{leanRefusal} Nothing was installed; untick lean install to install the full package.");
+                installer = Path.Combine(leanFolder, "setup.exe");
+            }
+
             var arguments = request.CleanInstall ? [.. profile.Arguments, .. profile.CleanInstallArguments] : profile.Arguments;
             int exitCode;
             try
             {
                 progress?.Report(new(DriverInstallStage.Installing, $"Installing driver {offer.Version}. The screen may flicker…"));
                 log.LogInformation("Installing driver {Version} for {Gpu} with {Arguments}", offer.Version, gpu.Name, arguments);
-                exitCode = adapters.Installer.RunInstaller(path, arguments);
+                exitCode = adapters.Installer.RunInstaller(installer, arguments);
             }
             catch (Exception ex)
             {
@@ -128,6 +142,8 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         finally
         {
             TryDelete(path);
+            if (leanFolder is not null)
+                LeanInstall.TryDeleteFolder(leanFolder, log);
         }
 
         DriverInstallResult Rejected(string message) => new(false, false, message, VendorPage: vendorPage);

@@ -365,6 +365,9 @@
                                                   Visibility="{Binding HasBranches, Converter={StaticResource Visible}}" />
                                         <CheckBox Content="Clean install (resets the driver's own settings)" IsChecked="{Binding CleanInstall}"
                                                   IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
+                                        <CheckBox Content="Lean install (display driver only: no NVIDIA App, telemetry or extras; laptops keep their power components; needs 7-Zip)"
+                                                  IsChecked="{Binding LeanInstall}" IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
+                                                  Visibility="{Binding CanInstallLean, Converter={StaticResource Visible}}" />
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button Content="Check for a newer driver" Click="CheckDriver" Padding="12,4"
                                                     IsEnabled="{Binding IsIdle}" />
