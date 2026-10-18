@@ -6,6 +6,7 @@ using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Services;
+using Elynt.Core.Startup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -169,6 +170,27 @@ public interface IEngine
 
     /// <summary>Puts back the whole configuration a service had before the app last changed it.</summary>
     ServiceResult UndoServiceChange(string serviceName);
+
+    /// <summary>Every startup item (Run keys, Startup folders, sign-in tasks, Store apps) and third-party scheduled task.</summary>
+    IReadOnlyList<StartupItemView> ListStartupItems();
+
+    /// <summary>
+    /// Turns a startup item on or off through the switch Task Manager uses (Task Scheduler's for tasks). Journaled,
+    /// so it can be undone from the Undo history.
+    /// </summary>
+    StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled);
+
+    /// <summary>
+    /// Deletes a startup item (the Run value, Startup folder file or scheduled task). Destructive: refused unless
+    /// <paramref name="confirmDestructive"/> says the user confirmed it separately.
+    /// </summary>
+    StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive);
+
+    /// <summary>
+    /// Startup items that were added and are on since the last look, for the tray note. The first look for a user
+    /// only takes note of what is there. Each new item is reported once.
+    /// </summary>
+    IReadOnlyList<StartupItemView> CheckNewStartupItems();
     /// <summary>
     /// "Check and install now": starts searching for and installing quality updates in the background, even while
     /// updates are paused, or shows the run already in progress.
@@ -223,7 +245,7 @@ public sealed record UndoOutcome(Guid ChangeId, string TweakName, bool Succeeded
 public sealed record RestoreResult(bool Succeeded, string Message, IReadOnlyList<UndoOutcome> Changes);
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
-public sealed class Engine(
+public sealed partial class Engine(
     Catalogue catalogue,
     SystemAdapters system,
     ChangeJournal journal,
@@ -242,6 +264,8 @@ public sealed class Engine(
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
     private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
+
+    private readonly StartupManager _startup = new(system, journal, user, safetyNet, clock ?? TimeProvider.System, logger);
     private readonly RepairBench _repair = new(
         repairs ?? RepairCatalogue.Default,
         system,
@@ -405,6 +429,8 @@ public sealed class Engine(
         var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
         if (entry is null)
             return new(false, "There is no such change in your undo history.", null);
+        if (StartupManager.Owns(entry.TweakId))
+            return UndoStartupChange(entry);
         if (!TryResolve(entry.TweakId, entry, out var tweak))
             return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
         if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
@@ -423,7 +449,7 @@ public sealed class Engine(
         var results = new List<UndoOutcome>();
         foreach (var entry in open)
         {
-            var name = TryResolve(entry.TweakId, entry, out var tweak) ? tweak.Name : entry.TweakId;
+            var name = NameOf(entry);
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
@@ -470,7 +496,7 @@ public sealed class Engine(
             .Select(entry => new ChangeView(
                 entry.Id,
                 entry.TweakId,
-                TryResolve(entry.TweakId, entry, out var tweak) ? tweak.Name : entry.TweakId,
+                NameOf(entry),
                 entry.AppliedAt,
                 entry.Status switch
                 {

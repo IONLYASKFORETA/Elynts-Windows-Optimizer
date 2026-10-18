@@ -225,8 +225,12 @@
                     </ListBox>
                 </DockPanel>
 
-                <!-- Startup & Services: one tab per panel, so Startup items (#36) can sit beside Services. -->
-                <TabControl Visibility="{Binding IsServicesPage, Converter={StaticResource Visible}}">
+                <!-- Startup & Services: the startup list and the services list, one tab each. -->
+                <TabControl Visibility="{Binding IsStartupPage, Converter={StaticResource Visible}}">
+                    <TabItem Header="Startup">
+                        <!-- Startup items and third-party scheduled tasks. -->
+                        <local:StartupPage DataContext="{Binding Startup}" />
+                    </TabItem>
                     <TabItem Header="Services">
                         <!-- Services: every service and driver; reviewed ones editable, Advanced unlocks the rest but never protected ones. -->
                         <DockPanel DataContext="{Binding ServicesPage}">

@@ -4,6 +4,7 @@ using Elynt.Core.Apps;
 using Elynt.Core.Bios;
 using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
+using Elynt.Core.Startup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
@@ -33,6 +34,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListServicesRequest), "listServices")]
 [JsonDerivedType(typeof(SetServiceStartRequest), "setServiceStart")]
 [JsonDerivedType(typeof(UndoServiceChangeRequest), "undoServiceChange")]
+[JsonDerivedType(typeof(ListStartupItemsRequest), "listStartupItems")]
+[JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
+[JsonDerivedType(typeof(DeleteStartupItemRequest), "deleteStartupItem")]
+[JsonDerivedType(typeof(CheckNewStartupItemsRequest), "checkNewStartupItems")]
 [JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
 [JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
@@ -163,7 +168,9 @@ public sealed record EngineResponse(
     UpdateRunStatus? WindowsUpdate = null,
     EngineEvent? Event = null,
     IReadOnlyList<ServiceView>? Services = null,
-    ServiceResult? ServiceResult = null)
+    ServiceResult? ServiceResult = null,
+    IReadOnlyList<StartupItemView>? StartupItems = null,
+    StartupCommandResult? StartupResult = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -216,6 +223,10 @@ public static class EngineProtocol
         ListServicesRequest => new(Services: engine.ListServices()),
         SetServiceStartRequest set => new(ServiceResult: engine.SetServiceStart(set.ServiceName, set.Start, set.Options)),
         UndoServiceChangeRequest undo => new(ServiceResult: engine.UndoServiceChange(undo.ServiceName)),
+        ListStartupItemsRequest => new(StartupItems: engine.ListStartupItems()),
+        SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
+        CheckNewStartupItemsRequest => new(StartupItems: engine.CheckNewStartupItems()),
+        DeleteStartupItemRequest delete => new(StartupResult: engine.DeleteStartupItem(delete.ItemId, delete.ConfirmDestructive)),
         StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
         GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         GetDriversRequest => new(Drivers: engine.GetDrivers()),

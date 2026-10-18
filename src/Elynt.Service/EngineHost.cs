@@ -8,6 +8,7 @@ using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Startup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -28,6 +29,9 @@ internal sealed class EngineHost(
     private readonly WindowsHardwareInfo _hardware = new();
     private readonly WindowsServiceManager _services = new();
     private readonly WindowsDevicePresence _devices = new();
+    private readonly WindowsScheduledTasks _tasks = new();
+    private readonly WindowsFileSignatures _signatures = new();
+    private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
@@ -100,7 +104,15 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power, Services = _services, Devices = _devices },
+                _games)
+            {
+                Boot = _boot,
+                Power = _power,
+                Services = _services,
+                Devices = _devices,
+                Startup = new StartupAdapters(
+                    new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+            },
             journal,
             sid,
             safetyNet,

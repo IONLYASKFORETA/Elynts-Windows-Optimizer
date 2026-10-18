@@ -5,6 +5,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
+using Elynt.Core.Startup;
 using Elynt.Core.Repair;
 using Elynt.Core.Services;
 using Elynt.Core.Tuning;
@@ -286,6 +287,41 @@ public sealed class PipeContractTests : IAsyncLifetime
         var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
 
         AssertSameJson(_engine.GetBiosReport(), report);
+    }
+
+    [Fact]
+    public async Task ListStartupItems_arrives_unchanged()
+    {
+        var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListStartupItems(), items);
+    }
+
+    [Fact]
+    public async Task SetStartupItemEnabled_arrives_unchanged()
+    {
+        var result = await _client.SetStartupItemEnabledAsync("run:HKCU:Discord", false, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetStartupItemEnabled run:HKCU:Discord False", _engine.LastCall);
+        AssertSameJson(_engine.SetStartupItemEnabled("run:HKCU:Discord", false), result);
+    }
+
+    [Fact]
+    public async Task DeleteStartupItem_carries_the_destructive_confirmation()
+    {
+        var result = await _client.DeleteStartupItemAsync("run:HKCU:Discord", true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("DeleteStartupItem run:HKCU:Discord True", _engine.LastCall);
+        AssertSameJson(_engine.DeleteStartupItem("run:HKCU:Discord", true), result);
+    }
+
+    [Fact]
+    public async Task CheckNewStartupItems_arrives_unchanged()
+    {
+        var items = await _client.CheckNewStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("CheckNewStartupItems", _engine.LastCall);
+        AssertSameJson(_engine.CheckNewStartupItems(), items);
     }
 
     [Fact]
@@ -667,6 +703,34 @@ public sealed class PipeContractTests : IAsyncLifetime
             ]);
         }
 
+        private static readonly StartupItemView StartupItem = new(
+            "run:HKCU:Discord", "Discord", StartupSource.RunKey, @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+            @"""C:\Discord\Update.exe"" --processStart Discord.exe", "Discord Inc.", SignatureStatus.Signed, StartupImpact.High,
+            Enabled: false, CanSwitch: true, CanDelete: true)
+        {
+            CanUndo = true,
+            Note = "A note.",
+        };
+
+        public IReadOnlyList<StartupItemView> ListStartupItems() => [StartupItem];
+
+        public StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled)
+        {
+            LastCall = $"SetStartupItemEnabled {itemId} {enabled}";
+            return new StartupCommandResult(true, "Turned off.", StartupItem);
+        }
+
+        public IReadOnlyList<StartupItemView> CheckNewStartupItems()
+        {
+            LastCall = "CheckNewStartupItems";
+            return [StartupItem with { Enabled = true }];
+        }
+
+        public StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive)
+        {
+            LastCall = $"DeleteStartupItem {itemId} {confirmDestructive}";
+            return new StartupCommandResult(true, "Deleted.", null);
+        }
         private static readonly UpdateRunStatus UpdateStatus = new(
             UpdatePhase.Finished, "Installed 1 of 2 updates. Restart to finish installing.", 1, 2, null, RebootRequired: true,
             Installed: ["2026-10 Cumulative Update"], NotInstalled: ["Defender update"], Skipped: ["NVIDIA - Display"]);

@@ -5,6 +5,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Power;
 using Elynt.Core.Registry;
+using Elynt.Core.Startup;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 
@@ -32,6 +33,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Which devices the PC has, for hardware-aware service recommendations. Without it, none are made.</summary>
     public Services.IDevicePresence? Devices { get; init; }
+
+    /// <summary>Startup sources, scheduled tasks, signatures and impact. Without it, the Startup page is empty.</summary>
+    public StartupAdapters? Startup { get; init; }
 
     /// <summary>The current boot entry's settings (BCD). Tweaks with boot steps fail without it.</summary>
     public IBootConfig? Boot { get; init; }

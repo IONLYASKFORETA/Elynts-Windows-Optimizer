@@ -7,6 +7,7 @@ namespace Elynt.Core.Journal;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
 [JsonDerivedType(typeof(Services.ServiceConfigRecord), "serviceConfig")]
+[JsonDerivedType(typeof(Startup.ScheduledTaskRecord), "scheduledTask")]
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
 [JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
