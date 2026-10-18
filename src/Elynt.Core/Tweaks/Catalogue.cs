@@ -16,7 +16,8 @@ public sealed class Catalogue
         _byId = Tweaks.ToDictionary(t => t.Id, StringComparer.Ordinal);
     }
 
-    public static Catalogue Default { get; } = new([.. GamingTweaks.All, .. PlaceboTweaks.All, .. DebloatTweaks.All], GamingTweaks.PerGame);
+    public static Catalogue Default { get; } =
+        new([.. GamingTweaks.All, .. PlaceboTweaks.All, .. DebloatTweaks.All, .. WindowsUpdateTweaks.All], GamingTweaks.PerGame);
 
     public IReadOnlyList<TweakDefinition> Tweaks { get; }
 

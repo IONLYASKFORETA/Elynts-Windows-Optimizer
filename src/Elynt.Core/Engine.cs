@@ -5,7 +5,11 @@ using Elynt.Core.Games;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Services;
+using Elynt.Core.Startup;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -124,10 +128,27 @@ public interface IEngine
     IReadOnlyList<AppView> ListApps();
 
     /// <summary>
-    /// Installs the ticked catalogue apps silently, one at a time, from winget's community source.
+    /// Installs the ticked apps silently, one at a time, from winget's community source.
     /// <paramref name="allRuntimes"/> adds every Visual C++, DirectX legacy and .NET runtime to the queue.
+    /// Apps outside the catalogue install only with <paramref name="allowNotReviewed"/>, which the UI sets once
+    /// the user has seen them marked "not reviewed".
     /// </summary>
-    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null);
+    InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null, bool allowNotReviewed = false);
+
+    /// <summary>Searches all of winget's community source. Results outside the catalogue are marked not reviewed.</summary>
+    AppSearchReport SearchApps(string query);
+
+    /// <summary>Every app installed on the PC, with the updates waiting in winget's community source.</summary>
+    InstalledAppsReport ListInstalledApps();
+
+    /// <summary>Updates the named installed apps, one at a time, from winget's community source.</summary>
+    InstallReport UpdateApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null);
+
+    /// <summary>Updates every installed app with an update waiting, one at a time.</summary>
+    InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null);
+
+    /// <summary>Uninstalls the named installed apps silently, one at a time.</summary>
+    InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null);
 
     /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
     IReadOnlyList<RepairToolView> ListRepairTools();
@@ -137,6 +158,47 @@ public interface IEngine
     Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default);
 
     BiosReport GetBiosReport();
+
+    /// <summary>Every installed service and driver, with who may change it and any recommendation for this PC.</summary>
+    IReadOnlyList<ServiceView> ListServices();
+
+    /// <summary>
+    /// Sets a service's start type. Reviewed services take Automatic or Manual; Disabled and unreviewed services need
+    /// Advanced; protected services and boot drivers are refused in every mode. The whole configuration is journaled.
+    /// </summary>
+    ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null);
+
+    /// <summary>Puts back the whole configuration a service had before the app last changed it.</summary>
+    ServiceResult UndoServiceChange(string serviceName);
+
+    /// <summary>Every startup item (Run keys, Startup folders, sign-in tasks, Store apps) and third-party scheduled task.</summary>
+    IReadOnlyList<StartupItemView> ListStartupItems();
+
+    /// <summary>
+    /// Turns a startup item on or off through the switch Task Manager uses (Task Scheduler's for tasks). Journaled,
+    /// so it can be undone from the Undo history.
+    /// </summary>
+    StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled);
+
+    /// <summary>
+    /// Deletes a startup item (the Run value, Startup folder file or scheduled task). Destructive: refused unless
+    /// <paramref name="confirmDestructive"/> says the user confirmed it separately.
+    /// </summary>
+    StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive);
+
+    /// <summary>
+    /// Startup items that were added and are on since the last look, for the tray note. The first look for a user
+    /// only takes note of what is there. Each new item is reported once.
+    /// </summary>
+    IReadOnlyList<StartupItemView> CheckNewStartupItems();
+    /// <summary>
+    /// "Check and install now": starts searching for and installing quality updates in the background, even while
+    /// updates are paused, or shows the run already in progress.
+    /// </summary>
+    UpdateRunStatus StartWindowsUpdate();
+
+    /// <summary>Progress of the latest "check and install now".</summary>
+    UpdateRunStatus GetWindowsUpdateStatus();
 
     /// <summary>The detected GPUs and their installed driver versions.</summary>
     DriverReport GetDrivers();
@@ -159,6 +221,22 @@ public interface IEngine
 
     /// <summary>Removes a game the user added by hand.</summary>
     GameCommandResult RemoveGame(string exePath);
+
+    /// <summary>Every tunable GPU with its SDK-reported sliders, current values and any change waiting to be kept.</summary>
+    GpuTuningReport GetGpuTuning();
+
+    /// <summary>Sets manual GPU values. The change reverts after 15 s unless <see cref="ConfirmGpuTuning"/> keeps it.</summary>
+    TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values);
+
+    /// <summary>Runs the vendor's auto overclock or undervolt, on the same 15 s probation.</summary>
+    TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind);
+
+    TuningResult ConfirmGpuTuning(string deviceId);
+
+    /// <summary>Puts a waiting GPU change back now.</summary>
+    TuningResult RevertGpuTuning(string deviceId);
+
+    TuningResult ResetGpuTuning(string deviceId);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -167,7 +245,7 @@ public sealed record UndoOutcome(Guid ChangeId, string TweakName, bool Succeeded
 public sealed record RestoreResult(bool Succeeded, string Message, IReadOnlyList<UndoOutcome> Changes);
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
-public sealed class Engine(
+public sealed partial class Engine(
     Catalogue catalogue,
     SystemAdapters system,
     ChangeJournal journal,
@@ -178,11 +256,16 @@ public sealed class Engine(
     AppCatalogue? apps = null,
     IRepairLogStore? repairLogs = null,
     RepairCatalogue? repairs = null,
-    IGameStore? gameStore = null) : IEngine
+    IGameStore? gameStore = null,
+    GpuTuning? gpuTuning = null,
+    ManualUpdate? windowsUpdate = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
+    private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
+
+    private readonly StartupManager _startup = new(system, journal, user, safetyNet, clock ?? TimeProvider.System, logger);
     private readonly RepairBench _repair = new(
         repairs ?? RepairCatalogue.Default,
         system,
@@ -191,12 +274,43 @@ public sealed class Engine(
         clock ?? TimeProvider.System,
         logger ?? (ILogger)NullLogger<Engine>.Instance);
 
+    private ServiceDesk Services => new(system, journal, user);
+
+    public IReadOnlyList<ServiceView> ListServices() => Services.List();
+
+    public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+
+    public ServiceResult UndoServiceChange(string serviceName) =>
+        Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
+
+    /// <summary>A catalogue tweak, or the change behind a journaled service start type.</summary>
+    private bool TryResolve(string tweakId, JournalEntry? entry, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TweakDefinition? tweak)
+    {
+        if (catalogue.TryGet(tweakId, out tweak))
+            return true;
+        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        return tweak is not null;
+    }
+
     private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
 
-    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null) =>
-        _apps.Install(appIds, allRuntimes, progress);
+    public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null, bool allowNotReviewed = false) =>
+        _apps.Install(appIds, allRuntimes, progress, allowNotReviewed);
+
+    public AppSearchReport SearchApps(string query) => _appManager.Search(query);
+
+    public InstalledAppsReport ListInstalledApps() => _appManager.ListInstalled();
+
+    public InstallReport UpdateApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null) =>
+        _appManager.Update(appIds, progress);
+
+    public InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null) => _appManager.UpdateAll(progress);
+
+    public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null) =>
+        _appManager.Uninstall(appIds, progress);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak
@@ -216,18 +330,23 @@ public sealed class Engine(
 
     public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
-        options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
 
         if (tweak.PerGame)
             return Failed(tweak, "Choose a game first: this is set for one game at a time. Nothing was changed.");
 
+        return ApplyTweak(tweak, options ?? ApplyOptions.Default);
+    }
+
+    /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    {
         if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
 
         // Hard rules hold in every mode, Advanced included.
-        if (tweak.Steps.Select(step => HardRules.Violation(step.Target)).FirstOrDefault(v => v is not null) is { } violation)
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
         {
             _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
             return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
@@ -295,10 +414,10 @@ public sealed class Engine(
 
     public CommandResult Revert(string tweakId)
     {
-        if (!catalogue.TryGet(tweakId, out var tweak))
+        var entry = journal.LatestUndoable(tweakId, user);
+        if (!TryResolve(tweakId, entry, out var tweak))
             return Unknown(tweakId);
 
-        var entry = journal.LatestUndoable(tweak.Id, user);
         if (entry is null)
             return Failed(tweak, "Nothing to undo: this was already set before the app changed anything.");
 
@@ -310,7 +429,9 @@ public sealed class Engine(
         var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
         if (entry is null)
             return new(false, "There is no such change in your undo history.", null);
-        if (!catalogue.TryGet(entry.TweakId, out var tweak))
+        if (StartupManager.Owns(entry.TweakId))
+            return UndoStartupChange(entry);
+        if (!TryResolve(entry.TweakId, entry, out var tweak))
             return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
         if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
             return Failed(tweak, "This change has already been undone.");
@@ -328,7 +449,7 @@ public sealed class Engine(
         var results = new List<UndoOutcome>();
         foreach (var entry in open)
         {
-            var name = catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId;
+            var name = NameOf(entry);
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
@@ -375,7 +496,7 @@ public sealed class Engine(
             .Select(entry => new ChangeView(
                 entry.Id,
                 entry.TweakId,
-                catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId,
+                NameOf(entry),
                 entry.AppliedAt,
                 entry.Status switch
                 {
@@ -413,6 +534,11 @@ public sealed class Engine(
         return BiosAdvisor.Build(hardware);
     }
 
+    public UpdateRunStatus StartWindowsUpdate() =>
+        windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
+
+    public UpdateRunStatus GetWindowsUpdateStatus() => windowsUpdate?.Status ?? UpdateRunStatus.Idle;
+
     public DriverReport GetDrivers() => DriverFlow.Report();
 
     public DriverCheck CheckDriver(DriverRequest request) => DriverFlow.Check(request);
@@ -427,6 +553,23 @@ public sealed class Engine(
     public GameCommandResult AddGame(string exePath) => _games.Add(exePath);
 
     public GameCommandResult RemoveGame(string exePath) => _games.Remove(exePath);
+
+    public GpuTuningReport GetGpuTuning() =>
+        gpuTuning?.Describe() ?? new GpuTuningReport([], "No GPU on this PC can be tuned from Windows.");
+
+    public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values) =>
+        gpuTuning?.Set(deviceId, values) ?? NoGpuTuning;
+
+    public TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind) =>
+        gpuTuning?.AutoTune(deviceId, kind) ?? NoGpuTuning;
+
+    public TuningResult ConfirmGpuTuning(string deviceId) => gpuTuning?.Confirm(deviceId) ?? NoGpuTuning;
+
+    public TuningResult RevertGpuTuning(string deviceId) => gpuTuning?.Revert(deviceId) ?? NoGpuTuning;
+
+    public TuningResult ResetGpuTuning(string deviceId) => gpuTuning?.ResetToDefaults(deviceId) ?? NoGpuTuning;
+
+    private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
     {

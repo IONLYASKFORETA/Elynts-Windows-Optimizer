@@ -5,8 +5,12 @@ using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
+using Elynt.Core.Startup;
 using Elynt.Core.Repair;
+using Elynt.Core.Services;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 
 namespace Elynt.Core.Tests;
 
@@ -69,6 +73,60 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task InstallApps_carries_the_not_reviewed_acceptance()
+    {
+        await _client.InstallAppsAsync(["Some.Tool"], allRuntimes: false, allowNotReviewed: true, cancellation: TestContext.Current.CancellationToken);
+
+        Assert.Equal("InstallApps Some.Tool runtimes=False notReviewed=True", _engine.LastCall);
+    }
+
+    [Fact]
+    public async Task SearchApps_arrives_unchanged()
+    {
+        var search = await _client.SearchAppsAsync("steam", TestContext.Current.CancellationToken);
+
+        Assert.Equal("SearchApps steam", _engine.LastCall);
+        AssertSameJson(_engine.SearchApps("steam"), search);
+    }
+
+    [Fact]
+    public async Task ListInstalledApps_arrives_unchanged()
+    {
+        var installed = await _client.ListInstalledAppsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListInstalledApps(), installed);
+        Assert.True(installed.Apps[0].CanUpdate);
+    }
+
+    [Fact]
+    public async Task Updates_and_uninstalls_stream_progress_then_the_report()
+    {
+        var seen = new List<InstallProgress>();
+        var progress = new SyncProgress(seen.Add);
+
+        var update = await _client.UpdateAppsAsync(["Valve.Steam"], progress, TestContext.Current.CancellationToken);
+        Assert.Equal("UpdateApps Valve.Steam", _engine.LastCall);
+        var all = await _client.UpdateAllAppsAsync(progress, TestContext.Current.CancellationToken);
+        Assert.Equal("UpdateAllApps", _engine.LastCall);
+        var uninstall = await _client.UninstallAppsAsync(["Valve.Steam"], progress, TestContext.Current.CancellationToken);
+        Assert.Equal("UninstallApps Valve.Steam", _engine.LastCall);
+
+        AssertSameJson(StubEngine.InstallSteps.Concat(StubEngine.InstallSteps).Concat(StubEngine.InstallSteps).ToList(), seen);
+        AssertSameJson(StubEngine.Report, update);
+        AssertSameJson(StubEngine.Report, all);
+        AssertSameJson(StubEngine.Report, uninstall);
+    }
+
+    [Fact]
+    public void Updates_and_uninstalls_run_alone_like_installs()
+    {
+        Assert.True(EngineProtocol.IsExclusive(new UpdateAppsRequest(["a"])));
+        Assert.True(EngineProtocol.IsExclusive(new UpdateAllAppsRequest()));
+        Assert.True(EngineProtocol.IsExclusive(new UninstallAppsRequest(["a"])));
+        Assert.False(EngineProtocol.IsExclusive(new SearchAppsRequest("a")));
+    }
+
+    [Fact]
     public async Task Apply_arrives_unchanged()
     {
         var result = await _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken);
@@ -92,6 +150,33 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         Assert.Equal("Revert some.tweak", _engine.LastCall);
         AssertSameJson(_engine.Revert("some.tweak"), result);
+    }
+
+    [Fact]
+    public async Task ListServices_arrives_unchanged()
+    {
+        var services = await _client.ListServicesAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListServices(), services);
+    }
+
+    [Fact]
+    public async Task SetServiceStart_arrives_unchanged_with_advanced_mode()
+    {
+        var result = await _client.SetServiceStartAsync("Spooler", ServiceStart.Disabled, new ApplyOptions(Advanced: true), TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetServiceStart Spooler Disabled", _engine.LastCall);
+        Assert.Equal(new ApplyOptions(Advanced: true), _engine.LastOptions);
+        AssertSameJson(_engine.SetServiceStart("Spooler", ServiceStart.Disabled), result);
+    }
+
+    [Fact]
+    public async Task UndoServiceChange_arrives_unchanged()
+    {
+        var result = await _client.UndoServiceChangeAsync("Spooler", TestContext.Current.CancellationToken);
+
+        Assert.Equal("UndoServiceChange Spooler", _engine.LastCall);
+        AssertSameJson(_engine.UndoServiceChange("Spooler"), result);
     }
 
     [Fact]
@@ -205,6 +290,58 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListStartupItems_arrives_unchanged()
+    {
+        var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListStartupItems(), items);
+    }
+
+    [Fact]
+    public async Task SetStartupItemEnabled_arrives_unchanged()
+    {
+        var result = await _client.SetStartupItemEnabledAsync("run:HKCU:Discord", false, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetStartupItemEnabled run:HKCU:Discord False", _engine.LastCall);
+        AssertSameJson(_engine.SetStartupItemEnabled("run:HKCU:Discord", false), result);
+    }
+
+    [Fact]
+    public async Task DeleteStartupItem_carries_the_destructive_confirmation()
+    {
+        var result = await _client.DeleteStartupItemAsync("run:HKCU:Discord", true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("DeleteStartupItem run:HKCU:Discord True", _engine.LastCall);
+        AssertSameJson(_engine.DeleteStartupItem("run:HKCU:Discord", true), result);
+    }
+
+    [Fact]
+    public async Task CheckNewStartupItems_arrives_unchanged()
+    {
+        var items = await _client.CheckNewStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("CheckNewStartupItems", _engine.LastCall);
+        AssertSameJson(_engine.CheckNewStartupItems(), items);
+    }
+
+    [Fact]
+    public async Task StartWindowsUpdate_arrives_unchanged()
+    {
+        var status = await _client.StartWindowsUpdateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("StartWindowsUpdate", _engine.LastCall);
+        AssertSameJson(_engine.StartWindowsUpdate(), status);
+    }
+
+    [Fact]
+    public async Task GetWindowsUpdateStatus_arrives_unchanged()
+    {
+        var status = await _client.GetWindowsUpdateStatusAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetWindowsUpdateStatus(), status);
+    }
+
+    [Fact]
     public async Task GetDrivers_arrives_unchanged()
     {
         var report = await _client.GetDriversAsync(TestContext.Current.CancellationToken);
@@ -277,6 +414,32 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetGpuTuning_arrives_unchanged()
+    {
+        var report = await _client.GetGpuTuningAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetGpuTuning(), report);
+    }
+
+    [Fact]
+    public async Task GPU_tuning_commands_arrive_unchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var values = new Dictionary<string, int> { [GpuControls.MaxClock] = 2600, [GpuControls.PowerLimit] = -5 };
+
+        AssertSameJson(_engine.SetGpuTuning("amd:0", values), await _client.SetGpuTuningAsync("amd:0", values, ct));
+        Assert.Equal("SetGpuTuning amd:0 gpuMaxClock=2600,powerLimit=-5", _engine.LastCall);
+        await _client.AutoTuneGpuAsync("amd:0", AutoTuneKind.UndervoltGpu, ct);
+        Assert.Equal("AutoTuneGpu amd:0 UndervoltGpu", _engine.LastCall);
+        await _client.ConfirmGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ConfirmGpuTuning amd:0", _engine.LastCall);
+        await _client.RevertGpuTuningAsync("amd:0", ct);
+        Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
+        await _client.ResetGpuTuningAsync("amd:0", ct);
+        Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -329,6 +492,29 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
 
+        private static readonly ServiceView Service = new(
+            "Spooler", "Print Spooler", "Queues print jobs.", ServiceKind.Service, ServiceStart.Automatic, DelayedAutoStart: true,
+            Running: true, ServiceAccess.Listed, LockReason: null,
+            new ServiceRecommendation(ServiceStart.Manual, "No printer was found."),
+            [ServiceStart.Automatic, ServiceStart.Manual], [ServiceStart.Automatic, ServiceStart.Manual, ServiceStart.Disabled],
+            CanUndo: true);
+
+        public IReadOnlyList<ServiceView> ListServices() =>
+            [Service, Service with { Name = "vgc", Access = ServiceAccess.Protected, LockReason = "anti-cheat", Recommendation = null }];
+
+        public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null)
+        {
+            LastCall = $"SetServiceStart {serviceName} {start}";
+            LastOptions = options;
+            return new ServiceResult(true, "Print Spooler now starts Manual.", Service with { Start = start });
+        }
+
+        public ServiceResult UndoServiceChange(string serviceName)
+        {
+            LastCall = $"UndoServiceChange {serviceName}";
+            return new ServiceResult(false, "Nothing to undo.", Service with { CanUndo = false });
+        }
+
         public IReadOnlyList<AppView> ListApps() =>
             [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];
 
@@ -344,14 +530,53 @@ public sealed class PipeContractTests : IAsyncLifetime
         /// <summary>When set, the second progress event waits for this, so the client must have seen the first.</summary>
         public Task? WaitBetweenProgress { get; set; }
 
-        public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null)
+        public InstallReport InstallApps(IReadOnlyList<string> appIds, bool allRuntimes, IProgress<InstallProgress>? progress = null, bool allowNotReviewed = false)
         {
-            LastCall = $"InstallApps {string.Join(",", appIds)} runtimes={allRuntimes}";
+            LastCall = $"InstallApps {string.Join(",", appIds)} runtimes={allRuntimes}" + (allowNotReviewed ? " notReviewed=True" : "");
+            return Stream(progress);
+        }
+
+        private InstallReport Stream(IProgress<InstallProgress>? progress)
+        {
             progress?.Report(InstallSteps[0]);
             if (WaitBetweenProgress is not null && !WaitBetweenProgress.Wait(TimeSpan.FromSeconds(10)))
                 throw new TimeoutException("The client never saw the first progress event.");
             progress?.Report(InstallSteps[1]);
             return Report;
+        }
+
+        public AppSearchReport SearchApps(string query)
+        {
+            LastCall = $"SearchApps {query}";
+            return new(true, "2 found. 1 isn't in the reviewed catalogue.",
+            [
+                new("Valve.Steam", "Steam", "2.10", true, AppGroups.GameLaunchers, "Valve's store."),
+                new("Some.SteamTool", "Steam Tool", "1.0", false, null, null),
+            ]);
+        }
+
+        public InstalledAppsReport ListInstalledApps() => new(true, "1 update available.",
+        [
+            new("Valve.Steam", "Steam", "2.10", "2.11", true),
+            new(@"ARP\Machine\X64\Old", "Old Thing", "1.0", null, false),
+        ]);
+
+        public InstallReport UpdateApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null)
+        {
+            LastCall = $"UpdateApps {string.Join(",", appIds)}";
+            return Stream(progress);
+        }
+
+        public InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null)
+        {
+            LastCall = "UpdateAllApps";
+            return Stream(progress);
+        }
+
+        public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null)
+        {
+            LastCall = $"UninstallApps {string.Join(",", appIds)}";
+            return Stream(progress);
         }
 
         public CommandResult Apply(string tweakId, ApplyOptions? options = null)
@@ -416,6 +641,46 @@ public sealed class PipeContractTests : IAsyncLifetime
             return new GameCommandResult(true, "Removed.", null);
         }
 
+        private static readonly GpuTuningView Gpu = new(
+            "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,
+            [new TuningControl(GpuControls.MaxClock, "Max GPU clock", "MHz", 500, 3000, 5, 2500, 2600)],
+            [AutoTuneKind.OverclockGpu, AutoTuneKind.UndervoltGpu],
+            AtDefaults: false,
+            RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
+            Notice: "Waiting.");
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+
+        public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
+        {
+            LastCall = $"SetGpuTuning {deviceId} " + string.Join(",", values.OrderBy(v => v.Key).Select(v => $"{v.Key}={v.Value}"));
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult AutoTuneGpu(string deviceId, AutoTuneKind kind)
+        {
+            LastCall = $"AutoTuneGpu {deviceId} {kind}";
+            return new TuningResult(true, "Changed.", Gpu);
+        }
+
+        public TuningResult ConfirmGpuTuning(string deviceId)
+        {
+            LastCall = $"ConfirmGpuTuning {deviceId}";
+            return new TuningResult(true, "Kept.", Gpu);
+        }
+
+        public TuningResult RevertGpuTuning(string deviceId)
+        {
+            LastCall = $"RevertGpuTuning {deviceId}";
+            return new TuningResult(true, "Put back.", Gpu);
+        }
+
+        public TuningResult ResetGpuTuning(string deviceId)
+        {
+            LastCall = $"ResetGpuTuning {deviceId}";
+            return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
+        }
+
         public CommandResult Revert(string tweakId)
         {
             LastCall = $"Revert {tweakId}";
@@ -437,6 +702,46 @@ public sealed class PipeContractTests : IAsyncLifetime
                 new(Guid.Empty, "Other tweak", false, "Something else changed it since."),
             ]);
         }
+
+        private static readonly StartupItemView StartupItem = new(
+            "run:HKCU:Discord", "Discord", StartupSource.RunKey, @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+            @"""C:\Discord\Update.exe"" --processStart Discord.exe", "Discord Inc.", SignatureStatus.Signed, StartupImpact.High,
+            Enabled: false, CanSwitch: true, CanDelete: true)
+        {
+            CanUndo = true,
+            Note = "A note.",
+        };
+
+        public IReadOnlyList<StartupItemView> ListStartupItems() => [StartupItem];
+
+        public StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled)
+        {
+            LastCall = $"SetStartupItemEnabled {itemId} {enabled}";
+            return new StartupCommandResult(true, "Turned off.", StartupItem);
+        }
+
+        public IReadOnlyList<StartupItemView> CheckNewStartupItems()
+        {
+            LastCall = "CheckNewStartupItems";
+            return [StartupItem with { Enabled = true }];
+        }
+
+        public StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive)
+        {
+            LastCall = $"DeleteStartupItem {itemId} {confirmDestructive}";
+            return new StartupCommandResult(true, "Deleted.", null);
+        }
+        private static readonly UpdateRunStatus UpdateStatus = new(
+            UpdatePhase.Finished, "Installed 1 of 2 updates. Restart to finish installing.", 1, 2, null, RebootRequired: true,
+            Installed: ["2026-10 Cumulative Update"], NotInstalled: ["Defender update"], Skipped: ["NVIDIA - Display"]);
+
+        public UpdateRunStatus StartWindowsUpdate()
+        {
+            LastCall = "StartWindowsUpdate";
+            return UpdateStatus with { Phase = UpdatePhase.Installing, Current = "2026-10 Cumulative Update" };
+        }
+
+        public UpdateRunStatus GetWindowsUpdateStatus() => UpdateStatus;
 
         public IReadOnlyList<ChangeView> ListHistory() =>
         [

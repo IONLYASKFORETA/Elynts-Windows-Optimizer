@@ -6,6 +6,8 @@ namespace Elynt.Core.Journal;
 /// <summary>The exact prior state of one step, captured before the change, that knows how to put it back.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
+[JsonDerivedType(typeof(Services.ServiceConfigRecord), "serviceConfig")]
+[JsonDerivedType(typeof(Startup.ScheduledTaskRecord), "scheduledTask")]
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
 [JsonDerivedType(typeof(RegistryEachKeyRecord), "registryEachKey")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]

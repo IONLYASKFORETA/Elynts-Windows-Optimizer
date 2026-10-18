@@ -4,25 +4,35 @@ using System.Windows;
 using System.Windows.Navigation;
 using Elynt.App.ViewModels;
 using Elynt.Core;
+using Elynt.Core.Apps;
 using Elynt.Core.Diagnostics;
 using Elynt.Core.Drivers;
+using Elynt.Core.Startup;
 
 namespace Elynt.App;
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _model;
+    private TrayNotes? _tray;
 
     public MainWindow()
     {
         _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
+        _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
+        _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
         InitializeComponent();
         DataContext = _model;
+        _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
+            _tray = new TrayNotes(_model.Startup, ShowFromTray);
+            // The first look after connecting takes note of what is already there.
+            await _tray.CheckAsync();
             await _model.CheckForUpdatesAsync();
         };
+        Closed += (_, _) => _tray?.Dispose();
     }
 
     private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();
@@ -30,6 +40,90 @@ public partial class MainWindow : Window
     private async void Retry(object sender, RoutedEventArgs e) => await _model.ConnectAsync();
 
     private async void InstallApps(object sender, RoutedEventArgs e) => await _model.InstallTickedAsync();
+
+    private AppsManagerViewModel Apps => _model.AppsManager!;
+
+    private async void SearchApps(object sender, RoutedEventArgs e) => await Apps.SearchAsync();
+
+    private async void SearchBoxKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter)
+            return;
+        e.Handled = true;
+        await Apps.SearchAsync();
+    }
+
+    private async void InstallSearchResults(object sender, RoutedEventArgs e) => await Apps.InstallTickedResultsAsync();
+
+    private async void RefreshInstalledApps(object sender, RoutedEventArgs e) => await Apps.RefreshInstalledAsync();
+
+    private async void UpdateAllApps(object sender, RoutedEventArgs e) => await Apps.UpdateAllAsync();
+
+    private async void UpdateApp(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is InstalledAppViewModel app)
+            await Apps.UpdateAsync(app);
+    }
+
+    private async void UninstallApp(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is InstalledAppViewModel app)
+            await Apps.UninstallAsync(app);
+    }
+
+    private bool ConfirmNotReviewed(IReadOnlyList<string> names) =>
+        MessageBox.Show(
+            this,
+            $"These apps aren't in the reviewed catalogue:\n\n{string.Join("\n", names)}\n\n" +
+            "Nobody has checked that they are free, safe or install silently. Install them only if you trust the publisher.\n\nInstall anyway?",
+            "Not reviewed",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private bool ConfirmUninstall(string name, string note) =>
+        MessageBox.Show(this, $"Uninstall {name}?\n\n{note}".TrimEnd(), "Uninstall",
+            MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK;
+
+    private void SaveAppList(object sender, RoutedEventArgs e)
+    {
+        var (text, count) = Apps.BuildAppList();
+        if (count == 0)
+        {
+            MessageBox.Show(this, "Tick the apps you want in the list first, on the Catalogue or Search tab.", "Save app list");
+            return;
+        }
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = "My apps" + AppList.FileExtension,
+            Filter = $"Elynt app list (*{AppList.FileExtension})|*{AppList.FileExtension}",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        File.WriteAllText(dialog.FileName, text);
+        MessageBox.Show(this, $"Saved {count} {(count == 1 ? "app" : "apps")}. Load the file with \"Load app list\" on another PC to install them there.", "Save app list");
+    }
+
+    private void LoadAppList(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = $"Elynt app list (*{AppList.FileExtension})|*{AppList.FileExtension}|All files (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        string text;
+        try
+        {
+            text = File.ReadAllText(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Couldn't read the file: {ex.Message}", "Load app list");
+            return;
+        }
+        MessageBox.Show(this, Apps.LoadAppList(text), "Load app list");
+    }
 
     private async void RunRepair(object sender, RoutedEventArgs e)
     {
@@ -88,6 +182,47 @@ public partial class MainWindow : Window
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
 
+    /// <summary>Drivers can stop Windows from starting, so changing one is asked about first. "No" is the default.</summary>
+    private bool ConfirmDriverChange(ServiceItemViewModel item, Elynt.Core.Tweaks.ServiceStart start) =>
+        MessageBox.Show(
+            this,
+            $"{item.Title} is a driver. Setting it to {start} can stop Windows from starting if it is needed for your hardware.\n\n" +
+            "The previous configuration is saved and can be put back from the Services page or the Undo history.\n\nChange it anyway?",
+            "Change a driver",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The separate confirmation deleting a startup item needs. "No" is the default button.</summary>
+    private bool ConfirmDeleteStartupItem(StartupItemView item) =>
+        MessageBox.Show(
+            this,
+            $"Delete {item.Name} from startup?\n\n{item.Location}\n\nThis can't be undone. Turning it off instead stops it starting and can be undone.\n\nDelete it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void SetServiceStart(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.SetAsync(item);
+    }
+
+    private async void UndoServiceChange(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.UndoAsync(item);
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
+
     private async void CheckDriver(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is GpuItemViewModel gpu)
@@ -127,13 +262,8 @@ public partial class MainWindow : Window
 
     private async void AddGame(object sender, RoutedEventArgs e)
     {
-        var picker = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Pick the game's .exe",
-            Filter = "Programs (*.exe)|*.exe",
-        };
-        if (picker.ShowDialog(this) == true)
-            await _model.AddGameAsync(picker.FileName);
+        if (PickGame() is { } exe)
+            await _model.AddGameAsync(exe);
     }
 
     private async void RemoveGame(object sender, RoutedEventArgs e)
@@ -142,10 +272,11 @@ public partial class MainWindow : Window
             await _model.RemoveGameAsync(item);
     }
 
-    private async void AddGameForTweak(object sender, RoutedEventArgs e)
+    /// <summary>Applies a per-game tweak to a game the user picks.</summary>
+    private async void ApplyForGame(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
-            await _model.AddGameAsync(item);
+            await _model.ApplyForGameAsync(item);
     }
 
     private async void UndoChange(object sender, RoutedEventArgs e)
@@ -165,6 +296,9 @@ public partial class MainWindow : Window
         if (answer == MessageBoxResult.OK)
             await _model.RestoreEverythingAsync();
     }
+
+    private async void CheckAndInstallWindowsUpdates(object sender, RoutedEventArgs e) =>
+        await _model.WindowsUpdate.StartAsync();
 
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {

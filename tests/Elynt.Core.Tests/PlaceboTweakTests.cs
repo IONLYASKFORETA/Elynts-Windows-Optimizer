@@ -15,7 +15,7 @@ public class PlaceboTweakTests
     private readonly FakeDevices _devices = new();
     private readonly ChangeJournal _journal = new(new InMemoryJournalStore());
 
-    private SystemAdapters Adapters() => new(_registry, _system) { Boot = _boot, Power = _power, Devices = _devices };
+    private SystemAdapters Adapters() => new(_registry, _system) { Boot = _boot, Power = _power, PnpDevices = _devices };
 
     private Engine NewEngine() => new(Catalogue.Default, Adapters(), _journal, "S-1-5-21-test");
 

@@ -53,8 +53,8 @@ public static class SystemSnapshot
                     lines.Add($"boot {boot.Element}: {system.Boot!.Get(boot.Element) ?? "not set"}");
                     break;
                 case DeviceTarget device:
-                    foreach (var id in system.Devices!.FindByHardwareId(device.HardwareId))
-                        lines.Add($"device {id}: {(system.Devices.IsEnabled(id) == true ? "enabled" : "disabled")}");
+                    foreach (var id in system.PnpDevices!.FindByHardwareId(device.HardwareId))
+                        lines.Add($"device {id}: {(system.PnpDevices.IsEnabled(id) == true ? "enabled" : "disabled")}");
                     break;
                 case PowerSettingTarget setting:
                     var active = system.Power!.GetActive();

@@ -53,7 +53,7 @@ public sealed record DeviceEnabledStep(string HardwareId, string DeviceName, boo
     }
 
     internal static IDevices Devices(SystemAdapters system) =>
-        system.Devices ?? throw new InvalidOperationException("Devices can't be read on this PC.");
+        system.PnpDevices ?? throw new InvalidOperationException("Devices can't be read on this PC.");
 }
 
 /// <summary>One device and whether it was enabled.</summary>

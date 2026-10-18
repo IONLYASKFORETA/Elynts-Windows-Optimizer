@@ -17,10 +17,10 @@ namespace Elynt.App.ViewModels;
 /// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
 /// <param name="pickGame">Asks the user for a game's .exe, or returns null when they cancel.</param>
 public sealed class MainViewModel(
-    Func<TweakView, bool> confirmDestructive,
-    Action<DriverInstallResult> askToReboot,
-    Func<string?> pickGame) : ObservableObject
+    Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot, Func<string?> pickGame) : ObservableObject
 {
+    private StartupPageViewModel? _startup;
+
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
 
@@ -43,7 +43,9 @@ public sealed class MainViewModel(
     private bool _isInstalling;
     private string? _installStatus;
     private BiosPageViewModel? _bios;
+    private WindowsUpdatePageViewModel? _windowsUpdate;
     private DriversPageViewModel? _drivers;
+    private GpuTuningPageViewModel? _gpu;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -58,6 +60,18 @@ public sealed class MainViewModel(
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
 
+    /// <summary>The Apps page's search, installed apps (updates and uninstalls) and app list parts.</summary>
+    public AppsManagerViewModel? AppsManager { get; set; }
+
+    /// <summary>The service connection, for the page view models that send their own commands.</summary>
+    internal EnginePipeClient? Client => _client;
+
+    /// <summary>The Startup tab on the Startup &amp; Services page.</summary>
+    public StartupPageViewModel Startup => _startup ??= new StartupPageViewModel(() => IsConnected ? _client : null);
+
+    /// <summary>The Startup &amp; Services page, which shows the Startup and Services lists as tabs.</summary>
+    public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
+
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
     public bool InstallAllRuntimes
     {
@@ -68,7 +82,7 @@ public sealed class MainViewModel(
     public bool IsInstalling
     {
         get => _isInstalling;
-        private set
+        internal set
         {
             if (Set(ref _isInstalling, value))
                 OnPropertyChanged(nameof(CanInstall));
@@ -110,6 +124,7 @@ public sealed class MainViewModel(
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsAppsPage));
+                OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
@@ -122,8 +137,14 @@ public sealed class MainViewModel(
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
 
+    /// <summary>The Services tab on the Startup &amp; Services page, set by the window. Null until then.</summary>
+    public ServicesPageViewModel? ServicesPage { get; set; }
+
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage;
+
+    /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
+    private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -158,7 +179,10 @@ public sealed class MainViewModel(
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    public bool IsEmpty => IsTweakPage && Tweaks.Count == 0 && !IsBiosPage && !IsDriversPage && !IsGamesPage;
+    /// <summary>Shows the "nothing here yet" note: a tweak page with no tweaks, or a panel page whose panel isn't available.</summary>
+    public bool IsEmpty =>
+        (IsTweakPage && Tweaks.Count == 0) ||
+        (IsPanelPage && !IsOverclockingPage && !IsDriversPage && !IsGamesPage);
 
     /// <summary>Installed games, shown on the per-game profiles page.</summary>
     public GamesPageViewModel Games { get; } = new();
@@ -178,6 +202,11 @@ public sealed class MainViewModel(
 
     public bool IsBiosPage => Bios is not null && SelectedPage == Sections.Overclocking;
 
+    /// <summary>"Check and install now" with its progress, shown above the Windows Update tweaks.</summary>
+    public WindowsUpdatePageViewModel WindowsUpdate => _windowsUpdate ??= new(() => _client);
+
+    public bool IsWindowsUpdatePage => IsConnected && SelectedPage == Sections.WindowsUpdate;
+
     /// <summary>The detected GPUs with driver lookup and install, shown on the Drivers page. Null until the service sends them.</summary>
     public DriversPageViewModel? Drivers
     {
@@ -190,6 +219,21 @@ public sealed class MainViewModel(
     }
 
     public bool IsDriversPage => Drivers is not null && SelectedPage == Sections.Drivers;
+    /// <summary>GPU tuning, shown on the Overclocking page. Null until the service sends it.</summary>
+    public GpuTuningPageViewModel? Gpu
+    {
+        get => _gpu;
+        private set
+        {
+            _gpu?.Stop();
+            if (Set(ref _gpu, value))
+                OnPropertyChanged(nameof(IsGpuPage));
+        }
+    }
+
+    public bool IsGpuPage => Gpu is not null && SelectedPage == Sections.Overclocking;
+
+    public bool IsOverclockingPage => IsBiosPage || IsGpuPage;
 
     public string Status
     {
@@ -206,6 +250,7 @@ public sealed class MainViewModel(
             {
                 OnPropertyChanged(nameof(IsDisconnected));
                 OnPropertyChanged(nameof(IsGamesPage));
+                OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
                 OnPropertyChanged(nameof(CanInstall));
             }
@@ -280,8 +325,11 @@ public sealed class MainViewModel(
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            if (ServicesPage is not null)
+                await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
             Games.Show(await _client.ListGamesAsync());
+            Gpu = await LoadGpuAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -348,9 +396,23 @@ public sealed class MainViewModel(
         }
     }
 
+    private static async Task<GpuTuningPageViewModel?> LoadGpuAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new GpuTuningPageViewModel(client, await client.GetGpuTuningAsync());
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't read GPU tuning");
+            return null;
+        }
+    }
+
     private async Task DisconnectAsync()
     {
         IsConnected = false;
+        Gpu = null;
         var client = _client;
         _client = null;
         if (client is not null)
@@ -484,6 +546,8 @@ public sealed class MainViewModel(
             HistoryMessage = null;
             _ = ShowHistoryAsync();
         }
+        if (IsStartupPage)
+            _ = Startup.LoadAsync();
 
         Tweaks.Clear();
         // The possible-placebo group goes last; within each group, tweaks that fit this PC come first.
@@ -506,8 +570,13 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsWindowsUpdatePage));
+        if (IsWindowsUpdatePage)
+            _ = WindowsUpdate.RefreshAsync();
         OnPropertyChanged(nameof(IsDriversPage));
         OnPropertyChanged(nameof(IsGamesPage));
+        OnPropertyChanged(nameof(IsGpuPage));
+        OnPropertyChanged(nameof(IsOverclockingPage));
     }
 
     public Task AddGameAsync(string exePath) => ChangeGamesAsync(client => client.AddGameAsync(exePath));
@@ -545,7 +614,7 @@ public sealed class MainViewModel(
     }
 
     /// <summary>Applies a per-game tweak to a game the user picks; the game then gets its own row and switch.</summary>
-    public async Task AddGameAsync(TweakItemViewModel template)
+    public async Task ApplyForGameAsync(TweakItemViewModel template)
     {
         if (_client is null || !template.IsPerGame)
             return;
