@@ -15,7 +15,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive, AskToReboot);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, ConfirmWarning);
         InitializeComponent();
         DataContext = _model;
         Loaded += async (_, _) =>
@@ -84,6 +84,16 @@ public partial class MainWindow : Window
             this,
             $"{tweak.Name}\n\nThis can't be undone. {tweak.DestructiveWarning}\n\nDo it anyway?",
             "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The warning a tweak needs read before it is applied (OneDrive, the Store). "No" is the default button.</summary>
+    private bool ConfirmWarning(TweakView tweak) =>
+        MessageBox.Show(
+            this,
+            $"{tweak.Name}\n\n{tweak.Warning}\n\nGo ahead?",
+            "Before you go on",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;

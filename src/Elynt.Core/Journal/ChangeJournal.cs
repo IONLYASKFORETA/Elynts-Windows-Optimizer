@@ -6,6 +6,9 @@ namespace Elynt.Core.Journal;
 /// <summary>The exact prior state of one step, captured before the change, that knows how to put it back.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
+[JsonDerivedType(typeof(Tweaks.AppRemovalRecord), "appRemoval")]
+[JsonDerivedType(typeof(Tweaks.AppDeprovisionRecord), "appDeprovision")]
+[JsonDerivedType(typeof(Tweaks.OptionalFeatureRecord), "optionalFeature")]
 public abstract record StepRecord
 {
     /// <summary>

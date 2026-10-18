@@ -72,6 +72,8 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public bool IsDestructive => View.Reversibility == Reversibility.Destructive;
 
+    public bool HasWarning => View.Warning is not null;
+
     public string StateText => !View.Applicable && View.State == TweakState.Off
         ? "Not applicable"
         : (View.State == TweakState.On ? "On" : "Off") + (View.PendingReboot ? " · pending reboot" : "");

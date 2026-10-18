@@ -27,6 +27,10 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
     {
         var tweak = Catalogue.Default.Get(tweakId);
+        // This is the registry round trip: app removals and Windows features are covered by the logic tests, so
+        // CI never uninstalls apps from the runner.
+        if (tweak.Steps.Any(step => step is not RegistryValueStep))
+            Assert.Skip("Changes more than registry values; covered by the fake-adapter logic tests.");
         // CI runs on Windows Server, so tweaks for other builds or editions are skipped there, not failed.
         if (tweak.Applicability.WhyNot(new WindowsSystemInfo()) is { } whyNot)
             Assert.Skip($"Not applicable on this machine: {whyNot}");

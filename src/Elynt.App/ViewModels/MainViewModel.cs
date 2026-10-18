@@ -15,7 +15,13 @@ namespace Elynt.App.ViewModels;
 /// Asks the user, separately from flipping the switch, to confirm a change that can't be undone.
 /// </param>
 /// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
-public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot) : ObservableObject
+/// <param name="confirmWarning">
+/// Shows a tweak's warning (e.g. OneDrive's cloud-only files) and asks the user to confirm it before applying.
+/// </param>
+public sealed class MainViewModel(
+    Func<TweakView, bool> confirmDestructive,
+    Action<DriverInstallResult> askToReboot,
+    Func<TweakView, bool>? confirmWarning = null) : ObservableObject
 {
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
@@ -657,8 +663,20 @@ public sealed class MainViewModel(Func<TweakView, bool> confirmDestructive, Acti
                 }
             }
 
+            // Likewise for a warning the user must read first; without a way to ask, the service refuses and says why.
+            var warningConfirmed = false;
+            if (turnOn && item.View.Warning is not null && confirmWarning is not null)
+            {
+                warningConfirmed = confirmWarning(item.View);
+                if (!warningConfirmed)
+                {
+                    item.Message = "Not changed.";
+                    return;
+                }
+            }
+
             var result = turnOn
-                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed))
+                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed, ConfirmWarning: warningConfirmed))
                 : await _client.RevertAsync(item.View.Id);
             Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)

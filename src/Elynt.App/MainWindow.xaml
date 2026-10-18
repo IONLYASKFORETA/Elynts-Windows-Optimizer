@@ -410,6 +410,10 @@
                                Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
                         <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
                     </TextBlock>
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                               Visibility="{Binding HasWarning, Converter={StaticResource Visible}}">
+                        <Run Text="Before you turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding View.Warning, Mode=OneWay}" />
+                    </TextBlock>
                     <StackPanel Margin="0,8,0,0" Visibility="{Binding HasAntiCheatWarnings, Converter={StaticResource Visible}}">
                         <TextBlock Text="Anti-cheat warning (you can still turn it on)" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding GamesWarning}" TextWrapping="Wrap" Margin="0,2" FontWeight="SemiBold"

@@ -90,7 +90,11 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games),
+                _games)
+            {
+                Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
+                Features = new WindowsOptionalFeatures(),
+            },
             journal,
             sid,
             safetyNet,
