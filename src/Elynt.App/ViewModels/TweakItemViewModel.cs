@@ -72,6 +72,8 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public bool IsDestructive => View.Reversibility == Reversibility.Destructive;
 
+    public bool HasApplyWarning => View.ApplyWarning is not null;
+
     /// <summary>Warnings for this PC's hardware, such as the X3D core-parking and Frame Generation notes.</summary>
     public IReadOnlyList<string> Warnings => View.Warnings;
 

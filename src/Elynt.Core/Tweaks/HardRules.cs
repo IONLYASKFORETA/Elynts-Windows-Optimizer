@@ -55,6 +55,40 @@ public static partial class HardRules
         _ => null,
     };
 
+    /// <summary>
+    /// The rules above, plus the ones that need to look at the PC: a driver whose current start type is Boot is
+    /// boot-critical, whatever its name.
+    /// </summary>
+    public static string? Violation(ChangeTarget target, Services.IServiceManager? services)
+    {
+        if (Violation(target) is { } violation)
+            return violation;
+
+        var name = target switch
+        {
+            ServiceTarget service => service.ServiceName,
+            RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
+                ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            _ => null,
+        };
+        if (name is null || services is null)
+            return null;
+
+        Services.ServiceInfo? current;
+        try
+        {
+            current = services.Find(name);
+        }
+        catch (Exception ex)
+        {
+            // Not knowing is treated as protected: a boot driver set wrong stops Windows from starting.
+            return $"couldn't check whether {name} is a boot driver ({ex.Message})";
+        }
+        return current?.Config.Start == ServiceStart.Boot
+            ? $"{name} is a boot driver: Windows can't start without it"
+            : null;
+    }
+
     private static string? BootViolation(BootSettingTarget boot)
     {
         if (ForbiddenBootElements.Contains(boot.Element) && boot.Value is not null)
@@ -114,14 +148,24 @@ public static partial class HardRules
                dword is not (2 or 3 or 4 or 5 or 7);
     }
 
+    /// <summary>
+    /// The Users folder, a profile itself, or anything in a profile outside AppData (Documents, Downloads, Desktop,
+    /// Pictures, OneDrive, Saved Games and any folder the user made there). Only AppData holds app caches.
+    /// </summary>
     private static bool IsUserFolder(string path)
     {
-        var match = UserProfile().Match(path.Replace('/', '\\'));
+        var normal = path.Replace('/', '\\').TrimEnd('\\');
+        if (UsersFolder().IsMatch(normal))
+            return true;
+        var match = UserProfile().Match(normal);
         if (!match.Success)
             return false;
+        if (!match.Groups["first"].Success)
+            return true;
         var first = match.Groups["first"].Value;
         return UserFolders.Any(f => f.Equals(first, StringComparison.OrdinalIgnoreCase)) ||
-               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase);
+               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase) ||
+               !first.Equals("AppData", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEdge(string package) =>
@@ -135,6 +179,9 @@ public static partial class HardRules
     [GeneratedRegex(@"^SYSTEM\\(CurrentControlSet|ControlSet\d{3})\\Control\\(?<rest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex ControlKey();
 
-    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+\\(?<first>[^\\]+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+(\\(?<first>[^\\]+))?", RegexOptions.IgnoreCase)]
     private static partial Regex UserProfile();
+
+    [GeneratedRegex(@"^[A-Za-z]:\\Users$", RegexOptions.IgnoreCase)]
+    private static partial Regex UsersFolder();
 }

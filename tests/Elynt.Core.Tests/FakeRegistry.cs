@@ -41,6 +41,9 @@ public sealed class FakeRegistry : IRegistry
 
     public bool KeyExists(RegistryRoot root, string keyPath) => _keys.ContainsKey((root, keyPath));
 
+    /// <summary>Nothing was ever written.</summary>
+    public bool IsEmpty => _keys.Count == 0;
+
     public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath)
     {
         ThrowIfBroken();

@@ -40,6 +40,10 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
     {
         var tweak = Catalogue.Default.Get(tweakId);
+        // This round trip covers registry values, boot settings and power plans: app removals and Windows features
+        // are covered by the logic tests, so CI never uninstalls apps from the runner.
+        Assert.SkipWhen(tweak.Steps.Any(step => step is AppRemovalStep or AppDeprovisionStep or OptionalFeatureStep),
+            "Removes apps or Windows features; covered by the fake-adapter logic tests.");
         var machineWide = tweak.Steps.Any(step => step.Target is not RegistryTarget { Location.Root: RegistryRoot.CurrentUser });
         Assert.SkipWhen(machineWide && !OnDisposableRunner,
             "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");
@@ -47,9 +51,12 @@ public sealed class RealRegistryRoundTripTests : IDisposable
             "This machine doesn't have that power plan.");
 
         var engine = NewEngine(Catalogue.Default);
-        var view = engine.ListTweaks().Single(t => t.Id == tweakId);
-        Assert.SkipWhen(!view.Applicable, $"Doesn't apply to this machine: {view.NotApplicableReason}");
-        Assert.SkipWhen(view.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
+        // Hidden tweaks (e.g. a version pin for another build) aren't listed; a per-game copy is listed only once applied.
+        var view = engine.ListTweaks().SingleOrDefault(t => t.Id == tweakId);
+        var perGameCopy = tweakId.Contains('|');
+        Assert.SkipWhen(view is null && !perGameCopy, "Hidden on this machine because it doesn't apply here.");
+        Assert.SkipWhen(view is { Applicable: false }, $"Doesn't apply to this machine: {view?.NotApplicableReason}");
+        Assert.SkipWhen(view?.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
 
         CatalogueRoundTrip.Run(engine, Adapters(), tweak);
     }

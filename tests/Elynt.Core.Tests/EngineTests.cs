@@ -12,6 +12,8 @@ public class EngineTests
     private readonly FakeBootConfig _boot = new();
     private readonly FakePowerPlans _power = new();
     private readonly InMemoryJournalStore _store = new();
+    private readonly FakeRemovableApps _apps = new();
+    private readonly FakeOptionalFeatures _features = new();
     private FakeSystemInfo _system = new();
 
     private Engine NewEngine() => NewEngineWith(_store);
@@ -19,7 +21,9 @@ public class EngineTests
     public static TheoryData<string, StartingState> EveryTweakFromEveryStartingState()
     {
         var data = new TheoryData<string, StartingState>();
-        foreach (var id in CatalogueRoundTrip.ApplicableIds(Catalogue.Default))
+        // Removal for future accounts can't be put back by design; AppRemovalTests covers that undo refuses it.
+        foreach (var id in CatalogueRoundTrip.ApplicableIds(Catalogue.Default)
+                     .Where(id => !Catalogue.Default.Tweaks.Any(t => t.Id == id && t.Steps.Any(s => s is AppDeprovisionStep))))
             foreach (var state in Enum.GetValues<StartingState>())
                 data.Add(id, state);
         return data;
@@ -197,7 +201,13 @@ public class EngineTests
         Assert.True(applied.Tweak.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, _system) { Boot = _boot, Power = _power };
+    private SystemAdapters Adapters() => new(_registry, _system, Packages: new FakePackageManager())
+    {
+        Boot = _boot,
+        Power = _power,
+        Apps = _apps,
+        Features = _features,
+    };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 
@@ -215,6 +225,13 @@ public class EngineTests
 
     private void Seed(TweakDefinition tweak, StartingState start)
     {
+        // Apps a tweak removes start out installed, so there is something to remove and reinstall.
+        foreach (var step in tweak.Steps.OfType<AppRemovalStep>())
+            _apps.Install(step.App.PackageName);
+        // Features a tweak switches start out the other way, on a PC that has them.
+        foreach (var step in tweak.Steps.OfType<OptionalFeatureStep>())
+            _features.Add(step.Feature, enabled: !step.Enabled);
+
         // Boot settings and power plans start away from what the tweak wants, so there is something to undo.
         foreach (var target in tweak.Steps.Select(s => s.Target))
         {

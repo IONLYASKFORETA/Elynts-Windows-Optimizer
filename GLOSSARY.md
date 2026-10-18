@@ -12,7 +12,9 @@
 
 **Quality update**: the monthly cumulative and security update. Can be deferred, never blocked.
 
-**App list**: a user's own saved selection of catalogue apps, used to reinstall them on another PC. Not a bundle or preset; the app ships none.
+**App list**: a user's own saved selection of apps (catalogue apps, plus any not-reviewed winget apps they chose), saved to a file and loaded on another PC to reinstall them. Not a bundle or preset; the app ships none.
+
+**Not reviewed**: a winget app outside the curated catalogue. Search shows it with this mark, and it installs only after the user accepts that.
 
 **Startup item**: anything that launches at sign-in (Run keys, Startup folders, sign-in tasks, Store app startup). Turning one off is reversible; deleting it is destructive.
 
