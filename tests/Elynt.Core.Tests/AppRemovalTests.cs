@@ -199,7 +199,7 @@ public class AppRemovalTests
         var engine = NewEngine();
 
         var view = engine.ListTweaks().Single(t => t.Id == tweakId);
-        Assert.Contains(warningMentions, view.Warning);
+        Assert.Contains(warningMentions, view.ApplyWarning);
 
         var refused = engine.Apply(tweakId);
         Assert.False(refused.Succeeded);

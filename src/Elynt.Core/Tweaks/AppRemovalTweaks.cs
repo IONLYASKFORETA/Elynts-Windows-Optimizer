@@ -67,7 +67,7 @@ public static class AppRemovalTweaks
         Steps: [new AppRemovalStep(OneDrive)])
     {
         Reversibility = Reversibility.NeedsDownload,
-        Warning =
+        ApplyWarning =
             "Files that are only in the cloud (\"online-only\", with a cloud icon in File Explorer) are not on this PC. " +
             "Once OneDrive is uninstalled you can't open them from File Explorer; they stay safe in the cloud on " +
             "onedrive.com. Before you go on, right-click your OneDrive folder and choose \"Always keep on this " +
@@ -97,7 +97,7 @@ public static class AppRemovalTweaks
         Steps: [new AppRemovalStep(MicrosoftStore)])
     {
         Reversibility = Reversibility.NeedsDownload,
-        Warning =
+        ApplyWarning =
             "Without the Store, Game Pass and the Xbox app stop working: they can't install or update games. Store " +
             "apps (including Xbox, Game Bar and Windows' own apps) stop getting updates, and you can't install " +
             "anything from the Store.",

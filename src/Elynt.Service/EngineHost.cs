@@ -8,7 +8,9 @@ using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
+using Elynt.Core.UpdateControl;
 using Elynt.Windows;
 
 namespace Elynt.Service;
@@ -19,10 +21,13 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsServiceManager _services = new();
+    private readonly WindowsDevicePresence _devices = new();
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
@@ -33,7 +38,12 @@ internal sealed class EngineHost(
         new ProcessInstallerRunner());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
     private bool _firstPipe = true;
+
+    // One "check and install now" for the whole PC, so any app window can follow its progress.
+    private readonly ManualUpdate _windowsUpdate = new(new WindowsUpdateAgent(), logger: loggers.CreateLogger<ManualUpdate>());
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -90,8 +100,11 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games)
-            {
+                _games) {
+                Boot = _boot,
+                Power = _power,
+                Services = _services,
+                Devices = _devices,
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
                 Features = new WindowsOptionalFeatures(),
             },
@@ -100,6 +113,8 @@ internal sealed class EngineHost(
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
-            gameStore: _gameStore);
+            gameStore: _gameStore,
+            gpuTuning: gpuTuning,
+            windowsUpdate: _windowsUpdate);
     }
 }

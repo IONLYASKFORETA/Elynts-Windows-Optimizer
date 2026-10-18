@@ -45,7 +45,7 @@ public sealed record TweakDefinition(
     /// Something the user must read and confirm before this tweak is applied, even though undo can put it back
     /// (e.g. OneDrive's cloud-only files). The Engine refuses to apply without that confirmation.
     /// </summary>
-    public string? Warning { get; init; }
+    public string? ApplyWarning { get; init; }
 
     public RiskFlags Risks { get; init; } = RiskFlags.None;
 
@@ -55,11 +55,17 @@ public sealed record TweakDefinition(
     /// <summary>The hardware, edition and build this tweak fits.</summary>
     public Applicability Applicability { get; init; } = Applicability.Always;
 
+    /// <summary>Warnings that only show on PCs with particular hardware, e.g. dual-CCD X3D CPUs.</summary>
+    public IReadOnlyList<HardwareNote> HardwareNotes { get; init; } = [];
+
     /// <summary>
     /// Takes effect immediately with no reboot and no signed-in session step, so a per-game profile may apply and
     /// undo it. Never true for reboot-needing, destructive or Security tweaks.
     /// </summary>
     public bool ProfileEligible { get; init; }
+
+    /// <summary>A per-game choice listed before a game is picked (see <see cref="PerGameTweak"/>). It can't be applied itself.</summary>
+    public bool PerGame { get; init; }
 }
 
 /// <summary>

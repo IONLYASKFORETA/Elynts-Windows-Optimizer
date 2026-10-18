@@ -35,5 +35,8 @@ public sealed record FileTarget(string Path) : ChangeTarget;
 /// <summary>Removes an app package (Appx, provisioned or winget).</summary>
 public sealed record PackageTarget(string PackageName) : ChangeTarget;
 
+/// <summary>Makes a power plan the active one.</summary>
+public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;
+
 /// <summary>Turns a Windows optional feature on or off (its files stay on disk).</summary>
 public sealed record OptionalFeatureTarget(string Feature, bool Enabled) : ChangeTarget;

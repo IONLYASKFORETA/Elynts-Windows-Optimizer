@@ -55,6 +55,40 @@ public static partial class HardRules
         _ => null,
     };
 
+    /// <summary>
+    /// The rules above, plus the ones that need to look at the PC: a driver whose current start type is Boot is
+    /// boot-critical, whatever its name.
+    /// </summary>
+    public static string? Violation(ChangeTarget target, Services.IServiceManager? services)
+    {
+        if (Violation(target) is { } violation)
+            return violation;
+
+        var name = target switch
+        {
+            ServiceTarget service => service.ServiceName,
+            RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
+                ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            _ => null,
+        };
+        if (name is null || services is null)
+            return null;
+
+        Services.ServiceInfo? current;
+        try
+        {
+            current = services.Find(name);
+        }
+        catch (Exception ex)
+        {
+            // Not knowing is treated as protected: a boot driver set wrong stops Windows from starting.
+            return $"couldn't check whether {name} is a boot driver ({ex.Message})";
+        }
+        return current?.Config.Start == ServiceStart.Boot
+            ? $"{name} is a boot driver: Windows can't start without it"
+            : null;
+    }
+
     private static string? BootViolation(BootSettingTarget boot)
     {
         if (ForbiddenBootElements.Contains(boot.Element) && boot.Value is not null)
@@ -81,12 +115,37 @@ public static partial class HardRules
             location.ValueName.StartsWith("VerifyDriver", StringComparison.OrdinalIgnoreCase))
             return "Driver Verifier is never turned on";
 
-        if (key.Equals(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", StringComparison.OrdinalIgnoreCase) &&
+        if (key.Equals(WindowsUpdatePolicies, StringComparison.OrdinalIgnoreCase) &&
             location.ValueName.Equals("DeferQualityUpdatesPeriodInDays", StringComparison.OrdinalIgnoreCase) &&
             registry.Desired is { Kind: RegistryValueKind.DWord, Data.Length: 4 } days && BitConverter.ToUInt32(days.Data) > 30)
             return "quality updates are deferred at most 30 days, never blocked";
 
+        if (BlocksUpdates(key, location.ValueName, registry.Desired))
+            return "Windows Update is never blocked or cut off";
+
         return null;
+    }
+
+    private const string WindowsUpdatePolicies = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate";
+
+    /// <summary>Policies (key\value) that stop updates arriving at all when set to anything but 0.</summary>
+    private static readonly HashSet<string> UpdateBlockingPolicies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        WindowsUpdatePolicies + @"\AU\NoAutoUpdate",
+        WindowsUpdatePolicies + @"\AU\UseWUServer",
+        WindowsUpdatePolicies + @"\DisableWindowsUpdateAccess",
+        WindowsUpdatePolicies + @"\DoNotConnectToWindowsUpdateInternetLocations",
+    };
+
+    private static bool BlocksUpdates(string key, string valueName, RegistryValue desired)
+    {
+        var dword = desired is { Kind: RegistryValueKind.DWord, Data.Length: 4 } ? BitConverter.ToUInt32(desired.Data) : (uint?)null;
+        if (UpdateBlockingPolicies.Contains($@"{key}\{valueName}"))
+            return dword != 0;
+        // AUOptions 1 means "never check for updates".
+        return key.Equals(WindowsUpdatePolicies + @"\AU", StringComparison.OrdinalIgnoreCase) &&
+               valueName.Equals("AUOptions", StringComparison.OrdinalIgnoreCase) &&
+               dword is not (2 or 3 or 4 or 5 or 7);
     }
 
     private static bool IsUserFolder(string path)

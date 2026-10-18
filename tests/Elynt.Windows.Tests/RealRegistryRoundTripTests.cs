@@ -20,35 +20,78 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public RealRegistryRoundTripTests() =>
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Needs the real Windows registry.");
 
-    public static TheoryData<string> CatalogueTweaks() => new(Catalogue.Default.Tweaks.Select(t => t.Id));
+    public static TheoryData<string> CatalogueTweaks() => new(CatalogueRoundTrip.ApplicableIds(Catalogue.Default));
+
+    private readonly WindowsBootConfig _boot = new();
+    private readonly WindowsPowerPlans _power = new();
+
+    /// <summary>
+    /// Machine-wide changes (HKLM, boot settings, power plans) only run on CI's throwaway Windows machines, as admin,
+    /// never on a developer's own PC.
+    /// </summary>
+    private static bool OnDisposableRunner =>
+        OperatingSystem.IsWindows() &&
+        string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase) &&
+        new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent())
+            .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
 
     [Theory]
     [MemberData(nameof(CatalogueTweaks))]
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
     {
         var tweak = Catalogue.Default.Get(tweakId);
-        // This is the registry round trip: app removals and Windows features are covered by the logic tests, so
-        // CI never uninstalls apps from the runner.
-        if (tweak.Steps.Any(step => step is not RegistryValueStep))
-            Assert.Skip("Changes more than registry values; covered by the fake-adapter logic tests.");
-        // CI runs on Windows Server, so tweaks for other builds or editions are skipped there, not failed.
-        if (tweak.Applicability.WhyNot(new WindowsSystemInfo()) is { } whyNot)
-            Assert.Skip($"Not applicable on this machine: {whyNot}");
+        // This round trip covers registry values, boot settings and power plans: app removals and Windows features
+        // are covered by the logic tests, so CI never uninstalls apps from the runner.
+        Assert.SkipWhen(tweak.Steps.Any(step => step is AppRemovalStep or AppDeprovisionStep or OptionalFeatureStep),
+            "Removes apps or Windows features; covered by the fake-adapter logic tests.");
+        var machineWide = tweak.Steps.Any(step => step.Target is not RegistryTarget { Location.Root: RegistryRoot.CurrentUser });
+        Assert.SkipWhen(machineWide && !OnDisposableRunner,
+            "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");
+        Assert.SkipWhen(tweak.Steps.OfType<Core.Power.PowerPlanStep>().Any(p => p.CreateFrom is null && !_power.Exists(p.Plan)),
+            "This machine doesn't have that power plan.");
 
         var engine = NewEngine(Catalogue.Default);
-        // A runner image may already ship a policy set (e.g. telemetry). Then there is nothing the app could undo.
-        if (engine.ListTweaks().Single(t => t.Id == tweakId).State == TweakState.On)
-            Assert.Skip("Already set on this machine, so there is nothing to apply and undo.");
+        // Hidden tweaks (e.g. a version pin for another build) aren't listed; a per-game copy is listed only once applied.
+        var view = engine.ListTweaks().SingleOrDefault(t => t.Id == tweakId);
+        var perGameCopy = tweakId.Contains('|');
+        Assert.SkipWhen(view is null && !perGameCopy, "Hidden on this machine because it doesn't apply here.");
+        Assert.SkipWhen(view is { Applicable: false }, $"Doesn't apply to this machine: {view?.NotApplicableReason}");
+        Assert.SkipWhen(view?.State == TweakState.On, "Already in the desired state on this machine, so there is nothing to undo.");
 
-        CatalogueRoundTrip.Run(engine, _registry, tweak);
+        CatalogueRoundTrip.Run(engine, Adapters(), tweak);
     }
+
+    [Fact]
+    public void A_forced_useplatformclock_is_removed_and_put_back()
+    {
+        Assert.SkipUnless(OnDisposableRunner, "Changes the boot configuration, so it only runs on CI's throwaway machines.");
+        var before = _boot.Get("useplatformclock");
+        try
+        {
+            _boot.Set("useplatformclock", "Yes");
+            Assert.Equal("Yes", _boot.Get("useplatformclock"));
+
+            CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), Adapters(), GamingTweaks.UsePlatformClockRemoved);
+
+            Assert.Equal("Yes", _boot.Get("useplatformclock"));
+        }
+        finally
+        {
+            if (before is null)
+                _boot.Delete("useplatformclock");
+            else
+                _boot.Set("useplatformclock", before);
+        }
+    }
+
+    private SystemAdapters Adapters() => new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power };
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()
     {
         var tweak = ScratchTweak();
 
-        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), Adapters(), tweak);
 
         Assert.False(_registry.KeyExists(RegistryRoot.CurrentUser, _scratchKey));
     }
@@ -60,7 +103,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         var location = ((RegistryValueStep)tweak.Steps[0]).Location;
         _registry.SetValue(location, RegistryValue.DWord(7));
 
-        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(new Catalogue([tweak])), Adapters(), tweak);
 
         Assert.Equal(RegistryValue.DWord(7), _registry.GetValue(location));
     }
@@ -94,7 +137,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
 
     private Engine NewEngine(Catalogue catalogue) => new(
         catalogue,
-        new SystemAdapters(_registry, new WindowsSystemInfo()),
+        Adapters(),
         new ChangeJournal(new InMemoryJournalStore()),
         CurrentUserSid);
 }

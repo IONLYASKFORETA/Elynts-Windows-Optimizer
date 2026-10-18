@@ -14,15 +14,19 @@ public sealed record RegistryValueStep(RegistryLocation Location, RegistryValue 
 
     public override StepRecord Capture(SystemAdapters system)
     {
-        // Record every key this step will create, deepest first, so undo removes exactly those.
-        var createdKeys = new List<string>();
-        for (var path = Location.KeyPath; path.Length > 0 && !system.Registry.KeyExists(Location.Root, path); path = Parent(path))
-            createdKeys.Add(path);
-
-        return new RegistryValueRecord(Location, system.Registry.GetValue(Location), Desired, createdKeys);
+        return new RegistryValueRecord(Location, system.Registry.GetValue(Location), Desired, MissingKeys(system.Registry, Location));
     }
 
     public override void Apply(SystemAdapters system) => system.Registry.SetValue(Location, Desired);
+
+    /// <summary>Every key a write to <paramref name="location"/> will create, deepest first, so undo removes exactly those.</summary>
+    internal static IReadOnlyList<string> MissingKeys(IRegistry registry, RegistryLocation location)
+    {
+        var createdKeys = new List<string>();
+        for (var path = location.KeyPath; path.Length > 0 && !registry.KeyExists(location.Root, path); path = Parent(path))
+            createdKeys.Add(path);
+        return createdKeys;
+    }
 
     private static string Parent(string keyPath)
     {
