@@ -33,7 +33,8 @@ internal sealed class EngineHost(
         ServicePaths.Downloads,
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
-        new ProcessInstallerRunner());
+        new ProcessInstallerRunner(),
+        new SevenZipExtractor());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();

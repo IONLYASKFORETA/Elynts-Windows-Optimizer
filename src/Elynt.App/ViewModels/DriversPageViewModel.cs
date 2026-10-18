@@ -21,6 +21,7 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 {
     private bool _useStudio;
     private bool _cleanInstall;
+    private bool _leanInstall;
     private bool _isBusy;
     private string _message = "";
     private string? _vendorPage;
@@ -42,6 +43,15 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
     {
         get => _cleanInstall;
         set => Set(ref _cleanInstall, value);
+    }
+
+    /// <summary>Only NVIDIA's package can be stripped to the display driver.</summary>
+    public bool CanInstallLean => gpu.Vendor == GpuVendor.Nvidia;
+
+    public bool LeanInstall
+    {
+        get => _leanInstall;
+        set => Set(ref _leanInstall, value);
     }
 
     public bool IsBusy
@@ -75,7 +85,7 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 
     public bool HasVendorPage => VendorPage is not null;
 
-    private DriverRequest Request => new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall);
+    private DriverRequest Request => new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall, LeanInstall && CanInstallLean);
 
     public Task CheckAsync() => RunAsync("Looking up the latest driver…", async c =>
     {
