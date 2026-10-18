@@ -54,6 +54,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
     public Devices.IDevices? PnpDevices { get; init; }
+
+    /// <summary>Microsoft Defender's scan exclusions. Exclusion tweaks fail without it.</summary>
+    public Security.IScanExclusions? ScanExclusions { get; init; }
 }
 
 public interface ISystemInfo

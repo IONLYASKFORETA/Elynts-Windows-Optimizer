@@ -48,6 +48,7 @@ internal sealed class EngineHost(
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
     private readonly WindowsPowerPlans _power = new();
+    private readonly WindowsScanExclusions _scanExclusions = new();
     private bool _firstPipe = true;
 
     // One "check and install now" for the whole PC, so any app window can follow its progress.
@@ -113,6 +114,7 @@ internal sealed class EngineHost(
             {
                 Boot = _boot,
                 Power = _power,
+                ScanExclusions = _scanExclusions,
                 Services = _services,
                 Devices = _devices,
                 PnpDevices = _pnpDevices,

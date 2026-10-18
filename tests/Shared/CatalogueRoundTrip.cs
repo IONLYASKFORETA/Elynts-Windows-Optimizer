@@ -66,6 +66,9 @@ public static class SystemSnapshot
                     lines.Add($"active power plan: {system.Power!.GetActive()}");
                     lines.Add($"power plan {plan.Plan}: {(system.Power.Exists(plan.Plan) ? "present" : "absent")}");
                     break;
+                case ScanExclusionTarget exclusion:
+                    lines.Add($"scan exclusion {exclusion.Folder}: {(system.ScanExclusions!.Contains(exclusion.Folder) ? "present" : "absent")}");
+                    break;
             }
         }
         return lines;

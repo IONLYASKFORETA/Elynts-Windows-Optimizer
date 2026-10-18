@@ -17,6 +17,7 @@ namespace Elynt.Core.Journal;
 [JsonDerivedType(typeof(Tweaks.OptionalFeatureRecord), "optionalFeature")]
 [JsonDerivedType(typeof(Power.PowerSettingRecord), "powerSetting")]
 [JsonDerivedType(typeof(Devices.DeviceEnabledRecord), "deviceEnabled")]
+[JsonDerivedType(typeof(Security.ScanExclusionRecord), "scanExclusion")]
 public abstract record StepRecord
 {
     /// <summary>

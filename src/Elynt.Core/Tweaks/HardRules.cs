@@ -53,8 +53,39 @@ public static partial class HardRules
             $"{driver.DriverFile} is a known-vulnerable driver that anti-cheats and Windows block",
         FileTarget file when IsUserFolder(file.Path) => "user folders and game saves are never touched",
         PackageTarget package when IsEdge(package.PackageName) => "Edge and WebView2 are never removed",
+        ScanExclusionTarget exclusion => ExclusionViolation(exclusion.Folder),
         _ => null,
     };
+
+    /// <summary>
+    /// Defender exclusions are only for one game's own folder. A whole drive, Windows, the shared program folders,
+    /// a user profile, user folders or temp folders would leave the places malware lands unscanned.
+    /// </summary>
+    private static string? ExclusionViolation(string folder)
+    {
+        var path = folder.Replace('/', '\\').TrimEnd('\\');
+        var parts = path.Split('\\');
+        if (!DriveLetter().IsMatch(parts[0]) || parts.Any(p => p is "" or "." or ".."))
+            return "Defender exclusions must be a full folder path";
+        if (parts.Length == 1)
+            return "a whole drive is never excluded from Defender scans";
+        if (parts[1].Equals("Windows", StringComparison.OrdinalIgnoreCase))
+            return "Windows' own folders are never excluded from Defender scans";
+        if (parts.Length == 2 && SharedRoots.Contains(parts[1]))
+            return $"{path} is shared by every program, so it is never excluded from Defender scans";
+        if (parts[1].Equals("Users", StringComparison.OrdinalIgnoreCase) &&
+            (parts.Length <= 3 || IsUserFolder(path) || path.Contains(@"\AppData\Local\Temp", StringComparison.OrdinalIgnoreCase)))
+            return "user profiles, user folders and temp folders are never excluded from Defender scans";
+        return null;
+    }
+
+    private static readonly HashSet<string> SharedRoots = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Program Files", "Program Files (x86)", "ProgramData", "Users",
+    };
+
+    [GeneratedRegex(@"^[A-Za-z]:$")]
+    private static partial Regex DriveLetter();
 
     /// <summary>
     /// The rules above, plus the ones that need to look at the PC: a driver whose current start type is Boot is

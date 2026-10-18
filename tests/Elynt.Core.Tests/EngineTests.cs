@@ -12,6 +12,7 @@ public class EngineTests
     private readonly FakeBootConfig _boot = new();
     private readonly FakePowerPlans _power = new();
     private readonly FakeDevices _devices = new();
+    private readonly FakeScanExclusions _exclusions = new();
     private readonly InMemoryJournalStore _store = new();
     private readonly FakeRemovableApps _apps = new();
     private readonly FakeOptionalFeatures _features = new();
@@ -209,6 +210,7 @@ public class EngineTests
         Apps = _apps,
         Features = _features,
         PnpDevices = _devices,
+        ScanExclusions = _exclusions,
     };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");

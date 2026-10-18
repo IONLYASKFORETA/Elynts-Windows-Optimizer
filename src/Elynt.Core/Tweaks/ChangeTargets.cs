@@ -52,3 +52,6 @@ public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;
 
 /// <summary>Turns a Windows optional feature on or off (its files stay on disk).</summary>
 public sealed record OptionalFeatureTarget(string Feature, bool Enabled) : ChangeTarget;
+
+/// <summary>Stops Microsoft Defender scanning one folder.</summary>
+public sealed record ScanExclusionTarget(string Folder) : ChangeTarget;
