@@ -6,6 +6,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- Only for the tray icon (NotifyIcon); WPF has none of its own. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>Elynt.App</RootNamespace>
     <AssemblyName>ElyntOptimizer</AssemblyName>
     <AssemblyTitle>Elynt's Windows Optimizer</AssemblyTitle>
@@ -15,6 +17,12 @@
     <!-- Program.Main runs Velopack's hooks before WPF starts, so App.xaml must not generate its own Main. -->
     <StartupObject>Elynt.App.Program</StartupObject>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep WinForms out of the global usings so WPF names (Application, UserControl) stay unambiguous. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />

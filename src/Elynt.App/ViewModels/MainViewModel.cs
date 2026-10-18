@@ -19,6 +19,8 @@ namespace Elynt.App.ViewModels;
 public sealed class MainViewModel(
     Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot, Func<string?> pickGame) : ObservableObject
 {
+    private StartupPageViewModel? _startup;
+
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
 
@@ -58,6 +60,18 @@ public sealed class MainViewModel(
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
 
+    /// <summary>The Apps page's search, installed apps (updates and uninstalls) and app list parts.</summary>
+    public AppsManagerViewModel? AppsManager { get; set; }
+
+    /// <summary>The service connection, for the page view models that send their own commands.</summary>
+    internal EnginePipeClient? Client => _client;
+
+    /// <summary>The Startup tab on the Startup &amp; Services page.</summary>
+    public StartupPageViewModel Startup => _startup ??= new StartupPageViewModel(() => IsConnected ? _client : null);
+
+    /// <summary>The Startup &amp; Services page, which shows the Startup and Services lists as tabs.</summary>
+    public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
+
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
     public bool InstallAllRuntimes
     {
@@ -68,7 +82,7 @@ public sealed class MainViewModel(
     public bool IsInstalling
     {
         get => _isInstalling;
-        private set
+        internal set
         {
             if (Set(ref _isInstalling, value))
                 OnPropertyChanged(nameof(CanInstall));
@@ -110,6 +124,7 @@ public sealed class MainViewModel(
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsAppsPage));
+                OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
@@ -122,8 +137,11 @@ public sealed class MainViewModel(
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
 
+    /// <summary>The Services tab on the Startup &amp; Services page, set by the window. Null until then.</summary>
+    public ServicesPageViewModel? ServicesPage { get; set; }
+
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
@@ -307,6 +325,8 @@ public sealed class MainViewModel(
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            if (ServicesPage is not null)
+                await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
             Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
@@ -526,6 +546,8 @@ public sealed class MainViewModel(
             HistoryMessage = null;
             _ = ShowHistoryAsync();
         }
+        if (IsStartupPage)
+            _ = Startup.LoadAsync();
 
         Tweaks.Clear();
         // Tweaks that fit this PC first; not-applicable ones sink to the bottom.

@@ -16,6 +16,9 @@ internal static class ServicePaths
 
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
+    /// <summary>The startup items each user has already been told about, so only new ones raise a tray note.</summary>
+    public static string KnownStartupItems { get; } = Path.Combine(Root, "startup", "known.json");
+
     /// <summary>Whole-store backups (BCD, firewall, power plans, tasks, drivers, hosts) taken before the first change of each kind.</summary>
     public static string Backups { get; } = Path.Combine(Root, "backups");
 
@@ -55,6 +58,7 @@ internal static class ServicePaths
         Directory.CreateDirectory(Path.GetDirectoryName(Tuning)!);
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Backups);
+        Directory.CreateDirectory(Path.GetDirectoryName(KnownStartupItems)!);
         Directory.CreateDirectory(RepairLogs);
         Directory.CreateDirectory(Downloads);
         Directory.CreateDirectory(Games);

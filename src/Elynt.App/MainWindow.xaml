@@ -53,49 +53,146 @@
 
             <!-- One cell for every section page; each part shows only on its own page. -->
             <Grid>
-                <!-- Apps: tick apps, then install them silently one at a time from winget's community source. -->
-                <DockPanel Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}">
-                    <StackPanel DockPanel.Dock="Bottom" Margin="4,8,4,0">
+                <!-- Apps: the reviewed catalogue, a search of all of winget, and installed apps with updates and uninstalls. -->
+                <TabControl Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}">
+                    <TabItem Header="Catalogue">
                         <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Install ticked apps" Padding="16,4"
-                                    Click="InstallApps" IsEnabled="{Binding CanInstall}" />
-                            <CheckBox Content="Install all runtimes (Visual C++, DirectX legacy and .NET)"
-                                      IsChecked="{Binding InstallAllRuntimes}" VerticalAlignment="Center" />
-                        </DockPanel>
-                        <TextBlock Text="{Binding InstallStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                    </StackPanel>
-                    <ListBox ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
-                             HorizontalContentAlignment="Stretch" BorderThickness="0">
-                        <ListBox.GroupStyle>
-                            <GroupStyle>
-                                <GroupStyle.HeaderTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" Margin="4,12,4,4" />
+                            <StackPanel DockPanel.Dock="Bottom" Margin="4,8,4,0">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Install ticked apps" Padding="16,4"
+                                            Click="InstallApps" IsEnabled="{Binding CanInstall}" />
+                                    <Button DockPanel.Dock="Right" Content="Load app list…" Padding="12,4" Margin="0,0,8,0"
+                                            Click="LoadAppList" IsEnabled="{Binding CanInstall}"
+                                            ToolTip="Tick every app in a list saved on this or another PC, ready to install." />
+                                    <Button DockPanel.Dock="Right" Content="Save ticked as app list…" Padding="12,4" Margin="0,0,8,0"
+                                            Click="SaveAppList"
+                                            ToolTip="Save the ticked apps (here and on the Search tab) to a file you can load on another PC." />
+                                    <CheckBox Content="Install all runtimes (Visual C++, DirectX legacy and .NET)"
+                                              IsChecked="{Binding InstallAllRuntimes}" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding InstallStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                                     HorizontalContentAlignment="Stretch" BorderThickness="0">
+                                <ListBox.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" Margin="4,12,4,4" />
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ListBox.GroupStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:AppItemViewModel}">
+                                        <Grid Margin="4,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                      AutomationProperties.Name="{Binding Name}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Name}" FontSize="14" />
+                                                <TextBlock Text="{Binding Description}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center"
+                                                       MaxWidth="220" TextWrapping="Wrap" Margin="8,0,0,0" />
+                                        </Grid>
                                     </DataTemplate>
-                                </GroupStyle.HeaderTemplate>
-                            </GroupStyle>
-                        </ListBox.GroupStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:AppItemViewModel}">
-                                <Grid Margin="4,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,8,0"
-                                              AutomationProperties.Name="{Binding Name}" />
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Text="{Binding Name}" FontSize="14" />
-                                        <TextBlock Text="{Binding Description}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center"
-                                               MaxWidth="220" TextWrapping="Wrap" Margin="8,0,0,0" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+
+                    <TabItem Header="Search winget" DataContext="{Binding AppsManager}">
+                        <DockPanel Margin="4">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,4,0,4">
+                                <Button DockPanel.Dock="Right" Content="Search" Padding="16,4" Margin="8,0,0,0" Click="SearchApps" />
+                                <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                                         AutomationProperties.Name="Search winget" KeyDown="SearchBoxKeyDown" />
+                            </DockPanel>
+                            <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Opacity="0.7" FontSize="12" Margin="0,0,0,8"
+                                       Text="Searches all of winget's community source. Apps marked Not reviewed aren't in the curated catalogue: install them only if you trust the publisher." />
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                                <Button Content="Install ticked results" Padding="16,4" HorizontalAlignment="Right"
+                                        Click="InstallSearchResults"
+                                        IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <TextBlock Text="{Binding SearchStatus}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding SearchResults}" HorizontalContentAlignment="Stretch" BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SearchResultViewModel}">
+                                        <Grid Margin="4,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                      AutomationProperties.Name="{Binding Name}" />
+                                            <StackPanel Grid.Column="1">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" />
+                                                    <Border Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}"
+                                                            Background="#33FFA500" CornerRadius="3" Padding="6,0" Margin="8,0,0,0">
+                                                        <TextBlock Text="Not reviewed" FontSize="11" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Details}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center"
+                                                       MaxWidth="220" TextWrapping="Wrap" Margin="8,0,0,0" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+
+                    <TabItem Header="Installed" DataContext="{Binding AppsManager}">
+                        <DockPanel Margin="4">
+                            <DockPanel DockPanel.Dock="Top" Margin="0,4,0,8">
+                                <Button DockPanel.Dock="Right" Content="Update all" Padding="16,4" Click="UpdateAllApps"
+                                        IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <Button DockPanel.Dock="Right" Content="Refresh" Padding="12,4" Margin="0,0,8,0" Click="RefreshInstalledApps" />
+                                <TextBlock Text="{Binding InstalledStatus}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ListBox ItemsSource="{Binding InstalledApps}" HorizontalContentAlignment="Stretch" BorderThickness="0">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:InstalledAppViewModel}">
+                                        <Grid Margin="4,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" />
+                                                    <Border Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}"
+                                                            Background="#33FFA500" CornerRadius="3" Padding="6,0" Margin="8,0,0,0">
+                                                        <TextBlock Text="Not reviewed" FontSize="11" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Details}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding Status}" VerticalAlignment="Center"
+                                                       MaxWidth="200" TextWrapping="Wrap" Margin="8,0,8,0" />
+                                            <Button Grid.Column="2" Content="Update" Padding="12,2" Margin="0,0,8,0" Click="UpdateApp"
+                                                    Visibility="{Binding CanUpdate, Converter={StaticResource Visible}}"
+                                                    IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <Button Grid.Column="3" Content="Uninstall" Padding="12,2" Click="UninstallApp"
+                                                    IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
 
                 <!-- Repair: one row per tool, each saying up front whether it needs a restart. -->
                 <DockPanel Visibility="{Binding IsRepairPage, Converter={StaticResource Visible}}">
@@ -127,6 +224,59 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </DockPanel>
+
+                <!-- Startup & Services: the startup list and the services list, one tab each. -->
+                <TabControl Visibility="{Binding IsStartupPage, Converter={StaticResource Visible}}">
+                    <TabItem Header="Startup">
+                        <!-- Startup items and third-party scheduled tasks. -->
+                        <local:StartupPage DataContext="{Binding Startup}" />
+                    </TabItem>
+                    <TabItem Header="Services">
+                        <!-- Services: every service and driver; reviewed ones editable, Advanced unlocks the rest but never protected ones. -->
+                        <DockPanel DataContext="{Binding ServicesPage}">
+                            <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8">
+                                <TextBlock Text="{Binding Summary}" Opacity="0.7" TextWrapping="Wrap" />
+                                <DockPanel Margin="0,6,0,0">
+                                    <CheckBox DockPanel.Dock="Right" Content="Advanced" IsChecked="{Binding Advanced}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                              ToolTip="Unlocks Disabled and services that aren't on the reviewed list. Anti-cheat, Windows Update and boot drivers stay locked." />
+                                    <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search every service by name" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+                            <ListBox ItemsSource="{Binding Services}" HorizontalContentAlignment="Stretch" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ServiceItemViewModel}">
+                                        <Grid Margin="4,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}" FontSize="14" TextWrapping="Wrap" />
+                                                <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap">
+                                                    <Run Text="{Binding Badge, Mode=OneWay}" /> · <Run Text="{Binding StartText, Mode=OneWay}" />
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding View.Explanation}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                <TextBlock Text="{Binding RecommendationText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                           Visibility="{Binding HasRecommendation, Converter={StaticResource Visible}}" />
+                                                <TextBlock Text="{Binding View.LockReason}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0"
+                                                           Visibility="{Binding IsProtected, Converter={StaticResource Visible}}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" MinWidth="100"
+                                                          IsEnabled="{Binding CanChange}" />
+                                                <Button Content="Set" Click="SetServiceStart" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanChange}" />
+                                                <Button Content="Undo" Click="UndoServiceChange" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanUndo}"
+                                                        ToolTip="Puts back the whole configuration this service had before the app changed it." />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
 
                 <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
                          Visibility="{Binding IsTweakPage, Converter={StaticResource Visible}}"

@@ -55,6 +55,40 @@ public static partial class HardRules
         _ => null,
     };
 
+    /// <summary>
+    /// The rules above, plus the ones that need to look at the PC: a driver whose current start type is Boot is
+    /// boot-critical, whatever its name.
+    /// </summary>
+    public static string? Violation(ChangeTarget target, Services.IServiceManager? services)
+    {
+        if (Violation(target) is { } violation)
+            return violation;
+
+        var name = target switch
+        {
+            ServiceTarget service => service.ServiceName,
+            RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
+                ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            _ => null,
+        };
+        if (name is null || services is null)
+            return null;
+
+        Services.ServiceInfo? current;
+        try
+        {
+            current = services.Find(name);
+        }
+        catch (Exception ex)
+        {
+            // Not knowing is treated as protected: a boot driver set wrong stops Windows from starting.
+            return $"couldn't check whether {name} is a boot driver ({ex.Message})";
+        }
+        return current?.Config.Start == ServiceStart.Boot
+            ? $"{name} is a boot driver: Windows can't start without it"
+            : null;
+    }
+
     private static string? BootViolation(BootSettingTarget boot)
     {
         if (ForbiddenBootElements.Contains(boot.Element) && boot.Value is not null)
