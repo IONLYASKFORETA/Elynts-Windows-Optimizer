@@ -45,6 +45,8 @@ public sealed class RealRegistryRoundTripTests : IDisposable
             "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");
         Assert.SkipWhen(tweak.Steps.OfType<Core.Power.PowerPlanStep>().Any(p => p.CreateFrom is null && !_power.Exists(p.Plan)),
             "This machine doesn't have that power plan.");
+        Assert.SkipWhen(tweak.Steps.Any(step => step.Target is ScanExclusionTarget) && !DefenderAvailable(),
+            "Microsoft Defender doesn't answer on this machine.");
 
         var engine = NewEngine(Catalogue.Default);
         // Hidden tweaks (e.g. a version pin for another build) aren't listed; a per-game copy is listed only once applied.
@@ -80,7 +82,24 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         }
     }
 
-    private SystemAdapters Adapters() => new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power };
+    private readonly WindowsScanExclusions _scanExclusions = new();
+
+    private SystemAdapters Adapters() =>
+        new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power, ScanExclusions = _scanExclusions };
+
+    /// <summary>Whether Defender answers here; a runner without it has no exclusion list to change.</summary>
+    private bool DefenderAvailable()
+    {
+        try
+        {
+            _scanExclusions.Contains(@"C:\ElyntOptimizerTests");
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()

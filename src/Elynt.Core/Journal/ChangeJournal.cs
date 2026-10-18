@@ -9,6 +9,7 @@ namespace Elynt.Core.Journal;
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
 [JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
+[JsonDerivedType(typeof(Security.ScanExclusionRecord), "scanExclusion")]
 public abstract record StepRecord
 {
     /// <summary>

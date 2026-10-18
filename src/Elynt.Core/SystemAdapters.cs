@@ -32,6 +32,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
+
+    /// <summary>Microsoft Defender's scan exclusions. Exclusion tweaks fail without it.</summary>
+    public Security.IScanExclusions? ScanExclusions { get; init; }
 }
 
 public interface ISystemInfo

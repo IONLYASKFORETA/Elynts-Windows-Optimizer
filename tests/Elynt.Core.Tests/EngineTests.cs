@@ -11,6 +11,7 @@ public class EngineTests
     private readonly FakeRegistry _registry = new();
     private readonly FakeBootConfig _boot = new();
     private readonly FakePowerPlans _power = new();
+    private readonly FakeScanExclusions _exclusions = new();
     private readonly InMemoryJournalStore _store = new();
     private FakeSystemInfo _system = new();
 
@@ -197,7 +198,7 @@ public class EngineTests
         Assert.True(applied.Tweak.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, _system) { Boot = _boot, Power = _power };
+    private SystemAdapters Adapters() => new(_registry, _system) { Boot = _boot, Power = _power, ScanExclusions = _exclusions };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 

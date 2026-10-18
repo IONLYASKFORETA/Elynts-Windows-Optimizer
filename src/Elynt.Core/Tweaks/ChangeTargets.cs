@@ -37,3 +37,6 @@ public sealed record PackageTarget(string PackageName) : ChangeTarget;
 
 /// <summary>Makes a power plan the active one.</summary>
 public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;
+
+/// <summary>Stops Microsoft Defender scanning one folder.</summary>
+public sealed record ScanExclusionTarget(string Folder) : ChangeTarget;
