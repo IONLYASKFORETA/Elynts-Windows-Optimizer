@@ -128,8 +128,14 @@ public sealed class MainViewModel(
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
 
+    /// <summary>The Services panel, set by the window. Null until then.</summary>
+    public ServicesPageViewModel? ServicesPage { get; set; }
+
+    /// <summary>The Startup &amp; Services page, which holds its panels (Services, later Startup items) as tabs.</summary>
+    public bool IsServicesPage => ServicesPage is not null && SelectedPage == Sections.StartupAndServices;
+
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsServicesPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
@@ -313,6 +319,8 @@ public sealed class MainViewModel(
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            if (ServicesPage is not null)
+                await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
             Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
@@ -554,6 +562,7 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
         OnPropertyChanged(nameof(IsBiosPage));
+        OnPropertyChanged(nameof(IsServicesPage));
         OnPropertyChanged(nameof(IsWindowsUpdatePage));
         if (IsWindowsUpdatePage)
             _ = WindowsUpdate.RefreshAsync();

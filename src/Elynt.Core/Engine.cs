@@ -5,6 +5,7 @@ using Elynt.Core.Games;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Services;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -157,6 +158,17 @@ public interface IEngine
 
     BiosReport GetBiosReport();
 
+    /// <summary>Every installed service and driver, with who may change it and any recommendation for this PC.</summary>
+    IReadOnlyList<ServiceView> ListServices();
+
+    /// <summary>
+    /// Sets a service's start type. Reviewed services take Automatic or Manual; Disabled and unreviewed services need
+    /// Advanced; protected services and boot drivers are refused in every mode. The whole configuration is journaled.
+    /// </summary>
+    ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null);
+
+    /// <summary>Puts back the whole configuration a service had before the app last changed it.</summary>
+    ServiceResult UndoServiceChange(string serviceName);
     /// <summary>
     /// "Check and install now": starts searching for and installing quality updates in the background, even while
     /// updates are paused, or shows the run already in progress.
@@ -238,6 +250,25 @@ public sealed class Engine(
         clock ?? TimeProvider.System,
         logger ?? (ILogger)NullLogger<Engine>.Instance);
 
+    private ServiceDesk Services => new(system, journal, user);
+
+    public IReadOnlyList<ServiceView> ListServices() => Services.List();
+
+    public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+
+    public ServiceResult UndoServiceChange(string serviceName) =>
+        Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
+
+    /// <summary>A catalogue tweak, or the change behind a journaled service start type.</summary>
+    private bool TryResolve(string tweakId, JournalEntry? entry, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TweakDefinition? tweak)
+    {
+        if (catalogue.TryGet(tweakId, out tweak))
+            return true;
+        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        return tweak is not null;
+    }
+
     private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
@@ -275,18 +306,23 @@ public sealed class Engine(
 
     public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
-        options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
 
         if (tweak.PerGame)
             return Failed(tweak, "Choose a game first: this is set for one game at a time. Nothing was changed.");
 
+        return ApplyTweak(tweak, options ?? ApplyOptions.Default);
+    }
+
+    /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    {
         if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
 
         // Hard rules hold in every mode, Advanced included.
-        if (tweak.Steps.Select(step => HardRules.Violation(step.Target)).FirstOrDefault(v => v is not null) is { } violation)
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
         {
             _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
             return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
@@ -354,10 +390,10 @@ public sealed class Engine(
 
     public CommandResult Revert(string tweakId)
     {
-        if (!catalogue.TryGet(tweakId, out var tweak))
+        var entry = journal.LatestUndoable(tweakId, user);
+        if (!TryResolve(tweakId, entry, out var tweak))
             return Unknown(tweakId);
 
-        var entry = journal.LatestUndoable(tweak.Id, user);
         if (entry is null)
             return Failed(tweak, "Nothing to undo: this was already set before the app changed anything.");
 
@@ -369,7 +405,7 @@ public sealed class Engine(
         var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
         if (entry is null)
             return new(false, "There is no such change in your undo history.", null);
-        if (!catalogue.TryGet(entry.TweakId, out var tweak))
+        if (!TryResolve(entry.TweakId, entry, out var tweak))
             return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
         if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
             return Failed(tweak, "This change has already been undone.");
@@ -387,7 +423,7 @@ public sealed class Engine(
         var results = new List<UndoOutcome>();
         foreach (var entry in open)
         {
-            var name = catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId;
+            var name = TryResolve(entry.TweakId, entry, out var tweak) ? tweak.Name : entry.TweakId;
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
@@ -434,7 +470,7 @@ public sealed class Engine(
             .Select(entry => new ChangeView(
                 entry.Id,
                 entry.TweakId,
-                catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId,
+                TryResolve(entry.TweakId, entry, out var tweak) ? tweak.Name : entry.TweakId,
                 entry.AppliedAt,
                 entry.Status switch
                 {

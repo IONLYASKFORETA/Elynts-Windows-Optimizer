@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Services;
+using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
@@ -28,6 +30,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(ListServicesRequest), "listServices")]
+[JsonDerivedType(typeof(SetServiceStartRequest), "setServiceStart")]
+[JsonDerivedType(typeof(UndoServiceChangeRequest), "undoServiceChange")]
 [JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
 [JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
@@ -81,6 +86,11 @@ public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineReq
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record ListServicesRequest : EngineRequest;
+
+public sealed record SetServiceStartRequest(string ServiceName, ServiceStart Start, ApplyOptions? Options = null) : EngineRequest;
+
+public sealed record UndoServiceChangeRequest(string ServiceName) : EngineRequest;
 public sealed record StartWindowsUpdateRequest : EngineRequest;
 
 public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
@@ -151,7 +161,9 @@ public sealed record EngineResponse(
     GpuTuningReport? GpuTuning = null,
     TuningResult? Tuning = null,
     UpdateRunStatus? WindowsUpdate = null,
-    EngineEvent? Event = null)
+    EngineEvent? Event = null,
+    IReadOnlyList<ServiceView>? Services = null,
+    ServiceResult? ServiceResult = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -201,6 +213,9 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        ListServicesRequest => new(Services: engine.ListServices()),
+        SetServiceStartRequest set => new(ServiceResult: engine.SetServiceStart(set.ServiceName, set.Start, set.Options)),
+        UndoServiceChangeRequest undo => new(ServiceResult: engine.UndoServiceChange(undo.ServiceName)),
         StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
         GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         GetDriversRequest => new(Drivers: engine.GetDrivers()),

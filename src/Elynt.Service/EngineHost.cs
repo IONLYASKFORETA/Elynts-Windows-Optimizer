@@ -26,6 +26,8 @@ internal sealed class EngineHost(
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsServiceManager _services = new();
+    private readonly WindowsDevicePresence _devices = new();
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
@@ -98,7 +100,7 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power },
+                _games) { Boot = _boot, Power = _power, Services = _services, Devices = _devices },
             journal,
             sid,
             safetyNet,

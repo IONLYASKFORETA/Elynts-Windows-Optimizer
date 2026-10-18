@@ -3,6 +3,8 @@ using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
+using Elynt.Core.Services;
+using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Tuning;
@@ -111,6 +113,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
 
+    public async Task<IReadOnlyList<ServiceView>> ListServicesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListServicesRequest(), cancellation)).Services ?? throw Missing("services");
+
+    public async Task<ServiceResult> SetServiceStartAsync(
+        string serviceName, ServiceStart start, ApplyOptions? options = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetServiceStartRequest(serviceName, start, options), cancellation)).ServiceResult ?? throw Missing("service result");
+
+    public async Task<ServiceResult> UndoServiceChangeAsync(string serviceName, CancellationToken cancellation = default) =>
+        (await SendAsync(new UndoServiceChangeRequest(serviceName), cancellation)).ServiceResult ?? throw Missing("service result");
     public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
 
