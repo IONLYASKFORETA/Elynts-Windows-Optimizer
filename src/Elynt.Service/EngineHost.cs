@@ -36,9 +36,18 @@ internal sealed class EngineHost(
     private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
     private readonly WindowsDevices _pnpDevices = new();
 
+    /// <summary>Shared by every vendor's latest-driver lookup.</summary>
+    private static readonly HttpClient LookupClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
-        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        [
+            new NvidiaDriverSource(LookupClient),
+            new AmdGpuDriverSource(LookupClient),
+            new AmdChipsetDriverSource(LookupClient),
+            new IntelGpuDriverSource(LookupClient),
+            new IntelChipsetDriverSource(LookupClient),
+        ],
         ServicePaths.Downloads,
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
