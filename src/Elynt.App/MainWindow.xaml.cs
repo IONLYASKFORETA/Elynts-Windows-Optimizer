@@ -5,6 +5,7 @@ using System.Windows.Navigation;
 using Elynt.App.ViewModels;
 using Elynt.Core;
 using Elynt.Core.Diagnostics;
+using Elynt.Core.Drivers;
 
 namespace Elynt.App;
 
@@ -14,7 +15,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
         _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
         InitializeComponent();
         DataContext = _model;
@@ -101,6 +102,61 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+    private async void CheckDriver(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is GpuItemViewModel gpu)
+            await gpu.CheckAsync();
+    }
+
+    private async void InstallDriver(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is GpuItemViewModel gpu)
+            await gpu.InstallAsync();
+    }
+
+    /// <summary>The reboot prompt after a driver installer reported that Windows must restart. "Later" is the default.</summary>
+    private void AskToReboot(DriverInstallResult result)
+    {
+        var answer = MessageBox.Show(
+            this,
+            $"{result.Message}\n\nRestart now? Save your work in other apps first.",
+            "Restart to finish the driver install",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information,
+            MessageBoxResult.No);
+        if (answer == MessageBoxResult.Yes)
+            Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
+    }
+
+    private string? PickGame()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private async void AddGame(object sender, RoutedEventArgs e)
+    {
+        if (PickGame() is { } exe)
+            await _model.AddGameAsync(exe);
+    }
+
+    private async void RemoveGame(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: GamesPageViewModel.GameItem item })
+            await _model.RemoveGameAsync(item);
+    }
+
+    /// <summary>Applies a per-game tweak to a game the user picks.</summary>
+    private async void ApplyForGame(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
+            await _model.ApplyForGameAsync(item);
+    }
 
     private async void UndoChange(object sender, RoutedEventArgs e)
     {
@@ -119,6 +175,9 @@ public partial class MainWindow : Window
         if (answer == MessageBoxResult.OK)
             await _model.RestoreEverythingAsync();
     }
+
+    private async void CheckAndInstallWindowsUpdates(object sender, RoutedEventArgs e) =>
+        await _model.WindowsUpdate.StartAsync();
 
     private void OpenLink(object sender, RequestNavigateEventArgs e)
     {

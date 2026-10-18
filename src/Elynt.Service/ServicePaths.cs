@@ -14,6 +14,9 @@ internal static class ServicePaths
     /// <summary>Each user's weekly cleaning choice and when it last ran.</summary>
     public static string CleanupSchedule { get; } = Path.Combine(Root, "cleanup-schedule.json");
 
+    /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
+    public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
+
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
     /// <summary>Whole-store backups (BCD, firewall, power plans, tasks, drivers, hosts) taken before the first change of each kind.</summary>
@@ -21,6 +24,12 @@ internal static class ServicePaths
 
     /// <summary>One log per repair run, readable by users so the app can copy them.</summary>
     public static string RepairLogs { get; } = Path.Combine(Logs, "repair");
+
+    /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
+    public static string Downloads { get; } = Path.Combine(Root, "downloads");
+
+    /// <summary>Games each user added by hand, one file per user SID.</summary>
+    public static string Games { get; } = Path.Combine(Root, "games");
 
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
@@ -46,8 +55,11 @@ internal static class ServicePaths
             root.SetAccessControl(security);
 
         Directory.CreateDirectory(Path.GetDirectoryName(Journal)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(Tuning)!);
         Directory.CreateDirectory(Logs);
         Directory.CreateDirectory(Backups);
         Directory.CreateDirectory(RepairLogs);
+        Directory.CreateDirectory(Downloads);
+        Directory.CreateDirectory(Games);
     }
 }
