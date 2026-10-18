@@ -41,6 +41,13 @@ public sealed class FakeRegistry : IRegistry
 
     public bool KeyExists(RegistryRoot root, string keyPath) => _keys.ContainsKey((root, keyPath));
 
+    public IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath) =>
+        _keys.Keys
+            .Where(k => k.Item1 == root && k.Item2.StartsWith(keyPath + "\\", StringComparison.OrdinalIgnoreCase))
+            .Select(k => k.Item2[(keyPath.Length + 1)..])
+            .Where(rest => !rest.Contains('\\'))
+            .ToList();
+
     public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath)
     {
         ThrowIfBroken();

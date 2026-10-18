@@ -43,12 +43,24 @@ public static class SystemSnapshot
     public static IReadOnlyList<string> Take(SystemAdapters system, TweakDefinition tweak)
     {
         var lines = RegistrySnapshot.Take(system.Registry, tweak).ToList();
+        foreach (var step in tweak.Steps.OfType<RegistryEachKeyStep>())
+            lines.AddRange(step.Matches(system.Registry).Select(location => RegistrySnapshot.Describe(system.Registry, location)));
         foreach (var target in tweak.Steps.Select(step => step.Target))
         {
             switch (target)
             {
                 case BootSettingTarget boot:
                     lines.Add($"boot {boot.Element}: {system.Boot!.Get(boot.Element) ?? "not set"}");
+                    break;
+                case DeviceTarget device:
+                    foreach (var id in system.Devices!.FindByHardwareId(device.HardwareId))
+                        lines.Add($"device {id}: {(system.Devices.IsEnabled(id) == true ? "enabled" : "disabled")}");
+                    break;
+                case PowerSettingTarget setting:
+                    var active = system.Power!.GetActive();
+                    foreach (var source in Enum.GetValues<Core.Power.PowerSource>())
+                        lines.Add($"power setting {setting.Setting} {source} on {active}: " +
+                                  system.Power.GetSetting(active, setting.Subgroup, setting.Setting, source));
                     break;
                 case PowerPlanTarget plan:
                     lines.Add($"active power plan: {system.Power!.GetActive()}");
@@ -65,17 +77,19 @@ public static class RegistrySnapshot
 {
     public static IReadOnlyList<string> Take(IRegistry registry, TweakDefinition tweak) =>
         tweak.Steps.Select(step => step.Target).OfType<RegistryTarget>()
-            .Select(target => target.Location)
-            .Select(location =>
-            {
-                var parts = location.KeyPath.Split('\\');
-                var key = string.Join(", ", Enumerable.Range(1, parts.Length)
-                    .Select(n => string.Join('\\', parts[..n]))
-                    .Select(path => $"{path} {(registry.KeyExists(location.Root, path) ? "present" : "absent")}"));
-                var value = registry.GetValue(location) is { } v
-                    ? $"{v.Kind} {Convert.ToHexString(v.Data)}"
-                    : "value absent";
-                return $"{location}: {key}, {value}";
-            })
+            .Select(target => Describe(registry, target.Location))
             .ToList();
+
+    /// <summary>One value with its type and raw bytes, and whether each key on its path exists.</summary>
+    public static string Describe(IRegistry registry, RegistryLocation location)
+    {
+        var parts = location.KeyPath.Split('\\');
+        var key = string.Join(", ", Enumerable.Range(1, parts.Length)
+            .Select(n => string.Join('\\', parts[..n]))
+            .Select(path => $"{path} {(registry.KeyExists(location.Root, path) ? "present" : "absent")}"));
+        var value = registry.GetValue(location) is { } v
+            ? $"{v.Kind} {Convert.ToHexString(v.Data)}"
+            : "value absent";
+        return $"{location}: {key}, {value}";
+    }
 }

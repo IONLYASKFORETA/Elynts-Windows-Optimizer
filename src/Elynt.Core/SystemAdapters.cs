@@ -32,6 +32,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
+
+    /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
+    public Devices.IDevices? Devices { get; init; }
 }
 
 public interface ISystemInfo

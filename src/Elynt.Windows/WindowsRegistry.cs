@@ -66,6 +66,12 @@ public sealed partial class WindowsRegistry(string? userSid = null) : IRegistry
         return key is not null;
     }
 
+    public IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath)
+    {
+        using var key = OpenKey(root, keyPath, writable: false);
+        return key?.GetSubKeyNames() ?? [];
+    }
+
     public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath)
     {
         using (var key = OpenKey(root, keyPath, writable: false))

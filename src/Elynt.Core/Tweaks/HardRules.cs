@@ -46,6 +46,7 @@ public static partial class HardRules
     {
         BootSettingTarget boot => BootViolation(boot),
         RegistryTarget registry => RegistryViolation(registry),
+        RegistryPatternTarget pattern => RegistryViolation(new RegistryTarget(pattern.Pattern, pattern.Desired)),
         ServiceTarget service when ProtectedServices.Contains(service.ServiceName) =>
             $"{service.ServiceName} is a protected service (anti-cheat, Windows Update or boot-critical)",
         DriverTarget driver when VulnerableDrivers.Contains(Path.GetFileName(driver.DriverFile.Replace('\\', '/'))) =>

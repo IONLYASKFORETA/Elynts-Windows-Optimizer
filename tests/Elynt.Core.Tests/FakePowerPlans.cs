@@ -34,6 +34,23 @@ public sealed class FakePowerPlans : IPowerPlans
         _plans.Add(newPlan);
     }
 
+    private readonly Dictionary<(Guid, Guid, Guid, PowerSource), uint> _settings = [];
+
+    /// <summary>Settings never set read as 0.</summary>
+    public uint GetSetting(Guid plan, Guid subgroup, Guid setting, PowerSource source)
+    {
+        if (!_plans.Contains(plan))
+            throw new InvalidOperationException($"There is no power plan {plan}.");
+        return _settings.GetValueOrDefault((plan, subgroup, setting, source));
+    }
+
+    public void SetSetting(Guid plan, Guid subgroup, Guid setting, PowerSource source, uint value)
+    {
+        if (!_plans.Contains(plan))
+            throw new InvalidOperationException($"There is no power plan {plan}.");
+        _settings[(plan, subgroup, setting, source)] = value;
+    }
+
     public void Delete(Guid plan)
     {
         if (plan == Active)

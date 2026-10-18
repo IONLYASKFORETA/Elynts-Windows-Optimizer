@@ -7,8 +7,11 @@ namespace Elynt.Core.Journal;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
+[JsonDerivedType(typeof(RegistryEachKeyRecord), "registryEachKey")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
 [JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
+[JsonDerivedType(typeof(Power.PowerSettingRecord), "powerSetting")]
+[JsonDerivedType(typeof(Devices.DeviceEnabledRecord), "deviceEnabled")]
 public abstract record StepRecord
 {
     /// <summary>

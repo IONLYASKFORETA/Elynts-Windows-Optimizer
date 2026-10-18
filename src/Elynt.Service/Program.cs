@@ -40,6 +40,7 @@ try
         logger: services.GetRequiredService<ILogger<SafetyNet>>()));
     builder.Services.AddSingleton<IRepairLogStore>(new FileRepairLogStore(ServicePaths.RepairLogs));
     builder.Services.AddHostedService<EngineHost>();
+    builder.Services.AddHostedService<StandbyListCleanerHost>();
 
     builder.Build().Run();
     return 0;
