@@ -11,6 +11,9 @@ namespace Elynt.Core.Journal;
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
 [JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
+[JsonDerivedType(typeof(Tweaks.AppRemovalRecord), "appRemoval")]
+[JsonDerivedType(typeof(Tweaks.AppDeprovisionRecord), "appDeprovision")]
+[JsonDerivedType(typeof(Tweaks.OptionalFeatureRecord), "optionalFeature")]
 public abstract record StepRecord
 {
     /// <summary>

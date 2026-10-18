@@ -42,6 +42,9 @@ public sealed record TweakView(
     /// <summary>For a destructive tweak: what cannot be undone, shown in the confirmation.</summary>
     public string? DestructiveWarning { get; init; }
 
+    /// <summary>What the user must read and confirm before applying, for a tweak undo can still put back.</summary>
+    public string? ApplyWarning { get; init; }
+
     public RiskFlags Risks { get; init; } = RiskFlags.None;
 
     public IReadOnlyList<AntiCheatConflict> AntiCheat { get; init; } = [];
@@ -76,7 +79,8 @@ public sealed record TweakView(
 /// <summary>How the user asked for a tweak to be applied.</summary>
 /// <param name="ConfirmDestructive">The user confirmed, in a separate step, that a destructive change can't be undone.</param>
 /// <param name="Advanced">Advanced mode is on. It unlocks more, but never the hard never-touch rules.</param>
-public sealed record ApplyOptions(bool ConfirmDestructive = false, bool Advanced = false)
+/// <param name="ConfirmWarning">The user read and confirmed the tweak's <see cref="TweakView.ApplyWarning"/>.</param>
+public sealed record ApplyOptions(bool ConfirmDestructive = false, bool Advanced = false, bool ConfirmWarning = false)
 {
     public static ApplyOptions Default { get; } = new();
 }
@@ -367,7 +371,7 @@ public sealed partial class Engine(
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
     private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
     {
-        if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
+        if (WhyNotApplicable(tweak) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
 
         // Hard rules hold in every mode, Advanced included.
@@ -379,6 +383,9 @@ public sealed partial class Engine(
 
         if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
             return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
+
+        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
+            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
 
         try
         {
@@ -618,6 +625,10 @@ public sealed partial class Engine(
             records[i].Revert(system);
     }
 
+    private string? WhyNotApplicable(TweakDefinition tweak) =>
+        tweak.Applicability.WhyNot(system.System) ??
+        tweak.Steps.Select(step => step.WhyNotHere(system)).FirstOrDefault(reason => reason is not null);
+
     /// <summary>For the list: a setting that can't be read right now (e.g. bcdedit failing) shows as off, not as an error.</summary>
     private TweakState SafeDetect(TweakDefinition tweak)
     {
@@ -654,13 +665,14 @@ public sealed partial class Engine(
     {
         Reversibility = tweak.Reversibility,
         DestructiveWarning = tweak.DestructiveWarning,
+        ApplyWarning = tweak.ApplyWarning,
         Risks = tweak.Risks,
         AntiCheat = tweak.AntiCheat,
         AffectedGames = affected,
         AntiCheatWarning = Games.AntiCheatWarning.For(affected),
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
-        NotApplicableReason = tweak.Applicability.WhyNot(system.System),
+        NotApplicableReason = WhyNotApplicable(tweak),
         Warnings = tweak.HardwareNotes
             .Where(note => (system.System.Hardware & note.When) == note.When)
             .Select(note => note.Text)

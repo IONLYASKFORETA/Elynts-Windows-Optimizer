@@ -41,6 +41,12 @@ public sealed record TweakDefinition(
     /// <summary>For a destructive tweak: what cannot be undone, spelled out in the confirmation.</summary>
     public string? DestructiveWarning { get; init; }
 
+    /// <summary>
+    /// Something the user must read and confirm before this tweak is applied, even though undo can put it back
+    /// (e.g. OneDrive's cloud-only files). The Engine refuses to apply without that confirmation.
+    /// </summary>
+    public string? ApplyWarning { get; init; }
+
     public RiskFlags Risks { get; init; } = RiskFlags.None;
 
     /// <summary>Anti-cheats that object to this tweak. The app warns and never blocks.</summary>
@@ -79,6 +85,12 @@ public abstract record TweakStep
     /// alone is enough (registry values).
     /// </summary>
     public virtual Safety.BackupStore? Store => null;
+
+    /// <summary>
+    /// Why this PC doesn't have what the step changes (e.g. a Windows feature only some PCs ship), or null when it
+    /// does. Checked as well as the tweak's <see cref="Applicability"/>.
+    /// </summary>
+    public virtual string? WhyNotHere(SystemAdapters system) => null;
 
     /// <summary>Whether the system is already in this step's desired state.</summary>
     public abstract bool IsApplied(SystemAdapters system);

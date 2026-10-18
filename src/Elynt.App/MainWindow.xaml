@@ -621,6 +621,10 @@
                                Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
                         <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
                     </TextBlock>
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                               Visibility="{Binding HasApplyWarning, Converter={StaticResource Visible}}">
+                        <Run Text="Before you turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding View.ApplyWarning, Mode=OneWay}" />
+                    </TextBlock>
                     <StackPanel Margin="0,8,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Visible}}">
                         <TextBlock Text="For your hardware" FontWeight="SemiBold" />
                         <ItemsControl ItemsSource="{Binding Warnings}">

@@ -40,6 +40,10 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId)
     {
         var tweak = Catalogue.Default.Get(tweakId);
+        // This round trip covers registry values, boot settings and power plans: app removals and Windows features
+        // are covered by the logic tests, so CI never uninstalls apps from the runner.
+        Assert.SkipWhen(tweak.Steps.Any(step => step is AppRemovalStep or AppDeprovisionStep or OptionalFeatureStep),
+            "Removes apps or Windows features; covered by the fake-adapter logic tests.");
         var machineWide = tweak.Steps.Any(step => step.Target is not RegistryTarget { Location.Root: RegistryRoot.CurrentUser });
         Assert.SkipWhen(machineWide && !OnDisposableRunner,
             "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");

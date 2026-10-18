@@ -16,8 +16,14 @@ namespace Elynt.App.ViewModels;
 /// </param>
 /// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
 /// <param name="pickGame">Asks the user for a game's .exe, or returns null when they cancel.</param>
+/// <param name="confirmWarning">
+/// Shows a tweak's warning (e.g. OneDrive's cloud-only files) and asks the user to confirm it before applying.
+/// </param>
 public sealed class MainViewModel(
-    Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot, Func<string?> pickGame) : ObservableObject
+    Func<TweakView, bool> confirmDestructive,
+    Action<DriverInstallResult> askToReboot,
+    Func<string?> pickGame,
+    Func<TweakView, bool>? confirmWarning = null) : ObservableObject
 {
     private StartupPageViewModel? _startup;
 
@@ -772,8 +778,20 @@ public sealed class MainViewModel(
                 }
             }
 
+            // Likewise for a warning the user must read first; without a way to ask, the service refuses and says why.
+            var warningConfirmed = false;
+            if (turnOn && item.View.ApplyWarning is not null && confirmWarning is not null)
+            {
+                warningConfirmed = confirmWarning(item.View);
+                if (!warningConfirmed)
+                {
+                    item.Message = "Not changed.";
+                    return;
+                }
+            }
+
             var result = turnOn
-                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed))
+                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed, ConfirmWarning: warningConfirmed))
                 : await _client.RevertAsync(item.View.Id);
             Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)

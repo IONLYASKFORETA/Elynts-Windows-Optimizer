@@ -45,6 +45,12 @@ public sealed record SystemAdapters(
 
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
+
+    /// <summary>Preinstalled apps the Debloat &amp; Privacy section removes. Without it, none show as installed.</summary>
+    public IRemovableApps Apps { get; init; } = new NoRemovableApps();
+
+    /// <summary>Windows optional features (e.g. Recall). Without it, this PC has none.</summary>
+    public IOptionalFeatures Features { get; init; } = new NoOptionalFeatures();
 }
 
 public interface ISystemInfo

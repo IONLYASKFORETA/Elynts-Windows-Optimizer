@@ -115,6 +115,8 @@ internal sealed class EngineHost(
                 Devices = _devices,
                 Startup = new StartupAdapters(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+                Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
+                Features = new WindowsOptionalFeatures(),
             },
             journal,
             sid,
