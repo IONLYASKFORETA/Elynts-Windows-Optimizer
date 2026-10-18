@@ -1,5 +1,6 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Boot;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
@@ -15,6 +16,7 @@ namespace Elynt.Core;
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
 /// <param name="Packages">winget. Without it, app installs report winget as missing.</param>
 /// <param name="Repair">Runs the Repair section's tools. Without it, no repair tools are listed.</param>
+/// <param name="Cleanup">The files cleanup measures and clears. Without it, a scan finds nothing.</param>
 /// <param name="Drivers">GPU driver detection, lookup, download and install. Without it, the Drivers page is unavailable.</param>
 /// <param name="Games">Where launchers record installed games. Without it, only games added by hand are known.</param>
 public sealed record SystemAdapters(
@@ -24,7 +26,8 @@ public sealed record SystemAdapters(
     IPackageManager? Packages = null,
     IRepairSystem? Repair = null,
     DriverAdapters? Drivers = null,
-    IGameSources? Games = null)
+    IGameSources? Games = null,
+    ICleanupSystem? Cleanup = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
 

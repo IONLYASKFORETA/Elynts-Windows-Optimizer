@@ -148,14 +148,24 @@ public static partial class HardRules
                dword is not (2 or 3 or 4 or 5 or 7);
     }
 
+    /// <summary>
+    /// The Users folder, a profile itself, or anything in a profile outside AppData (Documents, Downloads, Desktop,
+    /// Pictures, OneDrive, Saved Games and any folder the user made there). Only AppData holds app caches.
+    /// </summary>
     private static bool IsUserFolder(string path)
     {
-        var match = UserProfile().Match(path.Replace('/', '\\'));
+        var normal = path.Replace('/', '\\').TrimEnd('\\');
+        if (UsersFolder().IsMatch(normal))
+            return true;
+        var match = UserProfile().Match(normal);
         if (!match.Success)
             return false;
+        if (!match.Groups["first"].Success)
+            return true;
         var first = match.Groups["first"].Value;
         return UserFolders.Any(f => f.Equals(first, StringComparison.OrdinalIgnoreCase)) ||
-               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase);
+               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase) ||
+               !first.Equals("AppData", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEdge(string package) =>
@@ -169,6 +179,9 @@ public static partial class HardRules
     [GeneratedRegex(@"^SYSTEM\\(CurrentControlSet|ControlSet\d{3})\\Control\\(?<rest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex ControlKey();
 
-    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+\\(?<first>[^\\]+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+(\\(?<first>[^\\]+))?", RegexOptions.IgnoreCase)]
     private static partial Regex UserProfile();
+
+    [GeneratedRegex(@"^[A-Za-z]:\\Users$", RegexOptions.IgnoreCase)]
+    private static partial Regex UsersFolder();
 }

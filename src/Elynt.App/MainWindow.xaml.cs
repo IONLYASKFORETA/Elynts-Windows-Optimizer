@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
         _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
         _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
+        _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
         InitializeComponent();
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
@@ -198,6 +199,20 @@ public partial class MainWindow : Window
         MessageBox.Show(
             this,
             $"Delete {item.Name} from startup?\n\n{item.Location}\n\nThis can't be undone. Turning it off instead stops it starting and can be undone.\n\nDelete it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void ScanCleanup(object sender, RoutedEventArgs e) => await _model.Cleanup.ScanAsync();
+
+    private async void CleanTicked(object sender, RoutedEventArgs e) => await _model.Cleanup.CleanAsync();
+
+    /// <summary>The separate confirmation destructive cleanup categories need. "No" is the default button.</summary>
+    private bool ConfirmDestructiveCleanup(string warnings) =>
+        MessageBox.Show(
+            this,
+            $"These can't be undone:\n\n{warnings}\n\nClean them anyway?",
             "This can't be undone",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,

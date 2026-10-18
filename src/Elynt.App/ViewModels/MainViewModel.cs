@@ -115,6 +115,11 @@ public sealed class MainViewModel(
 
     public bool IsRepairPage => SelectedPage == Sections.Repair;
 
+    /// <summary>The Cleanup page's scan and clean, shown above its tweaks (the hibernation file).</summary>
+    public CleanupPageViewModel Cleanup { get; } = new();
+
+    public bool IsCleanupPage => SelectedPage == Sections.Cleanup && IsConnected;
+
     public string SelectedPage
     {
         get => _selectedPage;
@@ -564,7 +569,11 @@ public sealed class MainViewModel(
         if (SelectedRepairTool is null || !RepairTools.Contains(SelectedRepairTool))
             SelectedRepairTool = RepairTools.FirstOrDefault();
 
+        if (IsCleanupPage)
+            _ = Cleanup.OnShownAsync();
+
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsCleanupPage));
         OnPropertyChanged(nameof(IsRepairPage));
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));

@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
@@ -22,6 +23,7 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
@@ -104,7 +106,8 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games)
+                _games,
+                Cleanup: new WindowsCleanupSystem(sid))
             {
                 Boot = _boot,
                 Power = _power,
@@ -118,6 +121,7 @@ internal sealed class EngineHost(
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
+            cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
             windowsUpdate: _windowsUpdate);

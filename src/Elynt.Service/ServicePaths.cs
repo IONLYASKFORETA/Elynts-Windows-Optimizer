@@ -11,6 +11,9 @@ internal static class ServicePaths
 
     public static string Journal { get; } = Path.Combine(Root, "journal", "journal.json");
 
+    /// <summary>Each user's weekly cleaning choice and when it last ran.</summary>
+    public static string CleanupSchedule { get; } = Path.Combine(Root, "cleanup-schedule.json");
+
     /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
     public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
 

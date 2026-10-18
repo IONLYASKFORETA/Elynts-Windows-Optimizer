@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
@@ -279,6 +280,59 @@ public sealed class PipeContractTests : IAsyncLifetime
     private sealed class Collect(List<RepairProgress> into) : IProgress<RepairProgress>
     {
         public void Report(RepairProgress value) => into.Add(value);
+    }
+
+    [Fact]
+    public async Task ScanCleanup_streams_each_category_then_the_scan_unchanged()
+    {
+        var progress = new List<CleanupProgress>();
+
+        var scan = await _client.ScanCleanupAsync(new CollectCleanup(progress), TestContext.Current.CancellationToken);
+
+        AssertSameJson(StubEngine.CleanupSteps, progress);
+        AssertSameJson(StubEngine.Scan, scan);
+    }
+
+    [Fact]
+    public async Task Clean_carries_the_ticked_categories_and_the_destructive_confirmation()
+    {
+        var progress = new List<CleanupProgress>();
+
+        var report = await _client.CleanAsync(["cleanup.temp", "cleanup.recycle-bin"], confirmDestructive: true, new CollectCleanup(progress),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("Clean cleanup.temp,cleanup.recycle-bin True", _engine.LastCall);
+        AssertSameJson(StubEngine.CleanupSteps, progress);
+        AssertSameJson(StubEngine.Cleaned, report);
+    }
+
+    [Fact]
+    public async Task Weekly_cleaning_schedule_arrives_unchanged()
+    {
+        var set = await _client.SetWeeklyCleanupAsync(true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetWeeklyCleanup True", _engine.LastCall);
+        AssertSameJson(_engine.GetCleanupSchedule(), set);
+        AssertSameJson(_engine.GetCleanupSchedule(), await _client.GetCleanupScheduleAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Other_commands_still_answer_while_a_clean_runs()
+    {
+        _engine.HoldRepair = new TaskCompletionSource();
+
+        var clean = _client.CleanAsync(["cleanup.temp"], false, null, TestContext.Current.CancellationToken);
+        await _engine.RepairStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        Assert.Single(await second.ListTweaksAsync(TestContext.Current.CancellationToken));
+
+        _engine.HoldRepair.SetResult();
+        await clean;
+    }
+
+    private sealed class CollectCleanup(List<CleanupProgress> into) : IProgress<CleanupProgress>
+    {
+        public void Report(CleanupProgress value) => into.Add(value);
     }
 
     [Fact]
@@ -769,6 +823,53 @@ public sealed class PipeContractTests : IAsyncLifetime
             new("some.repair", Sections.Repair, "Some repair", "Repairs a thing.", ["Run thing.exe /fix"], RestartNeed.Restart,
                 "Needs a restart.", "Are you sure?", IsFollowUp: false, Available: false, "Not on this PC."),
         ];
+
+        public static readonly IReadOnlyList<CleanupProgress> CleanupSteps =
+        [
+            new(CleanupPhase.Scanning, "cleanup.temp", "Temporary files", 1, 2),
+            new(CleanupPhase.Cleaning, "cleanup.recycle-bin", "Recycle Bin", 2, 2),
+        ];
+
+        public static readonly CleanupScan Scan = new(
+        [
+            new("cleanup.temp", "Temporary files", "Deletes leftovers.", CleanupKind.Safe, null, 3_500, 3, [@"C:\Windows\Temp"], null, Ticked: true),
+            new("cleanup.component-store", "ResetBase", "DISM.", CleanupKind.Destructive, "Can't uninstall updates.", null, 0, [], "Busy.", Ticked: false),
+        ]);
+
+        public static readonly CleanupReport Cleaned = new(false, "Freed 3 KB.", 3_500,
+        [
+            new("cleanup.temp", "Temporary files", true, 3_500, 3, 1, "Freed 3 KB. 1 in use were left alone."),
+            new("cleanup.recycle-bin", "Recycle Bin", false, 0, 0, 0, "Couldn't clean this."),
+        ]);
+
+        private CleanupSchedule _schedule = new(false, new DateTimeOffset(2026, 10, 9, 3, 0, 0, TimeSpan.Zero));
+
+        public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = "ScanCleanup";
+            foreach (var p in CleanupSteps)
+                progress?.Report(p);
+            return Task.FromResult(Scan);
+        }
+
+        public async Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = $"Clean {string.Join(",", categoryIds)} {confirmDestructive}";
+            RepairStarted.TrySetResult();
+            foreach (var p in CleanupSteps)
+                progress?.Report(p);
+            if (HoldRepair is not null)
+                await HoldRepair.Task.WaitAsync(cancellation);
+            return Cleaned;
+        }
+
+        public CleanupSchedule GetCleanupSchedule() => _schedule;
+
+        public CleanupSchedule SetWeeklyCleanup(bool enabled)
+        {
+            LastCall = $"SetWeeklyCleanup {enabled}";
+            return _schedule = _schedule with { WeeklyEnabled = enabled };
+        }
 
         public async Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default)
         {

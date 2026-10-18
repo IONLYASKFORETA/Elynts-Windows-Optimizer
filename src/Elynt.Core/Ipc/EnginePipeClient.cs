@@ -6,6 +6,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Startup;
+using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Tuning;
@@ -135,6 +136,25 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<IReadOnlyList<StartupItemView>> CheckNewStartupItemsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new CheckNewStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
+
+    /// <summary>Measures every cleanup category; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new ScanCleanupRequest(), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupScan
+        ?? throw Missing("cleanup scan");
+
+    /// <summary>Cleans the ticked categories; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupReport> CleanAsync(
+        IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new CleanRequest(categoryIds, confirmDestructive), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupReport
+        ?? throw Missing("cleanup report");
+
+    public async Task<CleanupSchedule> GetCleanupScheduleAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetCleanupScheduleRequest(), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
+
+    public async Task<CleanupSchedule> SetWeeklyCleanupAsync(bool enabled, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetWeeklyCleanupRequest(enabled), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
     public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
 

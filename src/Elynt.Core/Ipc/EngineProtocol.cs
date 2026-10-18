@@ -5,6 +5,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Startup;
+using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
@@ -38,6 +39,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
 [JsonDerivedType(typeof(DeleteStartupItemRequest), "deleteStartupItem")]
 [JsonDerivedType(typeof(CheckNewStartupItemsRequest), "checkNewStartupItems")]
+[JsonDerivedType(typeof(ScanCleanupRequest), "scanCleanup")]
+[JsonDerivedType(typeof(CleanRequest), "clean")]
+[JsonDerivedType(typeof(GetCleanupScheduleRequest), "getCleanupSchedule")]
+[JsonDerivedType(typeof(SetWeeklyCleanupRequest), "setWeeklyCleanup")]
 [JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
 [JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
@@ -96,6 +101,16 @@ public sealed record ListServicesRequest : EngineRequest;
 public sealed record SetServiceStartRequest(string ServiceName, ServiceStart Start, ApplyOptions? Options = null) : EngineRequest;
 
 public sealed record UndoServiceChangeRequest(string ServiceName) : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category measured, then the scan.</summary>
+public sealed record ScanCleanupRequest : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category cleaned, then the report.</summary>
+public sealed record CleanRequest(IReadOnlyList<string> CategoryIds, bool ConfirmDestructive) : EngineRequest;
+
+public sealed record GetCleanupScheduleRequest : EngineRequest;
+
+public sealed record SetWeeklyCleanupRequest(bool Enabled) : EngineRequest;
 public sealed record StartWindowsUpdateRequest : EngineRequest;
 
 public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
@@ -132,6 +147,7 @@ public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
 [JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
 [JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(CleanupProgressEvent), "cleanupProgress")]
 [JsonDerivedType(typeof(DriverInstallProgressEvent), "driverInstallProgress")]
 public abstract record EngineEvent;
 
@@ -139,6 +155,7 @@ public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEven
 
 public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
 
+public sealed record CleanupProgressEvent(CleanupProgress Progress) : EngineEvent;
 public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) : EngineEvent;
 
 /// <summary>
@@ -170,7 +187,10 @@ public sealed record EngineResponse(
     IReadOnlyList<ServiceView>? Services = null,
     ServiceResult? ServiceResult = null,
     IReadOnlyList<StartupItemView>? StartupItems = null,
-    StartupCommandResult? StartupResult = null)
+    StartupCommandResult? StartupResult = null,
+    CleanupScan? CleanupScan = null,
+    CleanupReport? CleanupReport = null,
+    CleanupSchedule? CleanupSchedule = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -227,6 +247,12 @@ public static class EngineProtocol
         SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
         CheckNewStartupItemsRequest => new(StartupItems: engine.CheckNewStartupItems()),
         DeleteStartupItemRequest delete => new(StartupResult: engine.DeleteStartupItem(delete.ItemId, delete.ConfirmDestructive)),
+        ScanCleanupRequest => new(CleanupScan: await engine.ScanCleanupAsync(
+            Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        CleanRequest clean => new(CleanupReport: await engine.CleanAsync(
+            clean.CategoryIds, clean.ConfirmDestructive, Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        GetCleanupScheduleRequest => new(CleanupSchedule: engine.GetCleanupSchedule()),
+        SetWeeklyCleanupRequest weekly => new(CleanupSchedule: engine.SetWeeklyCleanup(weekly.Enabled)),
         StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
         GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         GetDriversRequest => new(Drivers: engine.GetDrivers()),
@@ -246,7 +272,7 @@ public static class EngineProtocol
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest;
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>
