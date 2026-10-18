@@ -34,6 +34,7 @@ internal sealed class EngineHost(
     private readonly WindowsScheduledTasks _tasks = new();
     private readonly WindowsFileSignatures _signatures = new();
     private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
+    private readonly WindowsDevices _pnpDevices = new();
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
@@ -114,6 +115,7 @@ internal sealed class EngineHost(
                 Power = _power,
                 Services = _services,
                 Devices = _devices,
+                PnpDevices = _pnpDevices,
                 Startup = new StartupAdapters(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),

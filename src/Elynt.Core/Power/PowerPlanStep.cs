@@ -17,6 +17,12 @@ public interface IPowerPlans
     void Duplicate(Guid source, Guid newPlan);
 
     void Delete(Guid plan);
+
+    /// <summary>A setting's value index on <paramref name="plan"/> (powercfg /query).</summary>
+    uint GetSetting(Guid plan, Guid subgroup, Guid setting, PowerSource source);
+
+    /// <summary>Sets a setting's value index on <paramref name="plan"/>; takes effect at once when the plan is active.</summary>
+    void SetSetting(Guid plan, Guid subgroup, Guid setting, PowerSource source, uint value);
 }
 
 /// <summary>Well-known power plan GUIDs.</summary>

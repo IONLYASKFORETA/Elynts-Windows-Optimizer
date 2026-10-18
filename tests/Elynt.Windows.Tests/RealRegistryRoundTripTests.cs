@@ -84,7 +84,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         }
     }
 
-    private SystemAdapters Adapters() => new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power };
+    private SystemAdapters Adapters() => new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power, PnpDevices = new WindowsDevices() };
 
     [Fact]
     public void Keys_and_values_the_tweak_created_are_removed_again()

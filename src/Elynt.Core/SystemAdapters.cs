@@ -51,6 +51,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Windows optional features (e.g. Recall). Without it, this PC has none.</summary>
     public IOptionalFeatures Features { get; init; } = new NoOptionalFeatures();
+
+    /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
+    public Devices.IDevices? PnpDevices { get; init; }
 }
 
 public interface ISystemInfo

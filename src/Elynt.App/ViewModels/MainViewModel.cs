@@ -561,8 +561,8 @@ public sealed class MainViewModel(
             _ = Startup.LoadAsync();
 
         Tweaks.Clear();
-        // Tweaks that fit this PC first; not-applicable ones sink to the bottom.
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
+        // The possible-placebo group goes last; within each group, tweaks that fit this PC come first.
+        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsPlacebo).ThenBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
 

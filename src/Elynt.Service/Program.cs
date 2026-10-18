@@ -52,6 +52,7 @@ try
     builder.Services.AddHostedService<TuningHost>();
     builder.Services.AddHostedService<EngineHost>();
     builder.Services.AddHostedService<WeeklyCleanupService>();
+    builder.Services.AddHostedService<StandbyListCleanerHost>();
 
     builder.Build().Run();
     return 0;

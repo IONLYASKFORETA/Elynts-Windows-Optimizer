@@ -13,6 +13,11 @@
                 <PropertyGroupDescription PropertyName="Group" />
             </CollectionViewSource.GroupDescriptions>
         </CollectionViewSource>
+        <CollectionViewSource x:Key="TweaksByGroup" Source="{Binding Tweaks}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
     </Window.Resources>
 
     <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
@@ -318,8 +323,50 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </DockPanel>
-                <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
+                <ListBox ItemsSource="{Binding Source={StaticResource TweaksByGroup}}" SelectedItem="{Binding SelectedTweak}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">
+                    <!-- The main tweaks are listed plainly; the possible-placebo group is folded away underneath. -->
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.ContainerStyle>
+                                <Style TargetType="GroupItem">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="GroupItem">
+                                                <ItemsPresenter />
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Name}" Value="Possible placebo">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="GroupItem">
+                                                        <Border BorderThickness="0,1,0,0" BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                                                                Margin="0,12,0,0" Padding="0,8,0,0">
+                                                            <Expander IsExpanded="False">
+                                                                <Expander.Header>
+                                                                    <StackPanel>
+                                                                        <TextBlock FontSize="14" FontWeight="SemiBold">
+                                                                            <Run Text="Possible placebo" />
+                                                                            <Run Text="{Binding ItemCount, Mode=OneWay, StringFormat=({0})}" />
+                                                                        </TextBlock>
+                                                                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                                                                   Text="Popular tweaks with no reliable evidence they help games. Each one says why." />
+                                                                    </StackPanel>
+                                                                </Expander.Header>
+                                                                <ItemsPresenter Margin="0,4,0,0" />
+                                                            </Expander>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </GroupStyle.ContainerStyle>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
                             <Grid Margin="4,6">
