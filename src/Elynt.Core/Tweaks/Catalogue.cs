@@ -17,7 +17,8 @@ public sealed class Catalogue
     }
 
     public static Catalogue Default { get; } =
-        new([.. GamingTweaks.All, .. DebloatTweaks.All, .. SecurityTweaks.All, .. WindowsUpdateTweaks.All], [.. GamingTweaks.PerGame, .. SecurityTweaks.PerGame]);
+        new([.. GamingTweaks.All, .. DebloatTweaks.All, .. SecurityTweaks.All, .. WindowsUpdateTweaks.All, .. CleanupTweaks.All],
+            [.. GamingTweaks.PerGame, .. SecurityTweaks.PerGame]);
 
     public IReadOnlyList<TweakDefinition> Tweaks { get; }
 

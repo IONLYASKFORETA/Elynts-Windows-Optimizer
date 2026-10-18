@@ -2,12 +2,14 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Startup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -21,11 +23,17 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsServiceManager _services = new();
+    private readonly WindowsDevicePresence _devices = new();
+    private readonly WindowsScheduledTasks _tasks = new();
+    private readonly WindowsFileSignatures _signatures = new();
+    private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
@@ -99,12 +107,23 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power, ScanExclusions = _scanExclusions },
+                _games,
+                Cleanup: new WindowsCleanupSystem(sid))
+            {
+                Boot = _boot,
+                Power = _power,
+                ScanExclusions = _scanExclusions,
+                Services = _services,
+                Devices = _devices,
+                Startup = new StartupAdapters(
+                    new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+            },
             journal,
             sid,
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
+            cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
             windowsUpdate: _windowsUpdate);
