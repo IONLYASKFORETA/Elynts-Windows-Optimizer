@@ -16,9 +16,17 @@ namespace Elynt.App.ViewModels;
 /// </param>
 /// <param name="askToReboot">Shows the reboot prompt after a driver install that needs a restart.</param>
 /// <param name="pickGame">Asks the user for a game's .exe, or returns null when they cancel.</param>
+/// <param name="confirmWarning">
+/// Shows a tweak's warning (e.g. OneDrive's cloud-only files) and asks the user to confirm it before applying.
+/// </param>
 public sealed class MainViewModel(
-    Func<TweakView, bool> confirmDestructive, Action<DriverInstallResult> askToReboot, Func<string?> pickGame) : ObservableObject
+    Func<TweakView, bool> confirmDestructive,
+    Action<DriverInstallResult> askToReboot,
+    Func<string?> pickGame,
+    Func<TweakView, bool>? confirmWarning = null) : ObservableObject
 {
+    private StartupPageViewModel? _startup;
+
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
 
@@ -65,6 +73,12 @@ public sealed class MainViewModel(
     /// <summary>The service connection, for the page view models that send their own commands.</summary>
     internal EnginePipeClient? Client => _client;
 
+    /// <summary>The Startup tab on the Startup &amp; Services page.</summary>
+    public StartupPageViewModel Startup => _startup ??= new StartupPageViewModel(() => IsConnected ? _client : null);
+
+    /// <summary>The Startup &amp; Services page, which shows the Startup and Services lists as tabs.</summary>
+    public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
+
     /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
     public bool InstallAllRuntimes
     {
@@ -108,6 +122,11 @@ public sealed class MainViewModel(
 
     public bool IsRepairPage => SelectedPage == Sections.Repair;
 
+    /// <summary>The Cleanup page's scan and clean, shown above its tweaks (the hibernation file).</summary>
+    public CleanupPageViewModel Cleanup { get; } = new();
+
+    public bool IsCleanupPage => SelectedPage == Sections.Cleanup && IsConnected;
+
     public string SelectedPage
     {
         get => _selectedPage;
@@ -117,6 +136,7 @@ public sealed class MainViewModel(
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsAppsPage));
+                OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
                 ShowPage();
@@ -129,8 +149,11 @@ public sealed class MainViewModel(
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
 
+    /// <summary>The Services tab on the Startup &amp; Services page, set by the window. Null until then.</summary>
+    public ServicesPageViewModel? ServicesPage { get; set; }
+
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
@@ -330,6 +353,8 @@ public sealed class MainViewModel(
                 Apps.Add(new AppItemViewModel(app));
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
+            if (ServicesPage is not null)
+                await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
             Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
@@ -568,10 +593,12 @@ public sealed class MainViewModel(
             HistoryMessage = null;
             _ = ShowHistoryAsync();
         }
+        if (IsStartupPage)
+            _ = Startup.LoadAsync();
 
         Tweaks.Clear();
-        // Tweaks that fit this PC first; not-applicable ones sink to the bottom.
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsNotApplicable))
+        // The possible-placebo group goes last; within each group, tweaks that fit this PC come first.
+        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsPlacebo).ThenBy(t => t.IsNotApplicable))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
 
@@ -584,7 +611,11 @@ public sealed class MainViewModel(
         if (SelectedRepairTool is null || !RepairTools.Contains(SelectedRepairTool))
             SelectedRepairTool = RepairTools.FirstOrDefault();
 
+        if (IsCleanupPage)
+            _ = Cleanup.OnShownAsync();
+
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsCleanupPage));
         OnPropertyChanged(nameof(IsRepairPage));
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));
@@ -786,8 +817,20 @@ public sealed class MainViewModel(
                 }
             }
 
+            // Likewise for a warning the user must read first; without a way to ask, the service refuses and says why.
+            var warningConfirmed = false;
+            if (turnOn && item.View.ApplyWarning is not null && confirmWarning is not null)
+            {
+                warningConfirmed = confirmWarning(item.View);
+                if (!warningConfirmed)
+                {
+                    item.Message = "Not changed.";
+                    return;
+                }
+            }
+
             var result = turnOn
-                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed))
+                ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed, ConfirmWarning: warningConfirmed))
                 : await _client.RevertAsync(item.View.Id);
             Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)
