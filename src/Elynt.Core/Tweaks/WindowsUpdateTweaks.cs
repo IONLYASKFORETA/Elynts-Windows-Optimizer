@@ -17,7 +17,8 @@ public static class WindowsUpdateTweaks
     /// <summary>
     /// Microsoft's Policy CSP lists Windows Update for Business (target version, deferral, driver exclusion) and
     /// Delivery Optimization's download mode for these editions only; Home is not listed. Checked against the docs,
-    /// not on a real Home PC.
+    /// not on a real Home PC. Driver exclusion and Delivery Optimization also write a setting Home honours, so they are
+    /// offered everywhere.
     /// </summary>
     private static readonly Applicability BusinessEditions =
         new(Editions: [WindowsEdition.Pro, WindowsEdition.Education, WindowsEdition.Enterprise]);
@@ -86,15 +87,21 @@ public static class WindowsUpdateTweaks
             "drivers you installed (from the Drivers section or the vendor) with older ones. New devices you plug in " +
             "may need their driver installed by hand.",
         Evidence:
-            "Microsoft's ExcludeWUDriversInQualityUpdate policy. Windows Update replacing a freshly installed GPU driver " +
-            "is a long-standing complaint from NVIDIA and AMD users.",
+            "Microsoft's ExcludeWUDriversInQualityUpdate policy (Pro and up), plus the Device Installation Settings " +
+            "switch \"Automatically download manufacturers' apps and custom icons\" set to No, which every edition " +
+            "honours. Windows Update replacing a freshly installed GPU driver is a long-standing complaint from NVIDIA " +
+            "and AMD users.",
         Sources: [UpdatePolicies],
         Tier: EvidenceTier.Proven,
-        Undo: "Puts back the previous policy value, or removes it if there was none, so Windows Update offers drivers again.",
-        Steps: [Policy("ExcludeWUDriversInQualityUpdate", 1)])
-    {
-        Applicability = BusinessEditions,
-    };
+        Undo: "Puts back the previous values, or removes them if there were none, so Windows Update offers drivers again.",
+        Steps:
+        [
+            Policy("ExcludeWUDriversInQualityUpdate", 1),
+            // System Properties > Hardware > Device Installation Settings: "No". Honoured on Home, where the policy isn't.
+            new RegistryValueStep(
+                new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig"),
+                RegistryValue.DWord(0)),
+        ]);
 
     public static TweakDefinition ActiveHours { get; } = new(
         Id: "update.active-hours",
@@ -144,7 +151,8 @@ public static class WindowsUpdateTweaks
             "Turns off Delivery Optimization peering: Windows downloads updates only from Microsoft and never uploads " +
             "them to other PCs on your network or the internet, so updates don't use your upload while you play.",
         Evidence:
-            "Microsoft's Delivery Optimization download mode 0, \"HTTP only, no peering\".",
+            "Microsoft's Delivery Optimization download mode 0, \"HTTP only, no peering\": the policy on Pro and up, " +
+            "and Delivery Optimization's own setting, which Home honours too.",
         Sources:
         [
             new("Microsoft: Policy CSP - DeliveryOptimization",
@@ -157,10 +165,11 @@ public static class WindowsUpdateTweaks
             new RegistryValueStep(
                 new(RegistryRoot.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization", "DODownloadMode"),
                 RegistryValue.DWord(0)),
-        ])
-    {
-        Applicability = BusinessEditions,
-    };
+            // Delivery Optimization's own (non-policy) setting, read on every edition.
+            new RegistryValueStep(
+                new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\DeliveryOptimization\Config", "DODownloadMode"),
+                RegistryValue.DWord(0)),
+        ]);
 
     public static IReadOnlyList<TweakDefinition> All { get; } =
     [

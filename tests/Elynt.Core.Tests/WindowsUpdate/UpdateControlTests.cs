@@ -83,14 +83,12 @@ public class UpdateControlTests
     }
 
     /// <summary>
-    /// Microsoft's Policy CSP lists the Windows Update for Business policies (target version, quality deferral,
-    /// driver exclusion) and Delivery Optimization's download mode for Pro, Enterprise and Education only.
+    /// Microsoft's Policy CSP lists the Windows Update for Business policies (target version, quality deferral) for
+    /// Pro, Enterprise and Education only.
     /// </summary>
     [Theory]
     [InlineData("update.defer-quality-7")]
     [InlineData("update.defer-quality-30")]
-    [InlineData("update.exclude-drivers")]
-    [InlineData("update.delivery-optimization-sharing-off")]
     public void Business_policies_are_not_applicable_on_Home_and_are_refused(string id)
     {
         _system.Edition = WindowsEdition.Home;
@@ -123,6 +121,23 @@ public class UpdateControlTests
         _system.Edition = WindowsEdition.Home;
 
         Assert.True(NewEngine().Apply(id).Succeeded);
+    }
+
+    /// <summary>
+    /// Driver exclusion and Delivery Optimization also write the setting Home honours: the Device Installation
+    /// Settings switch and Delivery Optimization's own download mode, besides the Pro-only policy.
+    /// </summary>
+    [Theory]
+    [InlineData("update.exclude-drivers", @"SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig", 0u)]
+    [InlineData("update.delivery-optimization-sharing-off", @"SOFTWARE\Microsoft\Windows\DeliveryOptimization\Config", "DODownloadMode", 0u)]
+    public void Driver_exclusion_and_update_sharing_work_on_Home_through_a_setting_Home_honours(string id, string key, string name, uint value)
+    {
+        _system.Edition = WindowsEdition.Home;
+        var engine = NewEngine();
+
+        Assert.True(engine.ListTweaks().Single(t => t.Id == id).Applicable);
+        Assert.True(engine.Apply(id).Succeeded);
+        Assert.Equal(RegistryValue.DWord(value), _registry.GetValue(Machine(key, name)));
     }
 
     /// <summary>Values from Microsoft's Policy CSP and "Manage device restarts after updates" pages.</summary>
