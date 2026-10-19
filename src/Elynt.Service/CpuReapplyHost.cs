@@ -1,13 +1,14 @@
+using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Windows;
 
 namespace Elynt.Service;
 
 /// <summary>
-/// Tells CPU tuning when someone signs in and when the PC wakes from sleep, so a kept tune comes back 90 s later and
-/// never at boot. Polls, because a hosted service gets no session-change or power messages.
+/// Tells CPU and GPU tuning when someone signs in, and CPU tuning when the PC wakes from sleep, so kept tunes come
+/// back after sign-in and never at boot. Polls, because a hosted service gets no session-change or power messages.
 /// </summary>
-internal sealed class CpuReapplyHost(CpuTuning cpu, ILogger<CpuReapplyHost> log) : BackgroundService
+internal sealed class CpuReapplyHost(CpuTuning cpu, GpuTuning gpu, ILogger<CpuReapplyHost> log) : BackgroundService
 {
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(5);
 
@@ -25,7 +26,10 @@ internal sealed class CpuReapplyHost(CpuTuning cpu, ILogger<CpuReapplyHost> log)
             {
                 var now = WindowsSessionWatch.ConsoleUser();
                 if (now is not null && now != user)
+                {
                     cpu.OnLogon();
+                    gpu.OnLogon();
+                }
                 user = now;
 
                 var nowAsleep = SafeTimeAsleep();

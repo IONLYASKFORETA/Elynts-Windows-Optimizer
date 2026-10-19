@@ -160,7 +160,10 @@ public sealed class NvidiaTuningTests : IDisposable
 
         _service!.Shutdown();
         _nvml.Reboot(); // NVML settings never survive a restart
-        var gpu = Start().GetGpuTuning().Gpus.Single();
+        var restarted = Start();
+        Assert.Equal(0, card.CoreOffset); // not at boot: only once someone signs in
+        _service!.OnLogon();
+        var gpu = restarted.GetGpuTuning().Gpus.Single();
 
         Assert.Equal((120, 190_000, (210, 2500)), (card.CoreOffset, card.PowerMilliwatts, card.Lock));
         Assert.Equal(2500, gpu.Controls.Single(c => c.Id == GpuControls.MaxClock).Current);

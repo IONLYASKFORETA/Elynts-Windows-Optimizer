@@ -658,6 +658,31 @@ public sealed class CpuTuningTests : IDisposable
     }
 
     [Fact]
+    public void A_WHEA_error_before_sleep_is_a_strike_and_the_tune_is_not_re_applied_on_resume()
+    {
+        StressTestedAutoApply(new CpuTune(CurveOptimizer: -12));
+        SignInAndWait();
+        _clock.Advance(TimeSpan.FromHours(1));
+        _cpu.WheaErrors.Add(_clock.GetUtcNow());
+        _cpu.PowerCycle();
+
+        _service!.OnResume();
+        _clock.Advance(CpuTuning.ReapplyDelay);
+
+        Assert.True(_cpu.AtBios);
+        var cpu = NewEngine().GetCpuTuning(false);
+        Assert.Equal(1, cpu.Strikes);
+        Assert.Equal(-7, cpu.Kept!.CurveOptimizer);
+        Assert.Contains("WHEA", cpu.Notice);
+
+        // The same errors don't count again at the next restart.
+        Reboot();
+        SignInAndWait();
+        Assert.Equal(1, NewEngine().GetCpuTuning(false).Strikes);
+        Assert.Equal(-7, _cpu.CurveOptimizer);
+    }
+
+    [Fact]
     public void Two_strikes_turn_the_tune_off_until_a_new_stress_test()
     {
         StressTestedAutoApply(new CpuTune(CurveOptimizer: -15));

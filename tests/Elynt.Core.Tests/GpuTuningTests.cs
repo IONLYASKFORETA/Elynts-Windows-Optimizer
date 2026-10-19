@@ -186,6 +186,7 @@ public sealed class GpuTuningTests : IDisposable
 
         _gpu.ResetToDefaults(Gpu); // like a driver that doesn't keep settings across a reboot
         CleanRestart();
+        _service.OnLogon();
 
         Assert.Equal(2700, _gpu.Value(GpuControls.MaxClock));
         Assert.Null(NewEngine().GetGpuTuning().Notice);
@@ -200,8 +201,29 @@ public sealed class GpuTuningTests : IDisposable
 
         _gpu.ResetToDefaults(Gpu);
         CleanRestart();
+        _service.OnLogon();
 
         Assert.Equal(AutoTuneKind.UndervoltGpu, _gpu.ActiveAuto);
+    }
+
+    [Fact]
+    public void Kept_settings_wait_for_sign_in_and_are_not_applied_when_the_service_starts()
+    {
+        var engine = NewEngine();
+        engine.SetGpuTuning(Gpu, Values((GpuControls.MaxClock, 2700)));
+        engine.ConfirmGpuTuning(Gpu);
+
+        _gpu.ResetToDefaults(Gpu);
+        CleanRestart();
+        Assert.True(_gpu.IsAtDefaults(Gpu));
+
+        _service.OnLogon();
+        Assert.Equal(2700, _gpu.Value(GpuControls.MaxClock));
+
+        // Only the first sign-in after a start brings them back; later sign-ins leave the GPU as it is.
+        _gpu.ResetToDefaults(Gpu);
+        _service.OnLogon();
+        Assert.True(_gpu.IsAtDefaults(Gpu));
     }
 
     [Fact]
@@ -227,8 +249,9 @@ public sealed class GpuTuningTests : IDisposable
         Assert.True(_gpu.IsAtDefaults(Gpu));
         Assert.Contains("didn't shut down cleanly", NewEngine().GetGpuTuning().Notice);
 
-        // The next clean restart doesn't bring the tune back either, so a bad tune can't loop.
+        // The next clean restart and sign-in don't bring the tune back either, so a bad tune can't loop.
         CleanRestart();
+        _service.OnLogon();
         Assert.True(_gpu.IsAtDefaults(Gpu));
     }
 

@@ -115,6 +115,7 @@ public sealed partial class GpuTuning : IDisposable
 
             try
             {
+                _safety.AllowProfiles(Key(device));
                 if (adapter.IsAtDefaults(device.Id))
                     _safety.MarkDefaults(Key(device));
                 else
@@ -212,7 +213,7 @@ public sealed partial class GpuTuning : IDisposable
 
     /// <summary>
     /// At service start: after an unclean end, puts every GPU that was tuned back on defaults and drops its saved
-    /// settings so a bad tune can never loop; after a clean end, re-applies the confirmed settings.
+    /// settings so a bad tune can never loop; after a clean end, the confirmed settings wait for <see cref="OnLogon"/>.
     /// </summary>
     public void RecoverAtStartup(SessionStart start)
     {
@@ -235,6 +236,7 @@ public sealed partial class GpuTuning : IDisposable
                 {
                     try
                     {
+                        _safety.BlockProfiles(Key(device));
                         adapter.ResetToDefaults(device.Id);
                         _safety.MarkDefaults(Key(device));
                         reset.Add(device.Name);
@@ -251,23 +253,47 @@ public sealed partial class GpuTuning : IDisposable
                 return;
             }
 
-            foreach (var (adapter, device) in devices)
+            // After a clean end the confirmed settings wait for the first sign-in, never boot.
+            _awaitingLogon = start.Saved;
+        }
+    }
+
+    /// <summary>Confirmed settings from the last clean session, re-applied at the first sign-in after the service starts.</summary>
+    private IReadOnlyDictionary<string, SavedTuning>? _awaitingLogon;
+
+    /// <summary>
+    /// Someone signed in: the first time since the service started cleanly, the confirmed settings come back. Later
+    /// sign-ins leave the GPU as it is.
+    /// </summary>
+    public void OnLogon()
+    {
+        lock (_gate)
+        {
+            if (_awaitingLogon is not { } saved)
+                return;
+            _awaitingLogon = null;
+            foreach (var adapter in _adapters.Where(a => SafeUnavailable(a) is null))
             {
-                if (start.Saved.GetValueOrDefault(Key(device)) is not { } saved)
-                    continue;
-                try
+                foreach (var device in SafeDevices(adapter))
                 {
-                    _safety.MarkLive(Key(device));
-                    if (saved.Mode is { } mode && Enum.TryParse<AutoTuneKind>(mode, out var kind))
-                        adapter.AutoTune(device.Id, kind);
-                    else
-                        adapter.Write(device.Id, saved.Values);
-                    _log.LogInformation("Re-applied the confirmed tuning on {Gpu}", device.Id);
-                }
-                catch (Exception ex)
-                {
-                    _log.LogError(ex, "Re-applying the tuning on {Gpu} failed; resetting it", device.Id);
-                    TryReset(adapter, device);
+                    // Something the user set since the service started wins over the old settings.
+                    if (saved.GetValueOrDefault(Key(device)) is not { } settings || _safety.Confirmed(Key(device)) != settings ||
+                        _probation.Deadline(Key(device)) is not null || HeldByProfile(device))
+                        continue;
+                    try
+                    {
+                        _safety.MarkLive(Key(device));
+                        if (settings.Mode is { } mode && Enum.TryParse<AutoTuneKind>(mode, out var kind))
+                            adapter.AutoTune(device.Id, kind);
+                        else
+                            adapter.Write(device.Id, settings.Values);
+                        _log.LogInformation("Re-applied the confirmed tuning on {Gpu} after sign-in", device.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogError(ex, "Re-applying the tuning on {Gpu} failed; resetting it", device.Id);
+                        TryReset(adapter, device);
+                    }
                 }
             }
         }

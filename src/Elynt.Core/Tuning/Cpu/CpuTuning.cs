@@ -346,31 +346,47 @@ public sealed partial class CpuTuning : IDisposable
     private void Strike(CpuProfile profile, string what)
     {
         var strikes = profile.Strikes + 1;
-        var kept = profile.Kept;
-        string stepped = "";
-        if (kept?.CurveOptimizer is { } co)
-        {
-            var milder = Math.Min(0, co + StepBack);
-            kept = kept with { CurveOptimizer = milder == 0 ? null : milder };
-            if (kept.IsEmpty)
-                kept = null;
-            stepped = $" Curve Optimizer stepped back from {co} to {milder}.";
-        }
+        var (kept, stepped) = Milder(profile.Kept);
+        // Game profiles are held to the tune that passed, so stepping that back steps theirs back too.
+        var (passed, passedStepped) = Milder(profile.StressPassedFor);
+        if (stepped.Length == 0)
+            stepped = passedStepped;
 
         if (strikes >= StrikesToDisable)
         {
-            Profile = profile with { Kept = kept, StressPassedFor = null, AutoApply = false, Disabled = true, Strikes = strikes };
+            Profile = profile with
+            {
+                Kept = kept, StressPassedFor = null, AutoApply = false, Disabled = true, Strikes = strikes, LastAppliedAt = _clock.GetUtcNow(),
+            };
             _notice = $"{what} while your CPU tune was on, for the second time, so it is turned off and wasn't re-applied.{stepped} " +
                       "Run the stress test again before turning auto-apply back on.";
         }
         else
         {
             // The stepped-back tune is milder than the one that passed, so it keeps the pass.
-            Profile = profile with { Kept = kept, StressPassedFor = kept, AutoApply = profile.AutoApply && kept is not null, Strikes = strikes };
+            Profile = profile with
+            {
+                Kept = kept,
+                StressPassedFor = profile.Kept is not null ? kept : passed,
+                AutoApply = profile.AutoApply && kept is not null,
+                Strikes = strikes,
+                // Errors up to now are counted; only new ones count against the stepped-back tune.
+                LastAppliedAt = _clock.GetUtcNow(),
+            };
             _notice = $"{what} while your CPU tune was on, so it wasn't re-applied this time.{stepped} " +
                       "One more crash or hardware error turns it off.";
         }
         _log.LogWarning("CPU tuning strike {Strikes}: {What}", strikes, what);
+    }
+
+    /// <summary>The tune with Curve Optimizer stepped back by <see cref="StepBack"/>, and a note saying so.</summary>
+    private static (CpuTune? Tune, string Note) Milder(CpuTune? tune)
+    {
+        if (tune?.CurveOptimizer is not { } co)
+            return (tune, "");
+        var milder = Math.Min(0, co + StepBack);
+        var stepped = tune with { CurveOptimizer = milder == 0 ? null : milder };
+        return (stepped.IsEmpty ? null : stepped, $" Curve Optimizer stepped back from {co} to {milder}.");
     }
 
     private bool SafeUncleanShutdown(DateTimeOffset since)
@@ -427,6 +443,14 @@ public sealed partial class CpuTuning : IDisposable
             var kept = profile.Kept!;
             try
             {
+                // Hardware errors since the tune went on (before sleep, say) are a strike, as they are at startup.
+                if (profile.LastAppliedAt is { } since && SafeWheaErrors(since) is var whea and > 0)
+                {
+                    _skipReapply = true;
+                    _safety.MarkDefaults(Key);
+                    Strike(profile, $"Windows logged {whea} WHEA hardware error(s)");
+                    return;
+                }
                 var inspection = Inspect();
                 var refusal = inspection.WhyNot ?? WhyNot(inspection, kept, new CpuTuningOptions(Advanced: true, Unofficial: true));
                 if (refusal is not null)
