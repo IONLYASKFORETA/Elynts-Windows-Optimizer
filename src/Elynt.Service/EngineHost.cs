@@ -7,6 +7,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.Profiles;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Startup;
@@ -25,6 +26,11 @@ internal sealed class EngineHost(
     IRepairLogStore repairLogs,
     ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
+    IProfileStore profiles,
+    ProfileNotes profileNotes,
+    WindowsProcesses processes,
+    WindowsTimerResolution timer,
+    ProfileHost profileHost,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -96,6 +102,7 @@ internal sealed class EngineHost(
         WindowsIdentity? identity = null;
         pipe.RunAsClient(() => identity = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed));
         var sid = identity?.User?.Value ?? throw new InvalidOperationException("Couldn't tell which user is connected.");
+        profileHost.RecoverLeftovers(sid);
 
         return new Engine(
             catalogue,
@@ -117,6 +124,8 @@ internal sealed class EngineHost(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
                 Features = new WindowsOptionalFeatures(),
+                Processes = processes,
+                Timer = timer,
             },
             journal,
             sid,
@@ -126,6 +135,8 @@ internal sealed class EngineHost(
             cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
-            windowsUpdate: _windowsUpdate);
+            windowsUpdate: _windowsUpdate,
+            profiles: profiles,
+            profileNotes: profileNotes);
     }
 }

@@ -1,5 +1,6 @@
 using Elynt.Core.Cleanup;
 using Elynt.Core.Journal;
+using Elynt.Core.Profiles;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Setup;
@@ -50,6 +51,13 @@ try
         logger: sp.GetRequiredService<ILogger<GpuTuning>>()));
     // Before the pipe: hardware is recovered before any command arrives, and closed after the pipe stops.
     builder.Services.AddHostedService<TuningHost>();
+    builder.Services.AddSingleton<IProfileStore>(new JsonFileProfileStore(ServicePaths.Profiles));
+    builder.Services.AddSingleton<ProfileNotes>();
+    builder.Services.AddSingleton<WindowsProcesses>();
+    builder.Services.AddSingleton<WindowsTimerResolution>();
+    // Before the pipe: temporary changes left behind by a crash or reboot are undone before any command arrives.
+    builder.Services.AddSingleton<ProfileHost>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ProfileHost>());
     builder.Services.AddHostedService<EngineHost>();
     builder.Services.AddHostedService<WeeklyCleanupService>();
 

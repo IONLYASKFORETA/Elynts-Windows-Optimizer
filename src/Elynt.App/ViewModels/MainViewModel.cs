@@ -198,6 +198,11 @@ public sealed class MainViewModel(
     /// <summary>Installed games, shown on the per-game profiles page.</summary>
     public GamesPageViewModel Games { get; } = new();
 
+    private ProfilesPageViewModel? _profiles;
+
+    /// <summary>The per-game profile editor on the Per-game profiles page.</summary>
+    public ProfilesPageViewModel Profiles => _profiles ??= new ProfilesPageViewModel(() => IsConnected ? _client : null);
+
     public bool IsGamesPage => IsConnected && SelectedPage == PerGameProfiles;
 
     /// <summary>The BIOS readouts and guides, shown on the Overclocking page. Null until the service sends them.</summary>
@@ -559,6 +564,8 @@ public sealed class MainViewModel(
         }
         if (IsStartupPage)
             _ = Startup.LoadAsync();
+        if (IsGamesPage)
+            _ = Profiles.LoadAsync();
 
         Tweaks.Clear();
         // Tweaks that fit this PC first; not-applicable ones sink to the bottom.

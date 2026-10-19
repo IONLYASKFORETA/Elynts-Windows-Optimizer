@@ -242,6 +242,20 @@ public interface IEngine
     /// <summary>Removes a game the user added by hand.</summary>
     GameCommandResult RemoveGame(string exePath);
 
+    /// <summary>This user's per-game profiles.</summary>
+    IReadOnlyList<Profiles.GameProfile> ListProfiles();
+
+    /// <summary>
+    /// Saves (or replaces) the profile for a game. Only instant changes may go in: reboot-only tweaks and Defender or
+    /// other Security tweaks are refused. Anti-cheat clashes with the game come back as warnings.
+    /// </summary>
+    Profiles.ProfileResult SaveProfile(Profiles.GameProfile profile);
+
+    Profiles.ProfileResult DeleteProfile(string exePath);
+
+    /// <summary>Tray notes about profiles applied, undone or skipped since the last call. Each note is returned once.</summary>
+    IReadOnlyList<Profiles.ProfileNote> TakeProfileNotes();
+
     /// <summary>Every tunable GPU with its SDK-reported sliders, current values and any change waiting to be kept.</summary>
     GpuTuningReport GetGpuTuning();
 
@@ -281,7 +295,8 @@ public sealed partial class Engine(
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
     ICleanupScheduleStore? cleanupSchedules = null,
-    Profiles.IProfileStore? profiles = null) : IEngine
+    Profiles.IProfileStore? profiles = null,
+    Profiles.ProfileNotes? profileNotes = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;

@@ -12,6 +12,8 @@ public sealed partial class Engine : IProfileEngine
 
     public IReadOnlyList<GameProfile> ListProfiles() => _profiles.Load(user);
 
+    public IReadOnlyList<ProfileNote> TakeProfileNotes() => profileNotes?.Take(user) ?? [];
+
     public ProfileResult SaveProfile(GameProfile profile)
     {
         if (WhyNotInProfile(profile) is { } problem)

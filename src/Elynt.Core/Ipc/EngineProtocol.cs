@@ -9,6 +9,7 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Profiles;
 using Elynt.Core.Repair;
 using Elynt.Core.Tuning;
 
@@ -57,6 +58,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(ListProfilesRequest), "listProfiles")]
+[JsonDerivedType(typeof(SaveProfileRequest), "saveProfile")]
+[JsonDerivedType(typeof(DeleteProfileRequest), "deleteProfile")]
+[JsonDerivedType(typeof(TakeProfileNotesRequest), "takeProfileNotes")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -190,7 +195,10 @@ public sealed record EngineResponse(
     StartupCommandResult? StartupResult = null,
     CleanupScan? CleanupScan = null,
     CleanupReport? CleanupReport = null,
-    CleanupSchedule? CleanupSchedule = null)
+    CleanupSchedule? CleanupSchedule = null,
+    IReadOnlyList<GameProfile>? Profiles = null,
+    ProfileResult? ProfileResult = null,
+    IReadOnlyList<ProfileNote>? ProfileNotes = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -268,6 +276,10 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        ListProfilesRequest => new(Profiles: engine.ListProfiles()),
+        SaveProfileRequest save => new(ProfileResult: engine.SaveProfile(save.Profile)),
+        DeleteProfileRequest delete => new(ProfileResult: engine.DeleteProfile(delete.ExePath)),
+        TakeProfileNotesRequest => new(ProfileNotes: engine.TakeProfileNotes()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
