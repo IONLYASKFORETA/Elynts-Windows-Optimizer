@@ -36,6 +36,7 @@ internal sealed class EngineHost(
     WindowsTimerResolution timer,
     ProfileHost profileHost,
     Elynt.Core.CommandLane commandLane,
+    NvmlLibrary nvml,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -74,7 +75,7 @@ internal sealed class EngineHost(
         new WinTrustSignatureVerifier());
 
     // Best first: the GPU vendor's SDK, then Windows. PawnIO, when installed, comes before both.
-    private readonly IReadOnlyList<ISensorSource> _sensors = [new NvmlSensors(), new WindowsSensors()];
+    private readonly IReadOnlyList<ISensorSource> _sensors = [new NvmlSensors(nvml), new WindowsSensors()];
 
     private readonly DriverCleaningAdapters _driverCleaning = new(
         new PnputilDriverStore(),
