@@ -16,6 +16,8 @@ public sealed class GpuTuningPageViewModel : ObservableObject
     private readonly EnginePipeClient _client;
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private string? _notice;
+    private int _ticks;
+    private bool _refreshing;
 
     public GpuTuningPageViewModel(EnginePipeClient client, GpuTuningReport report)
     {
@@ -81,16 +83,30 @@ public sealed class GpuTuningPageViewModel : ObservableObject
         var expired = false;
         foreach (var gpu in Gpus)
             expired |= gpu.Tick(DateTimeOffset.UtcNow);
-        if (!expired)
+        var live = ++_ticks % 8 == 0 && Gpus.Any(g => g.HasReadouts);
+        if ((!expired && !live) || _refreshing)
             return;
 
+        _refreshing = true;
         try
         {
-            Show(await _client.GetGpuTuningAsync());
+            var report = await _client.GetGpuTuningAsync();
+            if (expired)
+            {
+                Show(report);
+                return;
+            }
+            // Every 2 s: only the sensor values, so sliders the user is moving keep their place.
+            foreach (var view in report.Gpus)
+                Gpus.FirstOrDefault(g => g.DeviceId == view.DeviceId)?.ShowReadouts(view);
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Couldn't refresh GPU tuning");
+        }
+        finally
+        {
+            _refreshing = false;
         }
     }
 }
@@ -115,9 +131,35 @@ public sealed class GpuTuningItemViewModel : ObservableObject
         Reset = new Command(() => _page.RunAsync(this, client => client.ResetGpuTuningAsync(DeviceId)), () => !IsBusy && !IsLocked);
         AutoOverclock = new Command(() => _page.RunAsync(this, client => client.AutoTuneGpuAsync(DeviceId, AutoTuneKind.OverclockGpu)), () => !IsBusy && view.AutoTunes.Contains(AutoTuneKind.OverclockGpu));
         AutoUndervolt = new Command(() => _page.RunAsync(this, client => client.AutoTuneGpuAsync(DeviceId, AutoTuneKind.UndervoltGpu)), () => !IsBusy && view.AutoTunes.Contains(AutoTuneKind.UndervoltGpu));
+        OpenNvidiaApp = new Command(() => { NvidiaApp.Open(); return Task.CompletedTask; }, () => true);
         foreach (var slider in Controls)
             slider.PropertyChanged += (_, _) => CommandManager.InvalidateRequerySuggested();
+        Readouts = Format(view.Readouts);
     }
+
+    /// <summary>Live sensor values, such as "Temperature  61 °C".</summary>
+    public IReadOnlyList<string> Readouts { get; private set; }
+
+    public bool HasReadouts => Readouts.Count > 0;
+
+    public bool CanAutoOverclock => _view.AutoTunes.Contains(AutoTuneKind.OverclockGpu);
+
+    public bool CanAutoUndervolt => _view.AutoTunes.Contains(AutoTuneKind.UndervoltGpu);
+
+    /// <summary>NVIDIA's own one-click overclock lives in the NVIDIA App, which has no API, so the page links to it.</summary>
+    public bool ShowsNvidiaApp => _view.Vendor == Elynt.Core.Drivers.GpuVendor.Nvidia;
+
+    public ICommand OpenNvidiaApp { get; }
+
+    internal void ShowReadouts(GpuTuningView view)
+    {
+        Readouts = Format(view.Readouts);
+        OnPropertyChanged(nameof(Readouts));
+        OnPropertyChanged(nameof(HasReadouts));
+    }
+
+    private static IReadOnlyList<string> Format(IReadOnlyList<GpuReadout>? readouts) =>
+        readouts?.Select(r => $"{r.Name}: {r.Value} {r.Unit}").ToList() ?? [];
 
     public string DeviceId => _view.DeviceId;
 
@@ -184,6 +226,7 @@ public sealed class GpuTuningItemViewModel : ObservableObject
         OnPropertyChanged(nameof(Warning));
         OnPropertyChanged(nameof(IsLocked));
         OnPropertyChanged(nameof(IsUnlocked));
+        ShowReadouts(view);
         Tick(DateTimeOffset.UtcNow);
         CommandManager.InvalidateRequerySuggested();
     }

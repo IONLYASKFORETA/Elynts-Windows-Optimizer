@@ -45,8 +45,13 @@ try
     builder.Services.AddSingleton(new TuningSafety(new JsonFileTuningStore(ServicePaths.Tuning)));
     builder.Services.AddSingleton<AdlxGpuTuning>();
     builder.Services.AddSingleton<IgclGpuTuning>();
+    builder.Services.AddSingleton<NvmlLibrary>();
     builder.Services.AddSingleton(sp => new GpuTuning(
-        [sp.GetRequiredService<AdlxGpuTuning>(), sp.GetRequiredService<IgclGpuTuning>()],
+        [
+            sp.GetRequiredService<AdlxGpuTuning>(),
+            sp.GetRequiredService<IgclGpuTuning>(),
+            new NvidiaGpuTuning(sp.GetRequiredService<NvmlLibrary>()),
+        ],
         sp.GetRequiredService<TuningSafety>(),
         logger: sp.GetRequiredService<ILogger<GpuTuning>>()));
     // Before the pipe: hardware is recovered before any command arrives, and closed after the pipe stops.
