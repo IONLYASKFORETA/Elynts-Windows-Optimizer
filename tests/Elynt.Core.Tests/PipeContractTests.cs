@@ -324,6 +324,36 @@ public sealed class PipeContractTests : IAsyncLifetime
             Assert.IsType<DriverInstallProgressEvent>(EngineProtocol.Deserialize<EngineResponse>(line).Event).Progress);
     }
 
+    [Fact]
+    public async Task GetDriverCleaning_arrives_unchanged()
+    {
+        var report = await _client.GetDriverCleaningAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetDriverCleaning(), report);
+    }
+
+    [Fact]
+    public async Task CleanDrivers_arrives_unchanged_and_runs_in_the_long_running_lane()
+    {
+        var request = new DriverCleanRequest(GpuVendor.Amd, DriverCleanMethod.Ddu, Confirmed: true);
+
+        var result = await _client.CleanDriversAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastCleanRequest);
+        AssertSameJson(_engine.CleanDrivers(request), result);
+        Assert.True(EngineProtocol.IsLongRunning(new CleanDriversRequest(request)));
+    }
+
+    [Fact]
+    public async Task RestoreDrivers_arrives_unchanged_and_runs_in_the_long_running_lane()
+    {
+        var result = await _client.RestoreDriversAsync("20261016-120000-Nvidia", TestContext.Current.CancellationToken);
+
+        Assert.Equal("20261016-120000-Nvidia", _engine.LastRestoredBackup);
+        AssertSameJson(_engine.RestoreDrivers("20261016-120000-Nvidia"), result);
+        Assert.True(EngineProtocol.IsLongRunning(new RestoreDriversRequest("x")));
+    }
+
     private sealed class SyncCollect<T>(List<T> into) : IProgress<T>
     {
         public void Report(T value) => into.Add(value);
@@ -535,6 +565,26 @@ public sealed class PipeContractTests : IAsyncLifetime
             foreach (var step in DriverSteps)
                 progress?.Report(step);
             return new DriverInstallResult(true, RebootNeeded: true, "Restart to finish.", "617.42", "https://www.nvidia.com/en-us/drivers/");
+        }
+
+        public DriverCleanRequest? LastCleanRequest { get; private set; }
+        public string? LastRestoredBackup { get; private set; }
+
+        public DriverCleaningReport GetDriverCleaning() => new(
+            [new DriverBackup("20261016-120000-Nvidia", GpuVendor.Nvidia, new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero), ["nv_dispi.inf 32.0.15.9174"])],
+            [new ProblemDriver("Samsung NVMe storage driver", "secnvme.sys", "3.3.0.2003", "Stops Valorant from launching.")],
+            "DDU is a third-party tool.");
+
+        public DriverCleanResult CleanDrivers(DriverCleanRequest request)
+        {
+            LastCleanRequest = request;
+            return new DriverCleanResult(true, RebootNeeded: true, "Cleaned.", "20261016-120000-Nvidia", "https://www.wagnardsoft.com/");
+        }
+
+        public DriverCleanResult RestoreDrivers(string backupId)
+        {
+            LastRestoredBackup = backupId;
+            return new DriverCleanResult(true, false, "Restored.", backupId);
         }
 
         private static readonly InstalledGame Game = new(

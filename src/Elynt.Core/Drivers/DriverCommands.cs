@@ -3,7 +3,8 @@ namespace Elynt.Core.Drivers;
 /// <summary>Which GPU's driver to check or install, and how.</summary>
 /// <param name="DeviceId">The GPU's PnP hardware ID, from <see cref="InstalledGpu.DeviceId"/>.</param>
 /// <param name="CleanInstall">Reset the vendor's driver settings as part of the install.</param>
-public sealed record DriverRequest(string DeviceId, DriverBranch Branch = DriverBranch.GameReady, bool CleanInstall = false);
+/// <param name="RemoveOldDrivers">Back up and remove the vendor's old driver packages (pnputil) before installing.</param>
+public sealed record DriverRequest(string DeviceId, DriverBranch Branch = DriverBranch.GameReady, bool CleanInstall = false, bool RemoveOldDrivers = false);
 
 /// <summary>The result of looking up a GPU's latest driver.</summary>
 /// <param name="Found">The lookup returned a driver. When false, <see cref="VendorPage"/> is where to get one by hand.</param>

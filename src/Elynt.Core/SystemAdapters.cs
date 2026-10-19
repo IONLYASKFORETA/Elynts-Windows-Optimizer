@@ -32,6 +32,9 @@ public sealed record SystemAdapters(
 
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
+
+    /// <summary>Driver cleaning (pnputil, DDU) and problem-driver checks. Without it, cleaning is unavailable.</summary>
+    public DriverCleaningAdapters? DriverCleaning { get; init; }
 }
 
 public interface ISystemInfo

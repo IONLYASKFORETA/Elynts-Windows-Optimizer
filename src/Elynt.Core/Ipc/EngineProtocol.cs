@@ -33,6 +33,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
 [JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
 [JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(GetDriverCleaningRequest), "getDriverCleaning")]
+[JsonDerivedType(typeof(CleanDriversRequest), "cleanDrivers")]
+[JsonDerivedType(typeof(RestoreDriversRequest), "restoreDrivers")]
 [JsonDerivedType(typeof(ListGamesRequest), "listGames")]
 [JsonDerivedType(typeof(AddGameRequest), "addGame")]
 [JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
@@ -92,6 +95,14 @@ public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
 /// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
 public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
 
+public sealed record GetDriverCleaningRequest : EngineRequest;
+
+/// <summary>Long-running: exports, then deletes; DDU also downloads and runs a third-party tool.</summary>
+public sealed record CleanDriversRequest(DriverCleanRequest Request) : EngineRequest;
+
+/// <summary>Long-running: reinstalls the exported drivers.</summary>
+public sealed record RestoreDriversRequest(string BackupId) : EngineRequest;
+
 public sealed record ListGamesRequest : EngineRequest;
 
 public sealed record AddGameRequest(string ExePath) : EngineRequest;
@@ -146,6 +157,8 @@ public sealed record EngineResponse(
     DriverReport? Drivers = null,
     DriverCheck? DriverCheck = null,
     DriverInstallResult? DriverInstall = null,
+    DriverCleaningReport? DriverCleaning = null,
+    DriverCleanResult? DriverClean = null,
     IReadOnlyList<InstalledGame>? Games = null,
     GameCommandResult? GameResult = null,
     GpuTuningReport? GpuTuning = null,
@@ -207,6 +220,9 @@ public static class EngineProtocol
         CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
         InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
             install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        GetDriverCleaningRequest => new(DriverCleaning: engine.GetDriverCleaning()),
+        CleanDriversRequest clean => new(DriverClean: engine.CleanDrivers(clean.Request)),
+        RestoreDriversRequest restore => new(DriverClean: engine.RestoreDrivers(restore.BackupId)),
         ListGamesRequest => new(Games: engine.ListGames()),
         AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
         RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
@@ -220,7 +236,7 @@ public static class EngineProtocol
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest;
+    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest or CleanDriversRequest or RestoreDriversRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>
