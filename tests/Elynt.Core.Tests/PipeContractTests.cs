@@ -5,6 +5,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Profiles;
 using Elynt.Core.Ipc;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Sensors;
@@ -561,6 +562,23 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Profile_commands_arrive_unchanged()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        AssertSameJson(_engine.ListProfiles(), await _client.ListProfilesAsync(cancellation));
+
+        var saved = await _client.SaveProfileAsync(StubEngine.Profile, cancellation);
+        Assert.Equal($"SaveProfile {StubEngine.Profile.ExePath}", _engine.LastCall);
+        AssertSameJson(_engine.SaveProfile(StubEngine.Profile), saved);
+
+        var deleted = await _client.DeleteProfileAsync(@"C:\Steam\cs2.exe", cancellation);
+        Assert.Equal(@"DeleteProfile C:\Steam\cs2.exe", _engine.LastCall);
+        AssertSameJson(_engine.DeleteProfile(@"C:\Steam\cs2.exe"), deleted);
+
+        AssertSameJson(_engine.TakeProfileNotes(), await _client.TakeProfileNotesAsync(cancellation));
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -781,6 +799,31 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastCall = $"RemoveGame {exePath}";
             return new GameCommandResult(true, "Removed.", null);
         }
+
+        public static readonly GameProfile Profile = new(@"C:\Steam\cs2.exe")
+        {
+            TweakIds = ["gaming.game-mode-on", "gaming.high-performance-plan"],
+            AppsToClose = [@"C:\Users\Aden\AppData\Local\Discord\Discord.exe"],
+            Priority = GamePriority.High,
+            RaiseTimerResolution = true,
+        };
+
+        public IReadOnlyList<GameProfile> ListProfiles() => [Profile];
+
+        public ProfileResult SaveProfile(GameProfile profile)
+        {
+            LastCall = $"SaveProfile {profile.ExePath}";
+            return new ProfileResult(true, "Saved.", profile, ["Game Mode: FACEIT in Counter-Strike 2 (test)."]);
+        }
+
+        public ProfileResult DeleteProfile(string exePath)
+        {
+            LastCall = $"DeleteProfile {exePath}";
+            return new ProfileResult(true, "Deleted.", null, []);
+        }
+
+        public IReadOnlyList<ProfileNote> TakeProfileNotes() =>
+            [new ProfileNote("S-1-5-21-test", ProfileNoteKind.Skipped, "Profile skipped", "cs2's profile was skipped.")];
 
         private static readonly GpuTuningView Gpu = new(
             "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,

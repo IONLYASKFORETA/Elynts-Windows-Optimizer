@@ -9,6 +9,7 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Profiles;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
 using Elynt.Core.Sensors;
@@ -67,6 +68,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ReapplyDriftRequest), "reapplyDrift")]
 [JsonDerivedType(typeof(GetDriftSettingsRequest), "getDriftSettings")]
 [JsonDerivedType(typeof(SetAutoReapplyRequest), "setAutoReapply")]
+[JsonDerivedType(typeof(ListProfilesRequest), "listProfiles")]
+[JsonDerivedType(typeof(SaveProfileRequest), "saveProfile")]
+[JsonDerivedType(typeof(DeleteProfileRequest), "deleteProfile")]
+[JsonDerivedType(typeof(TakeProfileNotesRequest), "takeProfileNotes")]
 [JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
 [JsonDerivedType(typeof(GetPawnIoRequest), "getPawnIo")]
 [JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
@@ -233,7 +238,10 @@ public sealed record EngineResponse(
     CleanupSchedule? CleanupSchedule = null,
     DriftReport? Drift = null,
     ReapplyResult? Reapply = null,
-    DriftSettings? DriftSettings = null)
+    DriftSettings? DriftSettings = null,
+    IReadOnlyList<GameProfile>? Profiles = null,
+    ProfileResult? ProfileResult = null,
+    IReadOnlyList<ProfileNote>? ProfileNotes = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -318,6 +326,10 @@ public static class EngineProtocol
         ReapplyDriftRequest reapply => new(Reapply: engine.ReapplyDrift(reapply.TweakIds, reapply.ConfirmDestructive)),
         GetDriftSettingsRequest => new(DriftSettings: engine.GetDriftSettings()),
         SetAutoReapplyRequest auto => new(DriftSettings: engine.SetAutoReapply(auto.Enabled)),
+        ListProfilesRequest => new(Profiles: engine.ListProfiles()),
+        SaveProfileRequest save => new(ProfileResult: engine.SaveProfile(save.Profile)),
+        DeleteProfileRequest delete => new(ProfileResult: engine.DeleteProfile(delete.ExePath)),
+        TakeProfileNotesRequest => new(ProfileNotes: engine.TakeProfileNotes()),
         AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
         GetPawnIoRequest => new(PawnIo: engine.GetPawnIo()),
         InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),

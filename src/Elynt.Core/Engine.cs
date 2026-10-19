@@ -256,6 +256,20 @@ public partial interface IEngine
     /// <summary>Removes a game the user added by hand.</summary>
     GameCommandResult RemoveGame(string exePath);
 
+    /// <summary>This user's per-game profiles.</summary>
+    IReadOnlyList<Profiles.GameProfile> ListProfiles();
+
+    /// <summary>
+    /// Saves (or replaces) the profile for a game. Only instant changes may go in: reboot-only tweaks and Defender or
+    /// other Security tweaks are refused. Anti-cheat clashes with the game come back as warnings.
+    /// </summary>
+    Profiles.ProfileResult SaveProfile(Profiles.GameProfile profile);
+
+    Profiles.ProfileResult DeleteProfile(string exePath);
+
+    /// <summary>Tray notes about profiles applied, undone or skipped since the last call. Each note is returned once.</summary>
+    IReadOnlyList<Profiles.ProfileNote> TakeProfileNotes();
+
     /// <summary>Every tunable GPU with its SDK-reported sliders, current values and any change waiting to be kept.</summary>
     GpuTuningReport GetGpuTuning();
 
@@ -313,7 +327,9 @@ public sealed partial class Engine(
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
     ICleanupScheduleStore? cleanupSchedules = null,
-    Drift.IDriftStore? driftStore = null) : IEngine
+    Drift.IDriftStore? driftStore = null,
+    Profiles.IProfileStore? profiles = null,
+    Profiles.ProfileNotes? profileNotes = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -334,7 +350,7 @@ public sealed partial class Engine(
     public IReadOnlyList<ServiceView> ListServices() => Services.List();
 
     public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
-        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o) => ApplyTweak(tweak, o));
 
     public ServiceResult UndoServiceChange(string serviceName) =>
         Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
@@ -344,7 +360,7 @@ public sealed partial class Engine(
     {
         if (catalogue.TryGet(tweakId, out tweak))
             return true;
-        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        tweak = ServiceChange.Resolve(tweakId, entry, system) ?? Profiles.CloseApp.Resolve(tweakId, entry);
         return tweak is not null;
     }
 
@@ -402,7 +418,8 @@ public sealed partial class Engine(
     }
 
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
-    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    /// <param name="temporary">Made by a per-game profile, so undone when the game closes or after a crash or reboot.</param>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false)
     {
         if (Refusal(tweak, options) is { } refused)
             return refused;
@@ -430,7 +447,7 @@ public sealed partial class Engine(
             try
             {
                 records = tweak.Steps.Select(step => step.Capture(system)).ToList();
-                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, temporary);
             }
             catch (Exception ex)
             {

@@ -7,6 +7,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.Profiles;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Sensors;
 using Elynt.Core.Repair;
@@ -27,8 +28,13 @@ internal sealed class EngineHost(
     IRepairLogStore repairLogs,
     ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
-    ILoggerFactory loggers,
-    Elynt.Core.Drift.IDriftStore driftStore) : BackgroundService
+    Elynt.Core.Drift.IDriftStore driftStore,
+    IProfileStore profiles,
+    ProfileNotes profileNotes,
+    WindowsProcesses processes,
+    WindowsTimerResolution timer,
+    ProfileHost profileHost,
+    ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
@@ -132,6 +138,7 @@ internal sealed class EngineHost(
         WindowsIdentity? identity = null;
         pipe.RunAsClient(() => identity = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed));
         var sid = identity?.User?.Value ?? throw new InvalidOperationException("Couldn't tell which user is connected.");
+        profileHost.RecoverLeftovers(sid);
 
         return new Engine(
             catalogue,
@@ -155,6 +162,8 @@ internal sealed class EngineHost(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
                 Features = new WindowsOptionalFeatures(),
+                Processes = processes,
+                Timer = timer,
                 PawnIo = _pawnIo,
                 Sensors = _sensors,
                 DriverCleaning = _driverCleaning,
@@ -168,6 +177,8 @@ internal sealed class EngineHost(
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
             windowsUpdate: _windowsUpdate,
-            driftStore: driftStore);
+            driftStore: driftStore,
+            profiles: profiles,
+            profileNotes: profileNotes);
     }
 }

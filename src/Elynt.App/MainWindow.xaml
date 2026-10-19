@@ -491,6 +491,8 @@
                 <!-- Installed games: what the launchers report, plus games added by their .exe. -->
                 <DockPanel DataContext="{Binding Games}" Margin="4"
                            Visibility="{Binding DataContext.IsGamesPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                    <local:ProfilesPage DockPanel.Dock="Top"
+                                        DataContext="{Binding DataContext.Profiles, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="Installed games" FontSize="16" FontWeight="SemiBold" />
                         <TextBlock Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games."

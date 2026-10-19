@@ -193,6 +193,18 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
     public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
         (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
 
+    public async Task<IReadOnlyList<Profiles.GameProfile>> ListProfilesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListProfilesRequest(), cancellation)).Profiles ?? throw Missing("profiles");
+
+    public async Task<Profiles.ProfileResult> SaveProfileAsync(Profiles.GameProfile profile, CancellationToken cancellation = default) =>
+        (await SendAsync(new SaveProfileRequest(profile), cancellation)).ProfileResult ?? throw Missing("result");
+
+    public async Task<Profiles.ProfileResult> DeleteProfileAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new DeleteProfileRequest(exePath), cancellation)).ProfileResult ?? throw Missing("result");
+
+    public async Task<IReadOnlyList<Profiles.ProfileNote>> TakeProfileNotesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new TakeProfileNotesRequest(), cancellation)).ProfileNotes ?? throw Missing("notes");
+
     public async Task<GpuTuningReport> GetGpuTuningAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetGpuTuningRequest(), cancellation)).GpuTuning ?? throw Missing("GPU tuning");
 

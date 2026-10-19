@@ -26,10 +26,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
+        _model.Profiles.PickApp = PickApp;
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
-            _tray = new TrayNotes(_model.Startup, ShowFromTray);
+            _tray = new TrayNotes(_model.Startup, ShowFromTray, () => _model.Client);
             // The first look after connecting takes note of what is already there.
             await _tray.CheckAsync();
             // Once per sign-in: the window starts with Windows, so this is the per-boot drift check.
@@ -320,6 +321,17 @@ public partial class MainWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private string? PickApp()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the app to close while playing",
             Filter = "Programs (*.exe)|*.exe",
             CheckFileExists = true,
         };

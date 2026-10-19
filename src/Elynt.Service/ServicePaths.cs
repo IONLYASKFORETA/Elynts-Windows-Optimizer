@@ -46,6 +46,9 @@ internal static class ServicePaths
     /// <summary>Games each user added by hand, one file per user SID.</summary>
     public static string Games { get; } = Path.Combine(Root, "games");
 
+    /// <summary>Per-game profiles, one file per user SID.</summary>
+    public static string Profiles { get; } = Path.Combine(Root, "profiles");
+
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
     /// (so the app can offer "copy log"), but cannot plant or edit files there.
@@ -77,6 +80,7 @@ internal static class ServicePaths
         Directory.CreateDirectory(RepairLogs);
         Directory.CreateDirectory(Downloads);
         Directory.CreateDirectory(Games);
+        Directory.CreateDirectory(Profiles);
         Directory.CreateDirectory(PawnIo);
         Directory.CreateDirectory(DriverBackups);
         Directory.CreateDirectory(Ddu);

@@ -50,6 +50,9 @@ public sealed record PowerSettingTarget(Guid Subgroup, Guid Setting, uint Value)
 /// <summary>Makes a power plan the active one.</summary>
 public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;
 
+/// <summary>Closes a running program (a per-game profile's background app); it is started again on undo.</summary>
+public sealed record ProcessTarget(string ExePath) : ChangeTarget;
+
 /// <summary>Turns a Windows optional feature on or off (its files stay on disk).</summary>
 public sealed record OptionalFeatureTarget(string Feature, bool Enabled) : ChangeTarget;
 

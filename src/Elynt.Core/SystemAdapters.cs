@@ -63,6 +63,11 @@ public sealed record SystemAdapters(
     /// <summary>Windows optional features (e.g. Recall). Without it, this PC has none.</summary>
     public IOptionalFeatures Features { get; init; } = new NoOptionalFeatures();
 
+    /// <summary>Running programs, for per-game profiles. Without it, no apps are closed and priority can't be set.</summary>
+    public Profiles.IProcesses Processes { get; init; } = new Profiles.NoProcesses();
+
+    /// <summary>The system timer's resolution, for per-game profiles.</summary>
+    public Profiles.ITimerResolution Timer { get; init; } = new Profiles.NoTimerResolution();
     /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
     public Devices.IDevices? PnpDevices { get; init; }
 
