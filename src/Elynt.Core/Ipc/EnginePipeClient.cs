@@ -94,8 +94,8 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
         RunQueueAsync(new UpdateAllAppsRequest(), progress, cancellation);
 
     public Task<InstallReport> UninstallAppsAsync(
-        IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null, CancellationToken cancellation = default) =>
-        RunQueueAsync(new UninstallAppsRequest(appIds), progress, cancellation);
+        IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress = null, CancellationToken cancellation = default) =>
+        RunQueueAsync(new UninstallAppsRequest(appIds, confirmed), progress, cancellation);
 
     private async Task<InstallReport> RunQueueAsync(EngineRequest request, IProgress<InstallProgress>? progress, CancellationToken cancellation) =>
         (await SendAsync(request, cancellation,

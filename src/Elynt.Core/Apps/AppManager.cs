@@ -95,8 +95,19 @@ internal sealed class AppManager(AppCatalogue catalogue, IPackageManager winget)
             return queue.Count == 0 ? new(true, "Every app is up to date.", []) : RunUpdates(queue, progress);
         });
 
-    public InstallReport Uninstall(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress) =>
-        WithInstalled(installed =>
+    public InstallReport Uninstall(IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress)
+    {
+        // The never-touch rules hold here too: Edge and WebView2 are never removed, confirmed or not.
+        var refused = appIds
+            .Select(id => (id, why: Tweaks.HardRules.Violation(new Tweaks.PackageTarget(id))))
+            .Where(r => r.why is not null)
+            .ToList();
+        if (refused.Count > 0)
+            return new(false, $"This is never allowed: {refused[0].why}. Nothing was uninstalled.", []);
+        if (!confirmed)
+            return new(false, "Uninstalling can't be undone from the app, so confirm it first. Nothing was uninstalled.", []);
+
+        return WithInstalled(installed =>
         {
             var queue = Pick(appIds, installed, out var missing);
             if (missing.Count > 0)
@@ -105,6 +116,7 @@ internal sealed class AppManager(AppCatalogue catalogue, IPackageManager winget)
                 ? new(false, "Nothing is ticked, so there is nothing to uninstall.", [])
                 : PackageQueue.Run(queue.Select(a => (a.Id, a.Name)).ToList(), PackageAction.Uninstall, winget.Uninstall, progress);
         });
+    }
 
     private InstallReport RunUpdates(List<InstalledAppView> queue, IProgress<InstallProgress>? progress) =>
         PackageQueue.Run(

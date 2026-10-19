@@ -183,7 +183,7 @@ public sealed class AppsManagerViewModel(
 
     public Task UninstallAsync(InstalledAppViewModel app) =>
         confirmUninstall(app.Name, app.NotReviewed ? "" : "It is in the reviewed catalogue, so you can install it again from there.")
-            ? RunOnInstalledAsync([app], "uninstall", (client, progress) => client.UninstallAppsAsync([app.View.Id], progress))
+            ? RunOnInstalledAsync([app], "uninstall", (client, progress) => client.UninstallAppsAsync([app.View.Id], confirmed: true, progress))
             : Task.CompletedTask;
 
     private async Task RunOnInstalledAsync(

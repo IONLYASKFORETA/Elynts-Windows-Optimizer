@@ -116,7 +116,8 @@ public sealed record UpdateAppsRequest(IReadOnlyList<string> AppIds) : EngineReq
 public sealed record UpdateAllAppsRequest : EngineRequest;
 
 /// <summary>Streams an <see cref="InstallProgressEvent"/> per step, like an install.</summary>
-public sealed record UninstallAppsRequest(IReadOnlyList<string> AppIds) : EngineRequest;
+/// <param name="Confirmed">The user confirmed the removal. The Engine refuses it otherwise.</param>
+public sealed record UninstallAppsRequest(IReadOnlyList<string> AppIds, bool Confirmed = false) : EngineRequest;
 
 public sealed record ListRepairToolsRequest : EngineRequest;
 
@@ -312,7 +313,7 @@ public static class EngineProtocol
             update.AppIds, Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
         UpdateAllAppsRequest => new(Install: engine.UpdateAllApps(Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
         UninstallAppsRequest uninstall => new(Install: engine.UninstallApps(
-            uninstall.AppIds, Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
+            uninstall.AppIds, uninstall.Confirmed, Relay<InstallProgress>(p => new InstallProgressEvent(p), sendEvent))),
         ListRepairToolsRequest => new(RepairTools: engine.ListRepairTools()),
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),

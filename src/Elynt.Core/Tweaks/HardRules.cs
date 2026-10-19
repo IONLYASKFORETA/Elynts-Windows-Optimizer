@@ -203,7 +203,9 @@ public static partial class HardRules
     private static bool IsEdge(string package) =>
         package.Contains("MicrosoftEdge", StringComparison.OrdinalIgnoreCase) ||
         package.Contains("EdgeWebView", StringComparison.OrdinalIgnoreCase) ||
-        package.Equals("Microsoft.Edge", StringComparison.OrdinalIgnoreCase);
+        // winget ids: Microsoft.Edge, Microsoft.Edge.Beta/.Dev, Microsoft.EdgeWebView2Runtime; ARP ids name it with a space.
+        package.StartsWith("Microsoft.Edge", StringComparison.OrdinalIgnoreCase) ||
+        package.Contains("Microsoft Edge", StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(@"^SYSTEM\\(CurrentControlSet|ControlSet\d{3})\\Services\\(?<name>[^\\]+)", RegexOptions.IgnoreCase)]
     private static partial Regex ServiceKey();

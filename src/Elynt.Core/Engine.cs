@@ -154,8 +154,11 @@ public partial interface IEngine
     /// <summary>Updates every installed app with an update waiting, one at a time.</summary>
     InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null);
 
-    /// <summary>Uninstalls the named installed apps silently, one at a time.</summary>
-    InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null);
+    /// <summary>
+    /// Uninstalls the named installed apps silently, one at a time. Only with <paramref name="confirmed"/>, which the
+    /// UI sets once the user confirmed the removal. Edge and WebView2 are refused in every case.
+    /// </summary>
+    InstallReport UninstallApps(IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress = null);
 
     /// <summary>The Repair section's tools, each saying up front whether it needs a restart.</summary>
     IReadOnlyList<RepairToolView> ListRepairTools();
@@ -388,8 +391,8 @@ public sealed partial class Engine(
 
     public InstallReport UpdateAllApps(IProgress<InstallProgress>? progress = null) => _appManager.UpdateAll(progress);
 
-    public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null) =>
-        _appManager.Uninstall(appIds, progress);
+    public InstallReport UninstallApps(IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress = null) =>
+        _appManager.Uninstall(appIds, confirmed, progress);
 
     /// <summary>
     /// Every tweak with its detected state, except tweaks that don't fit this PC and ask to be hidden. A hidden tweak

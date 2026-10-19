@@ -141,7 +141,7 @@ public class AppManagementTests
         _winget.Installed.Add(new("VideoLAN.VLC", "VLC", "3", null, "winget"));
         var progress = new ProgressLog();
 
-        var report = NewEngine().UninstallApps(["Some.Tool"], progress);
+        var report = NewEngine().UninstallApps(["Some.Tool"], confirmed: true, progress);
 
         Assert.True(report.Succeeded);
         Assert.Equal("1 of 1 uninstalled.", report.Message);
@@ -154,10 +154,39 @@ public class AppManagementTests
     {
         _winget.Installed.Add(new("VideoLAN.VLC", "VLC", "3", null, "winget"));
 
-        var report = NewEngine().UninstallApps(["VideoLAN.VLC", "Not.There"]);
+        var report = NewEngine().UninstallApps(["VideoLAN.VLC", "Not.There"], confirmed: true);
 
         Assert.False(report.Succeeded);
         Assert.Contains("Not.There", report.Message);
+        Assert.Empty(_winget.Uninstalls);
+    }
+
+    [Theory]
+    [InlineData("Microsoft.Edge")]
+    [InlineData("Microsoft.EdgeWebView2Runtime")]
+    [InlineData("Microsoft.Edge.Beta")]
+    [InlineData(@"ARP\Machine\X64\Microsoft Edge")]
+    public void Edge_and_WebView2_are_never_uninstalled_even_when_confirmed(string edgeId)
+    {
+        _winget.Installed.Add(new(edgeId, "Microsoft Edge", "130", null, "winget"));
+        _winget.Installed.Add(new("Some.Tool", "Some Tool", "1", null, "winget"));
+
+        var report = NewEngine().UninstallApps(["Some.Tool", edgeId], confirmed: true);
+
+        Assert.False(report.Succeeded);
+        Assert.Contains("never", report.Message);
+        Assert.Empty(_winget.Uninstalls);
+    }
+
+    [Fact]
+    public void Uninstall_without_the_users_confirmation_is_refused_and_nothing_is_removed()
+    {
+        _winget.Installed.Add(new("Some.Tool", "Some Tool", "1", null, "winget"));
+
+        var report = NewEngine().UninstallApps(["Some.Tool"], confirmed: false);
+
+        Assert.False(report.Succeeded);
+        Assert.Contains("confirm", report.Message);
         Assert.Empty(_winget.Uninstalls);
     }
 
@@ -167,7 +196,7 @@ public class AppManagementTests
         _winget.Installed.Add(new("Some.Tool", "Some Tool", "1", null, "winget"));
         _winget.Results["Some.Tool"] = new(PackageInstallStatus.Installed, RebootRequired: true);
 
-        var report = NewEngine().UninstallApps(["Some.Tool"]);
+        var report = NewEngine().UninstallApps(["Some.Tool"], confirmed: true);
 
         Assert.Equal("1 of 1 uninstalled. Restart the PC to finish.", report.Message);
     }

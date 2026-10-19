@@ -113,8 +113,8 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Equal("UpdateApps Valve.Steam", _engine.LastCall);
         var all = await _client.UpdateAllAppsAsync(progress, TestContext.Current.CancellationToken);
         Assert.Equal("UpdateAllApps", _engine.LastCall);
-        var uninstall = await _client.UninstallAppsAsync(["Valve.Steam"], progress, TestContext.Current.CancellationToken);
-        Assert.Equal("UninstallApps Valve.Steam", _engine.LastCall);
+        var uninstall = await _client.UninstallAppsAsync(["Valve.Steam"], confirmed: true, progress, TestContext.Current.CancellationToken);
+        Assert.Equal("UninstallApps Valve.Steam True", _engine.LastCall);
 
         AssertSameJson(StubEngine.InstallSteps.Concat(StubEngine.InstallSteps).Concat(StubEngine.InstallSteps).ToList(), seen);
         AssertSameJson(StubEngine.Report, update);
@@ -746,9 +746,9 @@ public sealed class PipeContractTests : IAsyncLifetime
             return Stream(progress);
         }
 
-        public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null)
+        public InstallReport UninstallApps(IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress = null)
         {
-            LastCall = $"UninstallApps {string.Join(",", appIds)}";
+            LastCall = $"UninstallApps {string.Join(",", appIds)} {confirmed}";
             return Stream(progress);
         }
 
