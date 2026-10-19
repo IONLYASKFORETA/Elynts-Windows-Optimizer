@@ -171,11 +171,11 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             "Import-Module Microsoft.WinGet.Client; ";
         if (user is null)
         {
-            var script = prelude + "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " +
-                $"ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline}";
+            var script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; try { " + prelude +
+                $"ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline} }} catch {{ Write-Output $_.ToString(); exit 1 }}";
             var (exit, output) = Run(powershell, PowerShellArgs(script), ModuleTimeout, logOutput: false);
             if (exit != 0)
-                throw new InvalidOperationException($"The WinGet PowerShell module failed (exit code {exit}).");
+                throw new InvalidOperationException($"The WinGet PowerShell module failed (exit code {exit}): {output.Trim()}");
             return output;
         }
 
