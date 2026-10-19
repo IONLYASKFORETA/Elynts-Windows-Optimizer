@@ -12,13 +12,17 @@ internal sealed partial class CleanupBench(
     ICleanupScheduleStore schedules,
     string user,
     TimeProvider clock,
-    ILogger log)
+    ILogger log,
+    Safety.SafetyNet? safetyNet = null)
 {
     public static readonly TimeSpan WeeklyInterval = TimeSpan.FromDays(7);
 
     private static readonly ProgramRun ResetBase = new("dism.exe", ["/Online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"]);
 
     private ICleanupSystem? Pc => system.Cleanup;
+
+    /// <summary>The categories the last scan measured. Cleaning only follows a scan, so the user saw what goes.</summary>
+    private HashSet<string>? _scanned;
 
     public Task<CleanupScan> ScanAsync(IProgress<CleanupProgress>? progress, CancellationToken cancellation)
     {
@@ -33,6 +37,7 @@ internal sealed partial class CleanupBench(
             progress?.Report(new(CleanupPhase.Scanning, category.Id, category.Name, i + 1, catalogue.Categories.Count));
             views.Add(Measure(category));
         }
+        _scanned = views.Select(v => v.Id).ToHashSet(StringComparer.Ordinal);
         return Task.FromResult(new CleanupScan(views));
     }
 
@@ -98,11 +103,32 @@ internal sealed partial class CleanupBench(
             categories.Add(category);
         }
 
+        if (_scanned is null || categories.Any(c => !_scanned.Contains(c.Id)))
+            return Refused("Scan first, so you can see what each category would delete. Nothing was deleted.");
+
         var destructive = categories.Where(c => c.Kind == CleanupKind.Destructive).ToList();
         if (destructive.Count > 0 && !confirmDestructive)
             return Refused(
                 $"{string.Join(", ", destructive.Select(c => c.Name))} can't be undone, so cleaning needs a separate confirmation first. " +
                 $"{string.Join(" ", destructive.Select(c => c.Warning))} Nothing was deleted.");
+
+        // What can't be undone gets the same safety net as a tweak: a restore point attempt, and the drivers backed up
+        // before any driver package is deleted.
+        string? safetyNote = null;
+        if (destructive.Count > 0 && safetyNet is not null)
+        {
+            Safety.BackupStore[] stores = destructive.Any(c => c.Sources.Any(s => s is OldDriverPackagesSource))
+                ? [Safety.BackupStore.Drivers]
+                : [];
+            try
+            {
+                safetyNote = safetyNet.BeforeChange($"cleaning {string.Join(", ", destructive.Select(c => c.Name))}", stores);
+            }
+            catch (Safety.BackupFailedException ex)
+            {
+                return Refused($"{ex.Message} Nothing was deleted.");
+            }
+        }
 
         var outcomes = new List<CleanupOutcome>();
         for (var i = 0; i < categories.Count; i++)
@@ -122,6 +148,8 @@ internal sealed partial class CleanupBench(
         var message = failed.Count == 0
             ? $"Done. Freed {Bytes(freed)}."
             : $"Freed {Bytes(freed)}. {failed.Count} of {outcomes.Count} couldn't be cleaned; see each one below.";
+        if (safetyNote is not null)
+            message += $" {safetyNote}";
         log.LogInformation("Cleanup for {User}: {Categories}, freed {Bytes} bytes", user, string.Join(",", categories.Select(c => c.Id)), freed);
         return new(failed.Count == 0, message, freed, outcomes);
     }
@@ -207,6 +235,7 @@ internal sealed partial class CleanupBench(
             return null;
 
         var safe = catalogue.Categories.Where(c => c.Kind == CleanupKind.Safe).Select(c => c.Id).ToList();
+        await ScanAsync(null, cancellation);
         var report = await CleanAsync(safe, confirmDestructive: false, progress: null, cancellation);
         schedules.Save(user, schedule with { LastRun = now });
         return report;

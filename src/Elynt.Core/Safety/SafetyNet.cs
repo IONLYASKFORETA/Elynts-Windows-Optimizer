@@ -79,11 +79,18 @@ public sealed class SafetyNet(
     /// point) or null. Throws <see cref="BackupFailedException"/> when a needed backup couldn't be made: then nothing
     /// may be changed.
     /// </summary>
-    public string? BeforeChange(TweakDefinition tweak)
+    public string? BeforeChange(TweakDefinition tweak) =>
+        BeforeChange(tweak.Name, tweak.Steps.Select(step => step.Store).OfType<BackupStore>());
+
+    /// <summary>
+    /// The same, for a change that isn't a tweak (destructive cleaning): <paramref name="what"/> names it in the restore
+    /// point, and <paramref name="stores"/> are backed up first.
+    /// </summary>
+    public string? BeforeChange(string what, IEnumerable<BackupStore> stores)
     {
         lock (_gate)
         {
-            foreach (var store in tweak.Steps.Select(step => step.Store).OfType<BackupStore>().Distinct())
+            foreach (var store in stores.Distinct())
             {
                 if (_backedUp.ContainsKey(store))
                     continue;
@@ -107,7 +114,7 @@ public sealed class SafetyNet(
             RestorePointResult result;
             try
             {
-                result = restorePoints.TryCreate($"Elynt Optimizer: before {tweak.Name}");
+                result = restorePoints.TryCreate($"Elynt Optimizer: before {what}");
             }
             catch (Exception ex)
             {
@@ -116,10 +123,10 @@ public sealed class SafetyNet(
 
             if (result.WasCreated)
             {
-                _log.LogInformation("Made a restore point before {Tweak}", tweak.Id);
+                _log.LogInformation("Made a restore point before {Change}", what);
                 return null;
             }
-            _log.LogWarning("Windows skipped the restore point before {Tweak}: {Reason}", tweak.Id, result.Reason);
+            _log.LogWarning("Windows skipped the restore point before {Change}: {Reason}", what, result.Reason);
             return $"Windows didn't make a restore point: {result.Reason} Your change is still recorded and can be undone from Undo history.";
         }
     }

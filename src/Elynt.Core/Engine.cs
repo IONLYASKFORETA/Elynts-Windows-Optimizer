@@ -373,8 +373,9 @@ public sealed partial class Engine(
         system,
         cleanupSchedules ?? new InMemoryCleanupScheduleStore(),
         user,
-        clock ?? TimeProvider.System,
-        logger ?? (ILogger)NullLogger<Engine>.Instance);
+        clock ?? system.Clock,
+        logger ?? (ILogger)NullLogger<Engine>.Instance,
+        safetyNet);
     private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
