@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.ServiceProcess;
 using Elynt.Core.Setup;
 using Microsoft.Win32;
@@ -85,22 +84,5 @@ public sealed class WindowsServiceControl : IServiceControl
     /// <summary>sc.exe needs the quotes inside the binPath value when the path has spaces.</summary>
     private static string Quoted(string path) => $"\"{path}\"";
 
-    private static void Sc(params string[] arguments)
-    {
-        var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "sc.exe"))
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var argument in arguments)
-            start.ArgumentList.Add(argument);
-
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Couldn't run sc.exe.");
-        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"sc.exe {arguments[0]} failed ({process.ExitCode}): {output.Trim()}");
-    }
+    private static void Sc(params string[] arguments) => SystemCommand.Run("sc.exe", arguments);
 }

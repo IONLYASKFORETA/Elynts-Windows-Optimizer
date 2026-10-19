@@ -177,9 +177,13 @@ internal static class PowerShell
         "if ($null -ne $elyntResult) { $elyntWriter.Write([string]$elyntResult) }; $elyntWriter.Dispose()";
 
     /// <summary>Runs a script as the service and returns its output. Throws with PowerShell's own words when it fails.</summary>
-    public static string Run(string script, TimeSpan? timeout = null) =>
+    /// <param name="stopOnError">
+    /// Prefixes the script with <c>$ErrorActionPreference = 'Stop'</c>. Off for scripts that handle their own errors.
+    /// </param>
+    public static string Run(string script, TimeSpan? timeout = null, bool stopOnError = true) =>
         SystemCommand.Run(
             System.IO.Path.Combine("WindowsPowerShell", "v1.0", "powershell.exe"),
-            ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Encode("$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'\n" + script)],
+            ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
+                Encode((stopOnError ? "$ErrorActionPreference = 'Stop'; " : "") + "$ProgressPreference = 'SilentlyContinue'\n" + script)],
             timeout ?? TimeSpan.FromMinutes(10));
 }

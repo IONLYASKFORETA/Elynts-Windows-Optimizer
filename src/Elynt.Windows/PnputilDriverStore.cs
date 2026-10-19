@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Elynt.Core.Drivers;
 
@@ -51,32 +50,8 @@ public sealed partial class PnputilDriverStore : IDriverStore
     private static string Checked(string publishedName) =>
         PublishedName().IsMatch(publishedName) ? publishedName : throw new ArgumentException($"Not a driver store name: {publishedName}");
 
-    private static string Run(params string[] arguments)
-    {
-        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "pnputil.exe"))
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var argument in arguments)
-            start.ArgumentList.Add(argument);
-
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Couldn't start pnputil.");
-        var error = process.StandardError.ReadToEndAsync();
-        var output = process.StandardOutput.ReadToEnd();
-        if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException("pnputil didn't finish within 10 minutes.");
-        }
-
-        if (process.ExitCode is not (0 or RebootRequired))
-            throw new InvalidOperationException(
-                $"pnputil {string.Join(' ', arguments)} failed (exit code {process.ExitCode}): {(output + error.Result).Trim()}");
-        return output;
-    }
+    private static string Run(params string[] arguments) =>
+        SystemCommand.Run("pnputil.exe", arguments, TimeSpan.FromMinutes(10), [RebootRequired]);
 
     [GeneratedRegex(@"^oem\d+\.inf$", RegexOptions.IgnoreCase)]
     private static partial Regex PublishedName();

@@ -155,13 +155,7 @@ public sealed class WindowsRemovableApps(WindowsIdentity user, ILogger<WindowsRe
         return versioned ?? inbox;
     }
 
-    private string UserLocalAppData()
-    {
-        using var profiles = Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{_sid}");
-        var profile = profiles?.GetValue("ProfileImagePath") as string
-            ?? throw new InvalidOperationException("Couldn't find the signed-in user's profile folder.");
-        return Path.Combine(Environment.ExpandEnvironmentVariables(profile), "AppData", "Local");
-    }
+    private string UserLocalAppData() => Path.Combine(UserProfiles.Require(_sid), "AppData", "Local");
 
     private HashSet<string> Cached(ref (DateTime At, HashSet<string> Names)? cache, Func<string> script)
     {

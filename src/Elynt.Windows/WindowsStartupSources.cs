@@ -157,12 +157,7 @@ public sealed class WindowsStartupSources(string userSid) : IStartupSources
         return Environment.ExpandEnvironmentVariables(text);
     }
 
-    private string? UserProfile()
-    {
-        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        using var profile = machine.OpenSubKey($@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{userSid}");
-        return profile?.GetValue("ProfileImagePath") as string is { } path ? Environment.ExpandEnvironmentVariables(path) : null;
-    }
+    private string? UserProfile() => UserProfiles.Find(userSid);
 
     private RegistryKey OpenUser()
     {

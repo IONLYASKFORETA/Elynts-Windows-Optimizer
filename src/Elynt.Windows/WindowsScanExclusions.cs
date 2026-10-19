@@ -21,10 +21,8 @@ public sealed class WindowsScanExclusions : IScanExclusions
         string.Equals(a.TrimEnd('\\'), b.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A PowerShell single-quoted string: nothing inside is expanded, and a quote is written twice.</summary>
-    private static string Quote(string text) => $"'{text.Replace("'", "''")}'";
+    private static string Quote(string text) => Windows.PowerShell.Quote(text);
 
-    private static string PowerShell(string command) => CommandLine.Run(
-        @"WindowsPowerShell\v1.0\powershell.exe",
-        "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
-        $"$ErrorActionPreference = 'Stop'; Import-Module Defender; {command}");
+    private static string PowerShell(string command) =>
+        Windows.PowerShell.Run($"Import-Module Defender; {command}", TimeSpan.FromSeconds(30));
 }

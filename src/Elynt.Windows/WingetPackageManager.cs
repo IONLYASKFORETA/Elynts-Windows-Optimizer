@@ -278,40 +278,13 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
     };
 
     /// <summary>The service's own winget: the newest App Installer package folder under Program Files.</summary>
-    private static string? FindSystemWinget()
-    {
-        var windowsApps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
-        try
-        {
-            return Directory.EnumerateDirectories(windowsApps, "Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe")
-                .Select(dir => (Dir: dir, Version: ParseVersion(Path.GetFileName(dir))))
-                .OrderByDescending(d => d.Version)
-                .Select(d => Path.Combine(d.Dir, "winget.exe"))
-                .FirstOrDefault(File.Exists);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private static Version ParseVersion(string folder)
-    {
-        var parts = folder.Split('_');
-        return parts.Length > 1 && Version.TryParse(parts[1], out var version) ? version : new Version(0, 0);
-    }
+    private static string? FindSystemWinget() => UserProfiles.SystemWinget();
 
     /// <summary>The user's winget app execution alias, which carries App Installer's package identity.</summary>
     private static string UserWinget(WindowsIdentity user) =>
         Path.Combine(UserProfile(user), @"AppData\Local\Microsoft\WindowsApps\winget.exe");
 
-    private static string UserProfile(WindowsIdentity user)
-    {
-        using var profiles = Registry.LocalMachine.OpenSubKey($@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{user.User?.Value}");
-        var profile = profiles?.GetValue("ProfileImagePath") as string
-            ?? throw new InvalidOperationException("Couldn't find the signed-in user's profile folder.");
-        return Environment.ExpandEnvironmentVariables(profile);
-    }
+    private static string UserProfile(WindowsIdentity user) => UserProfiles.Require(user.User?.Value);
 
     /// <param name="logOutput">False for commands whose output is data (JSON), so it doesn't fill the log.</param>
     private (int Exit, string Output) Run(string exe, IReadOnlyList<string> args, TimeSpan timeout, bool logOutput = true)
