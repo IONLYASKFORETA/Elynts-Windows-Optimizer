@@ -703,7 +703,16 @@ public sealed class PipeContractTests : IAsyncLifetime
             RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
             Notice: "Waiting.");
 
-        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+        private static readonly GpuTuningView Nvidia = new(
+            "nvidia:GPU-1234", "NVIDIA GeForce RTX 4070", GpuVendor.Nvidia,
+            [new TuningControl(GpuControls.CoreClockOffset, "Core clock offset", "MHz", -500, 1000, 1, 0, 150)],
+            [],
+            AtDefaults: false,
+            RevertsAt: null,
+            Notice: null,
+            Readouts: [new GpuReadout("Temperature", 61, "°C"), new GpuReadout("Power draw", 187, "W")]);
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu, Nvidia], "A page note.");
 
         public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
         {

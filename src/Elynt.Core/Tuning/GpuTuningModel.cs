@@ -19,6 +19,8 @@ public static class GpuControls
     public const string VramMaxClock = "vramMaxClock";
     public const string PowerLimit = "powerLimit";
     public const string FanSpeed = "fanSpeed";
+    public const string CoreClockOffset = "coreClockOffset";
+    public const string MemoryClockOffset = "vramClockOffset";
 }
 
 /// <summary>One slider as the vendor SDK reports it. The SDK's range is the only range the app allows.</summary>
@@ -69,6 +71,15 @@ public interface IGpuTuningAdapter
     void AutoTune(string deviceId, AutoTuneKind kind);
 }
 
+/// <summary>One live sensor value, such as the GPU temperature.</summary>
+public sealed record GpuReadout(string Name, int Value, string Unit);
+
+/// <summary>An adapter that can also report live sensor values. Optional: adapters without it show no readouts.</summary>
+public interface IGpuReadouts
+{
+    IReadOnlyList<GpuReadout> Readouts(string deviceId);
+}
+
 /// <summary>A slider ready to show: the SDK's range and default plus the card's current value.</summary>
 public sealed record TuningControl(string Id, string Name, string Unit, int Min, int Max, int Step, int Default, int Current);
 
@@ -83,7 +94,8 @@ public sealed record GpuTuningView(
     IReadOnlyList<AutoTuneKind> AutoTunes,
     bool AtDefaults,
     DateTimeOffset? RevertsAt,
-    string? Notice);
+    string? Notice,
+    IReadOnlyList<GpuReadout>? Readouts = null);
 
 /// <param name="Notice">A page-wide note, such as tuning being unavailable or settings reset after a crash.</param>
 public sealed record GpuTuningReport(IReadOnlyList<GpuTuningView> Gpus, string? Notice);

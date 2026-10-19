@@ -395,7 +395,23 @@ public sealed class GpuTuning : IDisposable
             device.AutoTunes,
             adapter.IsAtDefaults(device.Id),
             _probation.Deadline(Key(device)),
-            _notices.GetValueOrDefault(Key(device)));
+            _notices.GetValueOrDefault(Key(device)),
+            Readouts(adapter, device));
+    }
+
+    private IReadOnlyList<GpuReadout>? Readouts(IGpuTuningAdapter adapter, GpuDevice device)
+    {
+        if (adapter is not IGpuReadouts sensors)
+            return null;
+        try
+        {
+            return sensors.Readouts(device.Id);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read {Gpu}'s sensors", device.Id);
+            return [];
+        }
     }
 
     private TuningResult Result(bool succeeded, string message, IGpuTuningAdapter adapter, GpuDevice device)
