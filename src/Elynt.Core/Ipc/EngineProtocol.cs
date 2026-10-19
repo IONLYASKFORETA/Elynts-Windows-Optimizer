@@ -9,7 +9,9 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
+using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
@@ -58,6 +60,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
 [JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
+[JsonDerivedType(typeof(GetPawnIoRequest), "getPawnIo")]
+[JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
+[JsonDerivedType(typeof(UninstallPawnIoRequest), "uninstallPawnIo")]
+[JsonDerivedType(typeof(GetSensorsRequest), "getSensors")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -143,6 +149,16 @@ public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
 
 public sealed record AcceptGpuWarningRequest(string DeviceId) : EngineRequest;
 
+public sealed record GetPawnIoRequest : EngineRequest;
+
+/// <summary>Long-running: downloads and runs PawnIO's setup.</summary>
+public sealed record InstallPawnIoRequest(bool AcceptFaceitWarning) : EngineRequest;
+
+/// <summary>Long-running: runs PawnIO's uninstaller.</summary>
+public sealed record UninstallPawnIoRequest : EngineRequest;
+
+public sealed record GetSensorsRequest : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -187,6 +203,9 @@ public sealed record EngineResponse(
     TuningResult? Tuning = null,
     UpdateRunStatus? WindowsUpdate = null,
     EngineEvent? Event = null,
+    PawnIoReport? PawnIo = null,
+    PawnIoResult? PawnIoResult = null,
+    SensorReport? Sensors = null,
     IReadOnlyList<ServiceView>? Services = null,
     ServiceResult? ServiceResult = null,
     IReadOnlyList<StartupItemView>? StartupItems = null,
@@ -272,11 +291,16 @@ public static class EngineProtocol
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
         AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
+        GetPawnIoRequest => new(PawnIo: engine.GetPawnIo()),
+        InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),
+        UninstallPawnIoRequest => new(PawnIoResult: engine.UninstallPawnIo()),
+        GetSensorsRequest => new(Sensors: engine.GetSensors()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest;
+    public static bool IsLongRunning(EngineRequest request) =>
+        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest or InstallPawnIoRequest or UninstallPawnIoRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>
