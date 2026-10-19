@@ -207,7 +207,8 @@ public sealed partial class Engine
 
         try
         {
-            entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+            // A per-game profile's change stays temporary, so the game closing still undoes it.
+            entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, previous.Temporary);
         }
         catch (Exception ex)
         {

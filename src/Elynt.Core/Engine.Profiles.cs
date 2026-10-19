@@ -121,7 +121,8 @@ public sealed partial class Engine : IProfileEngine
         var problems = new List<string>();
         foreach (var entry in journal.OpenTemporary(user).Reverse())
         {
-            // A newer change to the same tweak (made by the user since) wins: undoing that is theirs to do.
+            // A newer change to the same tweak wins: undoing that is the user's to do. (A tweak the user turns on
+            // while the profile already has it on takes over the profile's change; see ApplyTweak.)
             if (!IsUndoable(entry))
                 continue;
             if (!TryResolve(entry.TweakId, entry, out var tweak))

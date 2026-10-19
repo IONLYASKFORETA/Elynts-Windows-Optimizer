@@ -61,7 +61,7 @@ public sealed class JournalEntry
     /// Made by a per-game profile: undone when the game closes, and at the next service start if it is still in
     /// place after a crash or reboot.
     /// </summary>
-    public bool Temporary { get; init; }
+    public bool Temporary { get; set; }
 }
 
 /// <summary>
@@ -149,6 +149,26 @@ public sealed class ChangeJournal
             older.Status = EntryStatus.Superseded;
             older.ClosedAt = at;
             _store.Save(_entries);
+        }
+    }
+
+    /// <summary>
+    /// A temporary change the user chose to keep: it is no longer undone when the game closes or the service starts.
+    /// </summary>
+    public void KeepPermanently(JournalEntry entry)
+    {
+        lock (_gate)
+        {
+            entry.Temporary = false;
+            try
+            {
+                _store.Save(_entries);
+            }
+            catch
+            {
+                entry.Temporary = true;
+                throw;
+            }
         }
     }
 

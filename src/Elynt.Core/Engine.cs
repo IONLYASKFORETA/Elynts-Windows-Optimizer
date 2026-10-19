@@ -431,7 +431,17 @@ public sealed partial class Engine(
         try
         {
             if (Detect(tweak) == TweakState.On)
+            {
+                // On only because a running game's profile turned it on: the user wants it kept, so the profile's
+                // change becomes theirs. Undo still goes back to how it was before the game.
+                if (!temporary && journal.LatestUndoable(tweak.Id, user) is { Temporary: true } profileChange)
+                {
+                    journal.KeepPermanently(profileChange);
+                    _log.LogInformation("Kept {Tweak} for {User} after the game closes", tweak.Id, user);
+                    return Done(tweak, "Turned on. A game's profile had it on already; it now stays on after the game closes.");
+                }
                 return Done(tweak, "Already on. Nothing was changed.");
+            }
 
             // The safety net goes down before anything changes: whole-store backups, then a restore point.
             string? note;

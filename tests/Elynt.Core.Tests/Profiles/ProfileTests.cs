@@ -190,4 +190,40 @@ public class ProfileTests
 
         Assert.Equal(PowerPlans.HighPerformance, _power.Active);
     }
+
+    [Fact]
+    public void A_profile_change_re_applied_after_drift_stays_temporary_and_is_undone_when_the_game_closes()
+    {
+        _processes.Run(Game, 4242);
+        var engine = EngineWithProfile();
+        engine.StartProfile(Game, 4242);
+        // Something else turns Game Mode off mid-game; the user re-applies it from the drift list.
+        _registry.SetValue(GameMode, RegistryValue.DWord(0));
+
+        var reapplied = engine.ReapplyDrift([GamingTweaks.GameModeOn.Id]);
+
+        Assert.True(reapplied.Succeeded, reapplied.Message);
+        Assert.True(_journal.LatestUndoable(GamingTweaks.GameModeOn.Id, User)!.Temporary);
+        engine.StopProfile(Game);
+        Assert.Equal(RegistryValue.DWord(0), _registry.GetValue(GameMode));
+        Assert.Empty(_journal.OpenTemporary(User));
+    }
+
+    [Fact]
+    public void A_tweak_the_user_turns_on_while_the_profile_has_it_on_stays_on_after_the_game_closes()
+    {
+        _processes.Run(Game, 4242);
+        var engine = EngineWithProfile();
+        engine.StartProfile(Game, 4242);
+
+        var applied = engine.Apply(GamingTweaks.GameModeOn.Id);
+        engine.StopProfile(Game);
+
+        Assert.True(applied.Succeeded, applied.Message);
+        Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(GameMode));
+        Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == GamingTweaks.GameModeOn.Id).State);
+        // Undo still goes back to how it was before the game.
+        Assert.True(engine.Revert(GamingTweaks.GameModeOn.Id).Succeeded);
+        Assert.Null(_registry.GetValue(GameMode));
+    }
 }
