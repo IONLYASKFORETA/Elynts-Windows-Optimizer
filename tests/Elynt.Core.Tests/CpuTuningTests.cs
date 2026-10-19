@@ -62,15 +62,17 @@ public sealed class CpuTuningTests : IDisposable
     }
 
     [Fact]
-    public void Zen_2_gets_power_limits_but_no_Curve_Optimizer()
+    public void Ryzen_3000_is_off_the_reviewed_list_so_it_cannot_be_tuned_and_gets_no_SMU_message()
     {
         _cpu = FakeCpu.Matisse3700X();
+        var engine = NewEngine();
 
-        var cpu = NewEngine().GetCpuTuning(advanced: true);
+        var cpu = engine.GetCpuTuning(advanced: true);
+        var set = engine.SetCpuTuning(new CpuTune(PptWatts: 70), CpuTuningOptions.Default);
 
-        Assert.True(cpu.Available);
-        Assert.DoesNotContain(cpu.Controls, c => c.Id == CpuControls.CurveOptimizer);
-        Assert.Equal(88, Control(cpu, CpuControls.Ppt).Max);
+        Assert.False(cpu.Available);
+        Assert.False(set.Succeeded);
+        Assert.Empty(_cpu.SmuMessages);
     }
 
     [Fact]
@@ -284,19 +286,6 @@ public sealed class CpuTuningTests : IDisposable
         var allowed = engine.SetCpuTuning(new CpuTune(CurveOptimizer: -10), new CpuTuningOptions(Unofficial: true));
         Assert.True(allowed.Succeeded, allowed.Message);
         Assert.Equal(-10, _cpu.CurveOptimizer);
-    }
-
-    [Fact]
-    public void Zen_2_refuses_Curve_Optimizer_but_lowers_limits()
-    {
-        _cpu = FakeCpu.Matisse3700X();
-        var engine = NewEngine();
-
-        Assert.False(engine.SetCpuTuning(new CpuTune(CurveOptimizer: -5), new CpuTuningOptions(Advanced: true, Unofficial: true)).Succeeded);
-        Assert.Empty(_cpu.SmuMessages);
-
-        Assert.True(engine.SetCpuTuning(new CpuTune(PptWatts: 70), CpuTuningOptions.Default).Succeeded);
-        Assert.Equal(70.0, _cpu.Ppt);
     }
 
     [Fact]

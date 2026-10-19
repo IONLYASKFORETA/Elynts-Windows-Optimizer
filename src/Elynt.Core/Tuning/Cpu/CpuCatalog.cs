@@ -7,7 +7,7 @@ namespace Elynt.Core.Tuning.Cpu;
 /// The only SMU messages the app may send to one Ryzen codename. PawnIO's RyzenSMU module passes any message id
 /// from 0 to 0xFF, so this list is the only thing between a bug and an arbitrary SMU command.
 /// </summary>
-/// <param name="SetAllCoreCurve">RSMU "set all-core Curve Optimizer margin", or null where CO isn't supported (Zen 2).</param>
+/// <param name="SetAllCoreCurve">RSMU "set all-core Curve Optimizer margin", or null where CO isn't supported.</param>
 /// <param name="SetPpt">RSMU "set PPT limit", in mW.</param>
 /// <param name="SetTdc">RSMU "set TDC limit", in mA.</param>
 /// <param name="SetEdc">RSMU "set EDC limit", in mA.</param>
@@ -20,7 +20,7 @@ public sealed record SmuAllowlist(string Codename, uint? SetAllCoreCurve, uint S
 /// <summary>
 /// What the app knows about each CPU: the reviewed Ryzen codenames and their SMU messages, the CPUs where Curve
 /// Optimizer is unofficial, and Intel's Default Settings for 13th and 14th gen desktop.
-/// Message ids are the publicly documented RSMU ids (Zen 2/3 and Zen 4/5 families), written down here from public
+/// Message ids are the publicly documented RSMU ids (Zen 3 and Zen 4/5 families), written down here from public
 /// facts; no code was taken from GPL tools. Not yet verified on real hardware.
 /// </summary>
 public static partial class CpuCatalog
@@ -28,18 +28,16 @@ public static partial class CpuCatalog
     /// <summary>Intel's fix for the 13th/14th gen desktop Vmin shift (idle and light-load voltage), from a BIOS update.</summary>
     public const uint IntelVminFixMicrocode = 0x12B;
 
-    private static readonly SmuAllowlist Matisse = new("Matisse", null, 0x53, 0x54, 0x55);
     private static readonly SmuAllowlist Vermeer = new("Vermeer", 0x0B, 0x53, 0x54, 0x55);
     private static readonly SmuAllowlist Raphael = new("Raphael", 0x07, 0x56, 0x57, 0x58);
     private static readonly SmuAllowlist GraniteRidge = new("GraniteRidge", 0x07, 0x56, 0x57, 0x58);
 
     /// <summary>
-    /// The reviewed desktop codenames by CPUID family and model: Ryzen 3000 (power limits only), 5000, 7000 and 9000,
-    /// X3D included. APUs, mobile and Threadripper parts are left out on purpose.
+    /// The reviewed desktop codenames by CPUID family and model: Ryzen 5000, 7000 and 9000, X3D included, as the spec
+    /// lists. Ryzen 3000 (Matisse), APUs, mobile and Threadripper parts are left out on purpose.
     /// </summary>
     private static readonly Dictionary<(int Family, int Model), SmuAllowlist> Codenames = new()
     {
-        [(0x17, 0x71)] = Matisse,
         [(0x19, 0x21)] = Vermeer,
         [(0x19, 0x61)] = Raphael,
         [(0x1A, 0x44)] = GraniteRidge,

@@ -42,6 +42,15 @@ public sealed class CpuTuningPageViewModel : ObservableObject
     public bool Available => _report.Available;
     public string CpuName => _report.CpuName;
     public string? Notice => _report.Notice;
+
+    /// <summary>The page's explainer, including the floors the service holds limits above (CpuTuning's constants).</summary>
+    public string Explainer => ExplainerText;
+
+    private static readonly string ExplainerText =
+        "Curve Optimizer only goes negative and power limits only go down: never below " +
+        $"{CpuTuning.IntelFloorWatts} W for Intel PL1 and PL2, and never below {(int)(CpuTuning.AmdFloorShare * 100)}% of your BIOS value for AMD PPT, TDC and EDC. " +
+        "Every change goes back after 60 seconds unless you keep it, and a restart always brings back your BIOS settings.";
+
     public bool HasNotice => !string.IsNullOrEmpty(Notice);
     public IReadOnlyList<string> Warnings => _report.Warnings;
     public bool IsWaiting => _report.RevertsAt is not null;
