@@ -23,7 +23,10 @@ public partial interface IEngine
 
     DriftSettings GetDriftSettings();
 
-    /// <summary>Turns automatic re-apply on or off. Off by default; never for destructive or reboot-needing changes.</summary>
+    /// <summary>
+    /// Turns automatic re-apply on or off. Off by default; never for destructive, reboot-needing or must-read-warning
+    /// (ApplyWarning) changes, which always wait for the user.
+    /// </summary>
     DriftSettings SetAutoReapply(bool enabled);
 }
 
