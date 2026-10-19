@@ -3,8 +3,10 @@ using Elynt.Core.Bios;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Journal;
+using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -203,6 +205,21 @@ public interface IEngine
     TuningResult RevertGpuTuning(string deviceId);
 
     TuningResult ResetGpuTuning(string deviceId);
+
+    /// <summary>Whether the optional PawnIO driver is installed, with the FACEIT warning naming installed FACEIT games.</summary>
+    PawnIoReport GetPawnIo();
+
+    /// <summary>
+    /// Downloads, signature-checks and silently installs PawnIO. The only way it is ever installed, and only with
+    /// <paramref name="acceptFaceitWarning"/>, which the UI sets once the user has accepted the FACEIT warning.
+    /// </summary>
+    PawnIoResult InstallPawnIo(bool acceptFaceitWarning);
+
+    /// <summary>"Uninstall driver": removes PawnIO and its modules.</summary>
+    PawnIoResult UninstallPawnIo();
+
+    /// <summary>Live temperatures, clocks and loads: from PawnIO when installed, otherwise from vendor SDKs and Windows.</summary>
+    SensorReport GetSensors();
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -469,7 +486,7 @@ public sealed class Engine(
             _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
         }
 
-        return BiosAdvisor.Build(hardware);
+        return BiosAdvisor.Build(PawnIo.Fill(hardware));
     }
 
     public UpdateRunStatus StartWindowsUpdate() =>
@@ -506,6 +523,16 @@ public sealed class Engine(
     public TuningResult RevertGpuTuning(string deviceId) => gpuTuning?.Revert(deviceId) ?? NoGpuTuning;
 
     public TuningResult ResetGpuTuning(string deviceId) => gpuTuning?.ResetToDefaults(deviceId) ?? NoGpuTuning;
+
+    public PawnIoReport GetPawnIo() => PawnIo.Report();
+
+    public PawnIoResult InstallPawnIo(bool acceptFaceitWarning) => PawnIo.Install(acceptFaceitWarning);
+
+    public PawnIoResult UninstallPawnIo() => PawnIo.Uninstall();
+
+    public SensorReport GetSensors() => PawnIo.Sensors();
+
+    private PawnIoManager PawnIo => new(system, _games.List, _log);
 
     private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 

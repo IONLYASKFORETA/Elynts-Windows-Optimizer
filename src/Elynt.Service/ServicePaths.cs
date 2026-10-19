@@ -25,6 +25,9 @@ internal static class ServicePaths
     /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
     public static string Downloads { get; } = Path.Combine(Root, "downloads");
 
+    /// <summary>PawnIO's setup between download and install, and its modules. Users can't write here, so a verified file can't be swapped.</summary>
+    public static string PawnIo { get; } = Path.Combine(Root, "pawnio");
+
     /// <summary>Games each user added by hand, one file per user SID.</summary>
     public static string Games { get; } = Path.Combine(Root, "games");
 
@@ -58,5 +61,6 @@ internal static class ServicePaths
         Directory.CreateDirectory(RepairLogs);
         Directory.CreateDirectory(Downloads);
         Directory.CreateDirectory(Games);
+        Directory.CreateDirectory(PawnIo);
     }
 }

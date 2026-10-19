@@ -331,6 +331,8 @@
                     <StackPanel>
                     <local:GpuTuningPanel DataContext="{Binding Gpu}"
                                           Visibility="{Binding DataContext.IsGpuPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}" />
+                    <local:SensorsPanel DataContext="{Binding Sensors}"
+                                        Visibility="{Binding DataContext.IsSensorsPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}" />
                     <StackPanel DataContext="{Binding Bios}" Margin="4"
                                 Visibility="{Binding DataContext.IsBiosPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
                         <TextBlock Text="BIOS settings" FontSize="16" FontWeight="SemiBold" />

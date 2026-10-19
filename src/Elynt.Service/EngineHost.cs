@@ -6,6 +6,8 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.LowLevel;
+using Elynt.Core.Sensors;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Tuning;
@@ -34,6 +36,16 @@ internal sealed class EngineHost(
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
         new ProcessInstallerRunner());
+    // PawnIO is only ever installed by the user's "Turn on PawnIO"; until then these only check whether it is there.
+    private readonly PawnIoAdapters _pawnIo = new(
+        new WindowsPawnIo(new ProcessInstallerRunner(TimeSpan.FromMinutes(5))),
+        new PawnIoCpu(Path.Combine(ServicePaths.PawnIo, "modules")),
+        ServicePaths.PawnIo,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(5) }),
+        new WinTrustSignatureVerifier());
+
+    // Best first: the GPU vendor's SDK, then Windows. PawnIO, when installed, comes before both.
+    private readonly IReadOnlyList<ISensorSource> _sensors = [new NvmlSensors(), new WindowsSensors()];
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
@@ -98,7 +110,7 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power },
+                _games) { Boot = _boot, Power = _power, PawnIo = _pawnIo, Sensors = _sensors },
             journal,
             sid,
             safetyNet,

@@ -3,9 +3,11 @@ using Elynt.Core.Bios;
 using Elynt.Core.Boot;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.LowLevel;
 using Elynt.Core.Power;
 using Elynt.Core.Registry;
 using Elynt.Core.Repair;
+using Elynt.Core.Sensors;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core;
@@ -32,6 +34,12 @@ public sealed record SystemAdapters(
 
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
+
+    /// <summary>The optional PawnIO driver, installed only when the user turns it on. Without it, PawnIO is unavailable.</summary>
+    public PawnIoAdapters? PawnIo { get; init; }
+
+    /// <summary>Sensor sources that need no extra driver (vendor SDKs, then Windows), best first.</summary>
+    public IReadOnlyList<ISensorSource> Sensors { get; init; } = [];
 }
 
 public interface ISystemInfo
