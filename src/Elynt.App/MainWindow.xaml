@@ -395,7 +395,7 @@
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />
 
-                <!-- Drivers page: each GPU's installed driver, the latest from the vendor, and a silent install. -->
+                <!-- Drivers page: each GPU's and the chipset's installed driver, the latest from the vendor, and a silent install. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding IsDriversPage, Converter={StaticResource Visible}}">
                     <StackPanel DataContext="{Binding Drivers}" Margin="4">
@@ -411,7 +411,8 @@
                                                   IsEnabled="{Binding IsIdle}"
                                                   Visibility="{Binding HasBranches, Converter={StaticResource Visible}}" />
                                         <CheckBox Content="Clean install (resets the driver's own settings)" IsChecked="{Binding CleanInstall}"
-                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
+                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
+                                                  Visibility="{Binding HasCleanInstall, Converter={StaticResource Visible}}" />
                                         <CheckBox Content="Lean install (display driver only: no NVIDIA App, telemetry or extras; laptops keep their power components; needs 7-Zip)"
                                                   IsChecked="{Binding LeanInstall}" IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
                                                   Visibility="{Binding CanInstallLean, Converter={StaticResource Visible}}" />
@@ -474,6 +475,8 @@
                     <StackPanel>
                     <local:GpuTuningPanel DataContext="{Binding Gpu}"
                                           Visibility="{Binding DataContext.IsGpuPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}" />
+                    <local:SensorsPanel DataContext="{Binding Sensors}"
+                                        Visibility="{Binding DataContext.IsSensorsPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}" />
                     <StackPanel DataContext="{Binding Bios}" Margin="4"
                                 Visibility="{Binding DataContext.IsBiosPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
                         <TextBlock Text="BIOS settings" FontSize="16" FontWeight="SemiBold" />

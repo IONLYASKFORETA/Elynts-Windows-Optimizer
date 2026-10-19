@@ -24,7 +24,35 @@
                             <TextBlock Text="On default settings" Opacity="0.7"
                                        Visibility="{Binding AtDefaults, Converter={StaticResource Visible}}" />
 
-                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,8,0,0">
+                            <!-- Live sensor values, refreshed every 2 seconds. -->
+                            <ItemsControl ItemsSource="{Binding Readouts}" Margin="0,6,0,0"
+                                          Visibility="{Binding HasReadouts, Converter={StaticResource Visible}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Margin="0,0,16,0" Opacity="0.8" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Intel requires its warning to be shown and accepted before tuning unlocks. -->
+                            <Border Padding="10" Margin="0,8,0,0" CornerRadius="4" BorderThickness="1"
+                                    BorderBrush="DarkOrange"
+                                    Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
+                                <StackPanel>
+                                    <TextBlock Text="Read this before tuning" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                                    <Button Content="I understand the risks, unlock tuning" Command="{Binding AcceptWarning}"
+                                            Padding="12,4" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,8,0,0"
+                                          IsEnabled="{Binding IsUnlocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:TuningSliderViewModel}">
                                         <Grid Margin="0,4">
@@ -51,10 +79,18 @@
 
                             <WrapPanel Margin="0,8,0,0">
                                 <Button Content="Apply" Command="{Binding Apply}" Padding="12,4" Margin="0,0,8,4" />
-                                <Button Content="Auto overclock" Command="{Binding AutoOverclock}" Padding="12,4" Margin="0,0,8,4" />
-                                <Button Content="Auto undervolt" Command="{Binding AutoUndervolt}" Padding="12,4" Margin="0,0,8,4" />
+                                <Button Content="Auto overclock" Command="{Binding AutoOverclock}" Padding="12,4" Margin="0,0,8,4"
+                                        Visibility="{Binding CanAutoOverclock, Converter={StaticResource Visible}}" />
+                                <Button Content="Auto undervolt" Command="{Binding AutoUndervolt}" Padding="12,4" Margin="0,0,8,4"
+                                        Visibility="{Binding CanAutoUndervolt, Converter={StaticResource Visible}}" />
                                 <Button Content="Reset to defaults" Command="{Binding Reset}" Padding="12,4" Margin="0,0,8,4" />
                             </WrapPanel>
+
+                            <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowsNvidiaApp, Converter={StaticResource Visible}}">
+                                <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                                           Text="For a one-click safe overclock, use Automatic Tuning in the NVIDIA App (System, then Performance). Use either it or the sliders here, not both: they overwrite each other." />
+                                <Button Content="Open the NVIDIA App" Command="{Binding OpenNvidiaApp}" Padding="12,4" Margin="0,4,0,0" HorizontalAlignment="Left" />
+                            </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
                                         Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}">

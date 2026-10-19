@@ -7,6 +7,8 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.LowLevel;
+using Elynt.Core.Sensors;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Startup;
@@ -37,14 +39,34 @@ internal sealed class EngineHost(
     private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
     private readonly WindowsDevices _pnpDevices = new();
 
+    /// <summary>Shared by every vendor's latest-driver lookup.</summary>
+    private static readonly HttpClient LookupClient = new() { Timeout = TimeSpan.FromSeconds(20) };
+
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
-        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        [
+            new NvidiaDriverSource(LookupClient),
+            new AmdGpuDriverSource(LookupClient),
+            new AmdChipsetDriverSource(LookupClient),
+            new IntelGpuDriverSource(LookupClient),
+            new IntelChipsetDriverSource(LookupClient),
+        ],
         ServicePaths.Downloads,
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
         new ProcessInstallerRunner(),
         new SevenZipExtractor());
+
+    // PawnIO is only ever installed by the user's "Turn on PawnIO"; until then these only check whether it is there.
+    private readonly PawnIoAdapters _pawnIo = new(
+        new WindowsPawnIo(new ProcessInstallerRunner(TimeSpan.FromMinutes(5))),
+        new PawnIoCpu(Path.Combine(ServicePaths.PawnIo, "modules")),
+        ServicePaths.PawnIo,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(5) }),
+        new WinTrustSignatureVerifier());
+
+    // Best first: the GPU vendor's SDK, then Windows. PawnIO, when installed, comes before both.
+    private readonly IReadOnlyList<ISensorSource> _sensors = [new NvmlSensors(), new WindowsSensors()];
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
@@ -123,6 +145,8 @@ internal sealed class EngineHost(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
                 Features = new WindowsOptionalFeatures(),
+                PawnIo = _pawnIo,
+                Sensors = _sensors,
             },
             journal,
             sid,

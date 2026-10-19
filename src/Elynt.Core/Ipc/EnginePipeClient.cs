@@ -10,6 +10,8 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Tuning;
+using Elynt.Core.LowLevel;
+using Elynt.Core.Sensors;
 
 namespace Elynt.Core.Ipc;
 
@@ -199,6 +201,22 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
 
     public Task<TuningResult> ResetGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
         TuneAsync(new ResetGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> AcceptGpuWarningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new AcceptGpuWarningRequest(deviceId), cancellation);
+
+    public async Task<PawnIoReport> GetPawnIoAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetPawnIoRequest(), cancellation)).PawnIo ?? throw Missing("PawnIO status");
+
+    /// <param name="acceptFaceitWarning">The user accepted the FACEIT warning. The service refuses to install without it.</param>
+    public async Task<PawnIoResult> InstallPawnIoAsync(bool acceptFaceitWarning, CancellationToken cancellation = default) =>
+        (await SendAsync(new InstallPawnIoRequest(acceptFaceitWarning), cancellation)).PawnIoResult ?? throw Missing("PawnIO result");
+
+    public async Task<PawnIoResult> UninstallPawnIoAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new UninstallPawnIoRequest(), cancellation)).PawnIoResult ?? throw Missing("PawnIO result");
+
+    public async Task<SensorReport> GetSensorsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetSensorsRequest(), cancellation)).Sensors ?? throw Missing("sensors");
 
     public async ValueTask DisposeAsync()
     {

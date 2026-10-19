@@ -6,6 +6,8 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
+using Elynt.Core.LowLevel;
+using Elynt.Core.Sensors;
 using Elynt.Core.Startup;
 using Elynt.Core.Repair;
 using Elynt.Core.Services;
@@ -509,6 +511,23 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
         await _client.ResetGpuTuningAsync("amd:0", ct);
         Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+        AssertSameJson(_engine.AcceptGpuWarning("intel:0"), await _client.AcceptGpuWarningAsync("intel:0", ct));
+        Assert.Equal("AcceptGpuWarning intel:0", _engine.LastCall);
+    }
+
+    [Fact]
+    public async Task PawnIO_and_sensor_commands_arrive_unchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+
+        AssertSameJson(_engine.GetPawnIo(), await _client.GetPawnIoAsync(ct));
+        AssertSameJson(_engine.GetSensors(), await _client.GetSensorsAsync(ct));
+        AssertSameJson(_engine.InstallPawnIo(true), await _client.InstallPawnIoAsync(acceptFaceitWarning: true, ct));
+        Assert.Equal("InstallPawnIo True", _engine.LastCall);
+        await _client.InstallPawnIoAsync(acceptFaceitWarning: false, ct);
+        Assert.Equal("InstallPawnIo False", _engine.LastCall);
+        AssertSameJson(_engine.UninstallPawnIo(), await _client.UninstallPawnIoAsync(ct));
+        Assert.Equal("UninstallPawnIo", _engine.LastCall);
     }
 
     [Fact]
@@ -721,7 +740,16 @@ public sealed class PipeContractTests : IAsyncLifetime
             RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
             Notice: "Waiting.");
 
-        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+        private static readonly GpuTuningView Nvidia = new(
+            "nvidia:GPU-1234", "NVIDIA GeForce RTX 4070", GpuVendor.Nvidia,
+            [new TuningControl(GpuControls.CoreClockOffset, "Core clock offset", "MHz", -500, 1000, 1, 0, 150)],
+            [],
+            AtDefaults: false,
+            RevertsAt: null,
+            Notice: null,
+            Readouts: [new GpuReadout("Temperature", 61, "°C"), new GpuReadout("Power draw", 187, "W")]);
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu, IntelGpu, Nvidia], "A page note.");
 
         public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
         {
@@ -747,11 +775,52 @@ public sealed class PipeContractTests : IAsyncLifetime
             return new TuningResult(true, "Put back.", Gpu);
         }
 
+        private static readonly PawnIoReport PawnIo = new(
+            true, true, "2.0.1", "FACEIT's anti-cheat blocks PawnIO.", ["Counter-Strike 2"], "PawnIO 2.0.1 is installed.");
+
+        public PawnIoReport GetPawnIo() => PawnIo;
+
+        public PawnIoResult InstallPawnIo(bool acceptFaceitWarning)
+        {
+            LastCall = $"InstallPawnIo {acceptFaceitWarning}";
+            return new PawnIoResult(true, "Installed PawnIO 2.0.1.", PawnIo, RebootNeeded: true);
+        }
+
+        public PawnIoResult UninstallPawnIo()
+        {
+            LastCall = "UninstallPawnIo";
+            return new PawnIoResult(true, "Uninstalled PawnIO.", PawnIo with { Installed = false, Version = null });
+        }
+
+        public SensorReport GetSensors() => new(
+            [
+                new SensorView(SensorIds.CpuTemperature, "CPU temperature", SensorKind.Temperature, 61.5, "°C", "PawnIO"),
+                new SensorView("gpu0.clock", "GPU clock", SensorKind.Clock, 2610, "MHz", "NVIDIA NVML"),
+            ],
+            FromPawnIo: true,
+            Note: null);
+
         public TuningResult ResetGpuTuning(string deviceId)
         {
             LastCall = $"ResetGpuTuning {deviceId}";
             return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
         }
+
+        public TuningResult AcceptGpuWarning(string deviceId)
+        {
+            LastCall = $"AcceptGpuWarning {deviceId}";
+            return new TuningResult(true, "Unlocked.", IntelGpu with { Locked = false });
+        }
+
+        private static readonly GpuTuningView IntelGpu = new(
+            "intel:0", "Intel Arc A770", GpuVendor.Intel,
+            [new TuningControl(GpuControls.ClockOffset, "GPU clock offset", "MHz", 0, 250, 1, 0, 0)],
+            [],
+            AtDefaults: true,
+            RevertsAt: null,
+            Notice: null,
+            Warning: "Overclocking may damage your GPU.",
+            Locked: true);
 
         public CommandResult Revert(string tweakId)
         {

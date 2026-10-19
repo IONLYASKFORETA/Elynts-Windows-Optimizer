@@ -4,13 +4,20 @@ using Serilog;
 
 namespace Elynt.App.ViewModels;
 
-/// <summary>The Drivers page: each detected GPU with its installed driver, a lookup, and a silent install.</summary>
+/// <summary>
+/// The Drivers page: each detected GPU, then the chipset driver for the CPU's maker, with its installed driver, a
+/// lookup, and a silent install.
+/// </summary>
 /// <param name="client">The current connection to the service, or null while disconnected.</param>
 /// <param name="askToReboot">Shows the reboot prompt after an install whose installer said Windows must restart.</param>
 public sealed class DriversPageViewModel(DriverReport report, Func<EnginePipeClient?> client, Action<DriverInstallResult> askToReboot)
 {
     public IReadOnlyList<GpuItemViewModel> Gpus { get; } =
-        report.Gpus.Select(g => new GpuItemViewModel(g, client, askToReboot)).ToList();
+        report.Gpus
+            .Concat(report.Chipset is { } chipset
+                ? [new InstalledGpu(chipset.Name, DriverRequest.Chipset, chipset.Vendor, chipset.DriverVersion ?? "not installed", "")]
+                : [])
+            .Select(g => new GpuItemViewModel(g, client, askToReboot)).ToList();
 
     public string? Problem { get; } = report.Problem ?? (report.Gpus.Count == 0 ? "No graphics card was found." : null);
 
@@ -30,8 +37,13 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 
     public string InstalledVersion => $"Installed driver: {gpu.DriverVersion}";
 
+    private bool IsNvidiaGpu => gpu.Vendor == GpuVendor.Nvidia && gpu.DeviceId != DriverRequest.Chipset;
+
     /// <summary>Only NVIDIA has a Studio branch.</summary>
-    public bool HasBranches => gpu.Vendor == GpuVendor.Nvidia;
+    public bool HasBranches => IsNvidiaGpu;
+
+    /// <summary>Only NVIDIA's installer has a clean-install switch.</summary>
+    public bool HasCleanInstall => IsNvidiaGpu;
 
     public bool UseStudio
     {
@@ -46,7 +58,7 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
     }
 
     /// <summary>Only NVIDIA's package can be stripped to the display driver.</summary>
-    public bool CanInstallLean => gpu.Vendor == GpuVendor.Nvidia;
+    public bool CanInstallLean => IsNvidiaGpu;
 
     public bool LeanInstall
     {
@@ -85,7 +97,8 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 
     public bool HasVendorPage => VendorPage is not null;
 
-    private DriverRequest Request => new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall, LeanInstall && CanInstallLean);
+    private DriverRequest Request =>
+        new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall && HasCleanInstall, LeanInstall && CanInstallLean);
 
     public Task CheckAsync() => RunAsync("Looking up the latest driver…", async c =>
     {

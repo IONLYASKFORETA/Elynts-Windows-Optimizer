@@ -61,7 +61,7 @@ public static class BiosAdvisor
                 ReadoutState.Off => new(BiosReadoutIds.Pbo, name, ReadoutState.Off, "PBO is off: the CPU runs at AMD's stock power limits."),
                 ReadoutState.NotApplicable => new(BiosReadoutIds.Pbo, name, ReadoutState.NotApplicable, "This CPU doesn't support PBO."),
                 _ => new(BiosReadoutIds.Pbo, name, ReadoutState.Unknown,
-                    "Windows can't read PBO without a low-level driver, which the app doesn't load. Check it in the BIOS, or in AMD Ryzen Master."),
+                    "Windows can't read PBO without the optional PawnIO driver. Turn PawnIO on under Overclocking to read it, or check it in the BIOS or in AMD Ryzen Master."),
             },
             _ => new(BiosReadoutIds.Pbo, name, ReadoutState.Unknown, "Couldn't tell which CPU this PC has."),
         };
