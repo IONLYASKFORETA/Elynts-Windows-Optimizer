@@ -57,11 +57,9 @@ public class DebloatSettingsTests
         var result = engine.Apply("debloat.game-dvr-background-capture-off");
 
         Assert.True(result.Succeeded, result.Message);
+        // Only "Record what happened". AppCaptureEnabled and GameDVR_Enabled turn off all capture, on-demand too.
         Assert.Equal(
-            [
-                @"Set HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR\AppCaptureEnabled to 0 (0x00000000) (REG_DWORD)",
-                @"Set HKCU\System\GameConfigStore\GameDVR_Enabled to 0 (0x00000000) (REG_DWORD)",
-            ],
+            [@"Set HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR\HistoricalCaptureEnabled to 0 (0x00000000) (REG_DWORD)"],
             result.Tweak!.ExactChange);
     }
 
