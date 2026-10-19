@@ -2,10 +2,13 @@ using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
+using Elynt.Core.Startup;
 using Elynt.Core.Repair;
+using Elynt.Core.Services;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -151,6 +154,33 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ListServices_arrives_unchanged()
+    {
+        var services = await _client.ListServicesAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListServices(), services);
+    }
+
+    [Fact]
+    public async Task SetServiceStart_arrives_unchanged_with_advanced_mode()
+    {
+        var result = await _client.SetServiceStartAsync("Spooler", ServiceStart.Disabled, new ApplyOptions(Advanced: true), TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetServiceStart Spooler Disabled", _engine.LastCall);
+        Assert.Equal(new ApplyOptions(Advanced: true), _engine.LastOptions);
+        AssertSameJson(_engine.SetServiceStart("Spooler", ServiceStart.Disabled), result);
+    }
+
+    [Fact]
+    public async Task UndoServiceChange_arrives_unchanged()
+    {
+        var result = await _client.UndoServiceChangeAsync("Spooler", TestContext.Current.CancellationToken);
+
+        Assert.Equal("UndoServiceChange Spooler", _engine.LastCall);
+        AssertSameJson(_engine.UndoServiceChange("Spooler"), result);
+    }
+
+    [Fact]
     public async Task ListHistory_arrives_unchanged()
     {
         var history = await _client.ListHistoryAsync(TestContext.Current.CancellationToken);
@@ -253,11 +283,99 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ScanCleanup_streams_each_category_then_the_scan_unchanged()
+    {
+        var progress = new List<CleanupProgress>();
+
+        var scan = await _client.ScanCleanupAsync(new CollectCleanup(progress), TestContext.Current.CancellationToken);
+
+        AssertSameJson(StubEngine.CleanupSteps, progress);
+        AssertSameJson(StubEngine.Scan, scan);
+    }
+
+    [Fact]
+    public async Task Clean_carries_the_ticked_categories_and_the_destructive_confirmation()
+    {
+        var progress = new List<CleanupProgress>();
+
+        var report = await _client.CleanAsync(["cleanup.temp", "cleanup.recycle-bin"], confirmDestructive: true, new CollectCleanup(progress),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("Clean cleanup.temp,cleanup.recycle-bin True", _engine.LastCall);
+        AssertSameJson(StubEngine.CleanupSteps, progress);
+        AssertSameJson(StubEngine.Cleaned, report);
+    }
+
+    [Fact]
+    public async Task Weekly_cleaning_schedule_arrives_unchanged()
+    {
+        var set = await _client.SetWeeklyCleanupAsync(true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetWeeklyCleanup True", _engine.LastCall);
+        AssertSameJson(_engine.GetCleanupSchedule(), set);
+        AssertSameJson(_engine.GetCleanupSchedule(), await _client.GetCleanupScheduleAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Other_commands_still_answer_while_a_clean_runs()
+    {
+        _engine.HoldRepair = new TaskCompletionSource();
+
+        var clean = _client.CleanAsync(["cleanup.temp"], false, null, TestContext.Current.CancellationToken);
+        await _engine.RepairStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
+        Assert.Single(await second.ListTweaksAsync(TestContext.Current.CancellationToken));
+
+        _engine.HoldRepair.SetResult();
+        await clean;
+    }
+
+    private sealed class CollectCleanup(List<CleanupProgress> into) : IProgress<CleanupProgress>
+    {
+        public void Report(CleanupProgress value) => into.Add(value);
+    }
+
+    [Fact]
     public async Task GetBiosReport_arrives_unchanged()
     {
         var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
 
         AssertSameJson(_engine.GetBiosReport(), report);
+    }
+
+    [Fact]
+    public async Task ListStartupItems_arrives_unchanged()
+    {
+        var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.ListStartupItems(), items);
+    }
+
+    [Fact]
+    public async Task SetStartupItemEnabled_arrives_unchanged()
+    {
+        var result = await _client.SetStartupItemEnabledAsync("run:HKCU:Discord", false, TestContext.Current.CancellationToken);
+
+        Assert.Equal("SetStartupItemEnabled run:HKCU:Discord False", _engine.LastCall);
+        AssertSameJson(_engine.SetStartupItemEnabled("run:HKCU:Discord", false), result);
+    }
+
+    [Fact]
+    public async Task DeleteStartupItem_carries_the_destructive_confirmation()
+    {
+        var result = await _client.DeleteStartupItemAsync("run:HKCU:Discord", true, TestContext.Current.CancellationToken);
+
+        Assert.Equal("DeleteStartupItem run:HKCU:Discord True", _engine.LastCall);
+        AssertSameJson(_engine.DeleteStartupItem("run:HKCU:Discord", true), result);
+    }
+
+    [Fact]
+    public async Task CheckNewStartupItems_arrives_unchanged()
+    {
+        var items = await _client.CheckNewStartupItemsAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("CheckNewStartupItems", _engine.LastCall);
+        AssertSameJson(_engine.CheckNewStartupItems(), items);
     }
 
     [Fact]
@@ -403,6 +521,8 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
         await _client.ResetGpuTuningAsync("amd:0", ct);
         Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+        AssertSameJson(_engine.AcceptGpuWarning("intel:0"), await _client.AcceptGpuWarningAsync("intel:0", ct));
+        Assert.Equal("AcceptGpuWarning intel:0", _engine.LastCall);
     }
 
     [Fact]
@@ -457,6 +577,29 @@ public sealed class PipeContractTests : IAsyncLifetime
         };
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
+
+        private static readonly ServiceView Service = new(
+            "Spooler", "Print Spooler", "Queues print jobs.", ServiceKind.Service, ServiceStart.Automatic, DelayedAutoStart: true,
+            Running: true, ServiceAccess.Listed, LockReason: null,
+            new ServiceRecommendation(ServiceStart.Manual, "No printer was found."),
+            [ServiceStart.Automatic, ServiceStart.Manual], [ServiceStart.Automatic, ServiceStart.Manual, ServiceStart.Disabled],
+            CanUndo: true);
+
+        public IReadOnlyList<ServiceView> ListServices() =>
+            [Service, Service with { Name = "vgc", Access = ServiceAccess.Protected, LockReason = "anti-cheat", Recommendation = null }];
+
+        public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null)
+        {
+            LastCall = $"SetServiceStart {serviceName} {start}";
+            LastOptions = options;
+            return new ServiceResult(true, "Print Spooler now starts Manual.", Service with { Start = start });
+        }
+
+        public ServiceResult UndoServiceChange(string serviceName)
+        {
+            LastCall = $"UndoServiceChange {serviceName}";
+            return new ServiceResult(false, "Nothing to undo.", Service with { CanUndo = false });
+        }
 
         public IReadOnlyList<AppView> ListApps() =>
             [new("Valve.Steam", "Steam", AppGroups.GameLaunchers, "Valve's store.", false)];
@@ -612,7 +755,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
             Notice: "Waiting.");
 
-        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+        public GpuTuningReport GetGpuTuning() => new([Gpu, IntelGpu], "A page note.");
 
         public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
         {
@@ -644,6 +787,22 @@ public sealed class PipeContractTests : IAsyncLifetime
             return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
         }
 
+        public TuningResult AcceptGpuWarning(string deviceId)
+        {
+            LastCall = $"AcceptGpuWarning {deviceId}";
+            return new TuningResult(true, "Unlocked.", IntelGpu with { Locked = false });
+        }
+
+        private static readonly GpuTuningView IntelGpu = new(
+            "intel:0", "Intel Arc A770", GpuVendor.Intel,
+            [new TuningControl(GpuControls.ClockOffset, "GPU clock offset", "MHz", 0, 250, 1, 0, 0)],
+            [],
+            AtDefaults: true,
+            RevertsAt: null,
+            Notice: null,
+            Warning: "Overclocking may damage your GPU.",
+            Locked: true);
+
         public CommandResult Revert(string tweakId)
         {
             LastCall = $"Revert {tweakId}";
@@ -666,6 +825,34 @@ public sealed class PipeContractTests : IAsyncLifetime
             ]);
         }
 
+        private static readonly StartupItemView StartupItem = new(
+            "run:HKCU:Discord", "Discord", StartupSource.RunKey, @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+            @"""C:\Discord\Update.exe"" --processStart Discord.exe", "Discord Inc.", SignatureStatus.Signed, StartupImpact.High,
+            Enabled: false, CanSwitch: true, CanDelete: true)
+        {
+            CanUndo = true,
+            Note = "A note.",
+        };
+
+        public IReadOnlyList<StartupItemView> ListStartupItems() => [StartupItem];
+
+        public StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled)
+        {
+            LastCall = $"SetStartupItemEnabled {itemId} {enabled}";
+            return new StartupCommandResult(true, "Turned off.", StartupItem);
+        }
+
+        public IReadOnlyList<StartupItemView> CheckNewStartupItems()
+        {
+            LastCall = "CheckNewStartupItems";
+            return [StartupItem with { Enabled = true }];
+        }
+
+        public StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive)
+        {
+            LastCall = $"DeleteStartupItem {itemId} {confirmDestructive}";
+            return new StartupCommandResult(true, "Deleted.", null);
+        }
         private static readonly UpdateRunStatus UpdateStatus = new(
             UpdatePhase.Finished, "Installed 1 of 2 updates. Restart to finish installing.", 1, 2, null, RebootRequired: true,
             Installed: ["2026-10 Cumulative Update"], NotInstalled: ["Defender update"], Skipped: ["NVIDIA - Display"]);
@@ -704,6 +891,53 @@ public sealed class PipeContractTests : IAsyncLifetime
             new("some.repair", Sections.Repair, "Some repair", "Repairs a thing.", ["Run thing.exe /fix"], RestartNeed.Restart,
                 "Needs a restart.", "Are you sure?", IsFollowUp: false, Available: false, "Not on this PC."),
         ];
+
+        public static readonly IReadOnlyList<CleanupProgress> CleanupSteps =
+        [
+            new(CleanupPhase.Scanning, "cleanup.temp", "Temporary files", 1, 2),
+            new(CleanupPhase.Cleaning, "cleanup.recycle-bin", "Recycle Bin", 2, 2),
+        ];
+
+        public static readonly CleanupScan Scan = new(
+        [
+            new("cleanup.temp", "Temporary files", "Deletes leftovers.", CleanupKind.Safe, null, 3_500, 3, [@"C:\Windows\Temp"], null, Ticked: true),
+            new("cleanup.component-store", "ResetBase", "DISM.", CleanupKind.Destructive, "Can't uninstall updates.", null, 0, [], "Busy.", Ticked: false),
+        ]);
+
+        public static readonly CleanupReport Cleaned = new(false, "Freed 3 KB.", 3_500,
+        [
+            new("cleanup.temp", "Temporary files", true, 3_500, 3, 1, "Freed 3 KB. 1 in use were left alone."),
+            new("cleanup.recycle-bin", "Recycle Bin", false, 0, 0, 0, "Couldn't clean this."),
+        ]);
+
+        private CleanupSchedule _schedule = new(false, new DateTimeOffset(2026, 10, 9, 3, 0, 0, TimeSpan.Zero));
+
+        public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = "ScanCleanup";
+            foreach (var p in CleanupSteps)
+                progress?.Report(p);
+            return Task.FromResult(Scan);
+        }
+
+        public async Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default)
+        {
+            LastCall = $"Clean {string.Join(",", categoryIds)} {confirmDestructive}";
+            RepairStarted.TrySetResult();
+            foreach (var p in CleanupSteps)
+                progress?.Report(p);
+            if (HoldRepair is not null)
+                await HoldRepair.Task.WaitAsync(cancellation);
+            return Cleaned;
+        }
+
+        public CleanupSchedule GetCleanupSchedule() => _schedule;
+
+        public CleanupSchedule SetWeeklyCleanup(bool enabled)
+        {
+            LastCall = $"SetWeeklyCleanup {enabled}";
+            return _schedule = _schedule with { WeeklyEnabled = enabled };
+        }
 
         public async Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default)
         {

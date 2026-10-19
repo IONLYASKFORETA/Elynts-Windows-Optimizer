@@ -6,6 +6,9 @@ public enum DriverInstallStage
     LookingUp,
     Downloading,
     Verifying,
+
+    /// <summary>Unpacking and stripping the package for a lean install.</summary>
+    Slimming,
     Installing,
 }
 

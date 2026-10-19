@@ -2,6 +2,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Services;
+using Elynt.Core.Tweaks;
+using Elynt.Core.Startup;
+using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
@@ -28,6 +32,17 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ListRepairToolsRequest), "listRepairTools")]
 [JsonDerivedType(typeof(RunRepairRequest), "runRepair")]
 [JsonDerivedType(typeof(GetBiosReportRequest), "getBiosReport")]
+[JsonDerivedType(typeof(ListServicesRequest), "listServices")]
+[JsonDerivedType(typeof(SetServiceStartRequest), "setServiceStart")]
+[JsonDerivedType(typeof(UndoServiceChangeRequest), "undoServiceChange")]
+[JsonDerivedType(typeof(ListStartupItemsRequest), "listStartupItems")]
+[JsonDerivedType(typeof(SetStartupItemEnabledRequest), "setStartupItemEnabled")]
+[JsonDerivedType(typeof(DeleteStartupItemRequest), "deleteStartupItem")]
+[JsonDerivedType(typeof(CheckNewStartupItemsRequest), "checkNewStartupItems")]
+[JsonDerivedType(typeof(ScanCleanupRequest), "scanCleanup")]
+[JsonDerivedType(typeof(CleanRequest), "clean")]
+[JsonDerivedType(typeof(GetCleanupScheduleRequest), "getCleanupSchedule")]
+[JsonDerivedType(typeof(SetWeeklyCleanupRequest), "setWeeklyCleanup")]
 [JsonDerivedType(typeof(StartWindowsUpdateRequest), "startWindowsUpdate")]
 [JsonDerivedType(typeof(GetWindowsUpdateStatusRequest), "getWindowsUpdateStatus")]
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
@@ -45,6 +60,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -84,6 +100,21 @@ public sealed record RunRepairRequest(string ToolId, bool Confirmed) : EngineReq
 
 public sealed record GetBiosReportRequest : EngineRequest;
 
+public sealed record ListServicesRequest : EngineRequest;
+
+public sealed record SetServiceStartRequest(string ServiceName, ServiceStart Start, ApplyOptions? Options = null) : EngineRequest;
+
+public sealed record UndoServiceChangeRequest(string ServiceName) : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category measured, then the scan.</summary>
+public sealed record ScanCleanupRequest : EngineRequest;
+
+/// <summary>Long-running: streams a <see cref="CleanupProgressEvent"/> per category cleaned, then the report.</summary>
+public sealed record CleanRequest(IReadOnlyList<string> CategoryIds, bool ConfirmDestructive) : EngineRequest;
+
+public sealed record GetCleanupScheduleRequest : EngineRequest;
+
+public sealed record SetWeeklyCleanupRequest(bool Enabled) : EngineRequest;
 public sealed record StartWindowsUpdateRequest : EngineRequest;
 
 public sealed record GetWindowsUpdateStatusRequest : EngineRequest;
@@ -121,6 +152,8 @@ public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
 
 public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
 
+public sealed record AcceptGpuWarningRequest(string DeviceId) : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -128,6 +161,7 @@ public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "event")]
 [JsonDerivedType(typeof(InstallProgressEvent), "installProgress")]
 [JsonDerivedType(typeof(RepairProgressEvent), "repairProgress")]
+[JsonDerivedType(typeof(CleanupProgressEvent), "cleanupProgress")]
 [JsonDerivedType(typeof(DriverInstallProgressEvent), "driverInstallProgress")]
 public abstract record EngineEvent;
 
@@ -135,6 +169,7 @@ public sealed record InstallProgressEvent(InstallProgress Progress) : EngineEven
 
 public sealed record RepairProgressEvent(RepairProgress Progress) : EngineEvent;
 
+public sealed record CleanupProgressEvent(CleanupProgress Progress) : EngineEvent;
 public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) : EngineEvent;
 
 /// <summary>
@@ -164,7 +199,14 @@ public sealed record EngineResponse(
     GpuTuningReport? GpuTuning = null,
     TuningResult? Tuning = null,
     UpdateRunStatus? WindowsUpdate = null,
-    EngineEvent? Event = null)
+    EngineEvent? Event = null,
+    IReadOnlyList<ServiceView>? Services = null,
+    ServiceResult? ServiceResult = null,
+    IReadOnlyList<StartupItemView>? StartupItems = null,
+    StartupCommandResult? StartupResult = null,
+    CleanupScan? CleanupScan = null,
+    CleanupReport? CleanupReport = null,
+    CleanupSchedule? CleanupSchedule = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -214,6 +256,19 @@ public static class EngineProtocol
         RunRepairRequest run => new(RepairResult: await engine.RunRepairAsync(
             run.ToolId, run.Confirmed, Relay<RepairProgress>(p => new RepairProgressEvent(p), sendEvent), cancellation)),
         GetBiosReportRequest => new(Bios: engine.GetBiosReport()),
+        ListServicesRequest => new(Services: engine.ListServices()),
+        SetServiceStartRequest set => new(ServiceResult: engine.SetServiceStart(set.ServiceName, set.Start, set.Options)),
+        UndoServiceChangeRequest undo => new(ServiceResult: engine.UndoServiceChange(undo.ServiceName)),
+        ListStartupItemsRequest => new(StartupItems: engine.ListStartupItems()),
+        SetStartupItemEnabledRequest set => new(StartupResult: engine.SetStartupItemEnabled(set.ItemId, set.Enabled)),
+        CheckNewStartupItemsRequest => new(StartupItems: engine.CheckNewStartupItems()),
+        DeleteStartupItemRequest delete => new(StartupResult: engine.DeleteStartupItem(delete.ItemId, delete.ConfirmDestructive)),
+        ScanCleanupRequest => new(CleanupScan: await engine.ScanCleanupAsync(
+            Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        CleanRequest clean => new(CleanupReport: await engine.CleanAsync(
+            clean.CategoryIds, clean.ConfirmDestructive, Relay<CleanupProgress>(p => new CleanupProgressEvent(p), sendEvent), cancellation)),
+        GetCleanupScheduleRequest => new(CleanupSchedule: engine.GetCleanupSchedule()),
+        SetWeeklyCleanupRequest weekly => new(CleanupSchedule: engine.SetWeeklyCleanup(weekly.Enabled)),
         StartWindowsUpdateRequest => new(WindowsUpdate: engine.StartWindowsUpdate()),
         GetWindowsUpdateStatusRequest => new(WindowsUpdate: engine.GetWindowsUpdateStatus()),
         GetDriversRequest => new(Drivers: engine.GetDrivers()),
@@ -232,11 +287,13 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest or CleanDriversRequest or RestoreDriversRequest;
+    public static bool IsLongRunning(EngineRequest request) =>
+        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest or CleanDriversRequest or RestoreDriversRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>

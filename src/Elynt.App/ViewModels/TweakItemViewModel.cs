@@ -32,6 +32,14 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
         _ => "Possible placebo",
     };
 
+    public const string MainGroup = "Tweaks";
+    public const string PlaceboGroup = "Possible placebo";
+
+    /// <summary>Possible-placebo tweaks are listed in their own group, folded at the bottom of the page.</summary>
+    public bool IsPlacebo => View.Tier == EvidenceTier.PossiblePlacebo;
+
+    public string Group => IsPlacebo ? PlaceboGroup : MainGroup;
+
     public string ReversibilityText => View.Reversibility switch
     {
         Reversibility.Reversible => "Reversible",
@@ -71,6 +79,8 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
     public bool HasGamesWarning => View.AntiCheatWarning is not null;
 
     public bool IsDestructive => View.Reversibility == Reversibility.Destructive;
+
+    public bool HasApplyWarning => View.ApplyWarning is not null;
 
     /// <summary>Warnings for this PC's hardware, such as the X3D core-parking and Frame Generation notes.</summary>
     public IReadOnlyList<string> Warnings => View.Warnings;

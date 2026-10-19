@@ -17,6 +17,9 @@ public interface IRegistry
 
     bool KeyExists(RegistryRoot root, string keyPath);
 
+    /// <summary>The names of the key's direct subkeys, or none when the key does not exist.</summary>
+    IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath);
+
     /// <summary>Deletes the key only when it has no values and no subkeys left.</summary>
     void DeleteKeyIfEmpty(RegistryRoot root, string keyPath);
 }

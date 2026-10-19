@@ -19,6 +19,9 @@ public static class GpuControls
     public const string VramMaxClock = "vramMaxClock";
     public const string PowerLimit = "powerLimit";
     public const string FanSpeed = "fanSpeed";
+    public const string ClockOffset = "gpuClockOffset";
+    public const string VoltageOffset = "gpuVoltageOffset";
+    public const string TemperatureLimit = "temperatureLimit";
 }
 
 /// <summary>One slider as the vendor SDK reports it. The SDK's range is the only range the app allows.</summary>
@@ -37,12 +40,16 @@ public sealed record TuningControlSpec(string Id, string Name, string Unit, int 
 
 /// <summary>A tunable GPU as its adapter sees it.</summary>
 /// <param name="Id">Unique across adapters, e.g. "amd:0".</param>
+/// <param name="Warning">
+/// The vendor's own warning the user must accept before any tuning unlocks (Intel's overclock waiver), or null.
+/// </param>
 public sealed record GpuDevice(
     string Id,
     string Name,
     GpuVendor Vendor,
     IReadOnlyList<TuningControlSpec> Controls,
-    IReadOnlyList<AutoTuneKind> AutoTunes);
+    IReadOnlyList<AutoTuneKind> AutoTunes,
+    string? Warning = null);
 
 /// <summary>
 /// One vendor's GPU tuning SDK (ADLX, IGCL, NVML). The only code that changes GPU settings. Values are whole numbers
@@ -67,6 +74,14 @@ public interface IGpuTuningAdapter
 
     /// <summary>Runs the vendor's automatic tuning and returns once it has finished.</summary>
     void AutoTune(string deviceId, AutoTuneKind kind);
+
+    /// <summary>
+    /// Tells the driver the user accepted the device's <see cref="GpuDevice.Warning"/>. Called once per service run
+    /// before the first change, because a driver such as IGCL forgets it when the process ends.
+    /// </summary>
+    void AcceptWarning(string deviceId)
+    {
+    }
 }
 
 /// <summary>A slider ready to show: the SDK's range and default plus the card's current value.</summary>
@@ -75,6 +90,8 @@ public sealed record TuningControl(string Id, string Name, string Unit, int Min,
 /// <summary>One GPU on the Overclocking page.</summary>
 /// <param name="RevertsAt">When the unconfirmed change goes back, or null when nothing is waiting for confirmation.</param>
 /// <param name="Notice">Something the user should know, such as a change that went back because it wasn't confirmed.</param>
+/// <param name="Warning">The vendor's warning to accept before tuning, or null when the vendor has none.</param>
+/// <param name="Locked">The warning hasn't been accepted yet, so nothing can be changed.</param>
 public sealed record GpuTuningView(
     string DeviceId,
     string Name,
@@ -83,7 +100,9 @@ public sealed record GpuTuningView(
     IReadOnlyList<AutoTuneKind> AutoTunes,
     bool AtDefaults,
     DateTimeOffset? RevertsAt,
-    string? Notice);
+    string? Notice,
+    string? Warning = null,
+    bool Locked = false);
 
 /// <param name="Notice">A page-wide note, such as tuning being unavailable or settings reset after a crash.</param>
 public sealed record GpuTuningReport(IReadOnlyList<GpuTuningView> Gpus, string? Notice);

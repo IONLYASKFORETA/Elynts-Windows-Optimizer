@@ -2,12 +2,14 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Elynt.Core;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Startup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -21,19 +23,36 @@ internal sealed class EngineHost(
     ChangeJournal journal,
     SafetyNet safetyNet,
     IRepairLogStore repairLogs,
+    ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
+    private readonly WindowsServiceManager _services = new();
+    private readonly WindowsDevicePresence _devices = new();
+    private readonly WindowsScheduledTasks _tasks = new();
+    private readonly WindowsFileSignatures _signatures = new();
+    private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
+    private readonly WindowsDevices _pnpDevices = new();
+
+    /// <summary>Shared by every vendor's latest-driver lookup.</summary>
+    private static readonly HttpClient LookupClient = new() { Timeout = TimeSpan.FromSeconds(20) };
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
-        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        [
+            new NvidiaDriverSource(LookupClient),
+            new AmdGpuDriverSource(LookupClient),
+            new AmdChipsetDriverSource(LookupClient),
+            new IntelGpuDriverSource(LookupClient),
+            new IntelChipsetDriverSource(LookupClient),
+        ],
         ServicePaths.Downloads,
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
-        new ProcessInstallerRunner());
+        new ProcessInstallerRunner(),
+        new SevenZipExtractor());
     private readonly DriverCleaningAdapters _driverCleaning = new(
         new PnputilDriverStore(),
         new WindowsKernelDrivers(),
@@ -47,6 +66,7 @@ internal sealed class EngineHost(
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
     private readonly WindowsPowerPlans _power = new();
+    private readonly WindowsScanExclusions _scanExclusions = new();
     private bool _firstPipe = true;
 
     // One "check and install now" for the whole PC, so any app window can follow its progress.
@@ -107,12 +127,27 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power, DriverCleaning = _driverCleaning },
+                _games,
+                Cleanup: new WindowsCleanupSystem(sid))
+            {
+                Boot = _boot,
+                Power = _power,
+                ScanExclusions = _scanExclusions,
+                Services = _services,
+                Devices = _devices,
+                PnpDevices = _pnpDevices,
+                Startup = new StartupAdapters(
+                    new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+                Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
+                Features = new WindowsOptionalFeatures(),
+                DriverCleaning = _driverCleaning,
+            },
             journal,
             sid,
             safetyNet,
             logger: loggers.CreateLogger<Engine>(),
             repairLogs: repairLogs,
+            cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
             windowsUpdate: _windowsUpdate);

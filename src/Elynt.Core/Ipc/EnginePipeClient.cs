@@ -3,6 +3,10 @@ using System.IO.Pipes;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
+using Elynt.Core.Services;
+using Elynt.Core.Tweaks;
+using Elynt.Core.Startup;
+using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Tuning;
@@ -111,6 +115,46 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public async Task<BiosReport> GetBiosReportAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetBiosReportRequest(), cancellation)).Bios ?? throw Missing("BIOS report");
 
+    public async Task<IReadOnlyList<ServiceView>> ListServicesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListServicesRequest(), cancellation)).Services ?? throw Missing("services");
+
+    public async Task<ServiceResult> SetServiceStartAsync(
+        string serviceName, ServiceStart start, ApplyOptions? options = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetServiceStartRequest(serviceName, start, options), cancellation)).ServiceResult ?? throw Missing("service result");
+
+    public async Task<ServiceResult> UndoServiceChangeAsync(string serviceName, CancellationToken cancellation = default) =>
+        (await SendAsync(new UndoServiceChangeRequest(serviceName), cancellation)).ServiceResult ?? throw Missing("service result");
+
+    public async Task<IReadOnlyList<StartupItemView>> ListStartupItemsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
+
+    public async Task<StartupCommandResult> SetStartupItemEnabledAsync(string itemId, bool enabled, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetStartupItemEnabledRequest(itemId, enabled), cancellation)).StartupResult ?? throw Missing("result");
+
+    public async Task<StartupCommandResult> DeleteStartupItemAsync(string itemId, bool confirmDestructive, CancellationToken cancellation = default) =>
+        (await SendAsync(new DeleteStartupItemRequest(itemId, confirmDestructive), cancellation)).StartupResult ?? throw Missing("result");
+
+    public async Task<IReadOnlyList<StartupItemView>> CheckNewStartupItemsAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new CheckNewStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
+
+    /// <summary>Measures every cleanup category; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new ScanCleanupRequest(), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupScan
+        ?? throw Missing("cleanup scan");
+
+    /// <summary>Cleans the ticked categories; holds this connection until done, like a repair.</summary>
+    public async Task<CleanupReport> CleanAsync(
+        IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        (await SendAsync(new CleanRequest(categoryIds, confirmDestructive), cancellation,
+            e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupReport
+        ?? throw Missing("cleanup report");
+
+    public async Task<CleanupSchedule> GetCleanupScheduleAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetCleanupScheduleRequest(), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
+
+    public async Task<CleanupSchedule> SetWeeklyCleanupAsync(bool enabled, CancellationToken cancellation = default) =>
+        (await SendAsync(new SetWeeklyCleanupRequest(enabled), cancellation)).CleanupSchedule ?? throw Missing("cleanup schedule");
     public async Task<UpdateRunStatus> StartWindowsUpdateAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new StartWindowsUpdateRequest(), cancellation)).WindowsUpdate ?? throw Missing("Windows Update status");
 
@@ -164,6 +208,9 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public Task<TuningResult> ResetGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
         TuneAsync(new ResetGpuTuningRequest(deviceId), cancellation);
+
+    public Task<TuningResult> AcceptGpuWarningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new AcceptGpuWarningRequest(deviceId), cancellation);
 
     public async ValueTask DisposeAsync()
     {

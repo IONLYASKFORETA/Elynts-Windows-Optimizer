@@ -7,24 +7,33 @@ using Elynt.Core;
 using Elynt.Core.Apps;
 using Elynt.Core.Diagnostics;
 using Elynt.Core.Drivers;
+using Elynt.Core.Startup;
 
 namespace Elynt.App;
 
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _model;
+    private TrayNotes? _tray;
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame, ConfirmWarning);
         _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
+        _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
+        _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
         InitializeComponent();
         DataContext = _model;
+        _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
+            _tray = new TrayNotes(_model.Startup, ShowFromTray);
+            // The first look after connecting takes note of what is already there.
+            await _tray.CheckAsync();
             await _model.CheckForUpdatesAsync();
         };
+        Closed += (_, _) => _tray?.Dispose();
     }
 
     private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();
@@ -173,6 +182,71 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The warning a tweak needs read before it is applied (OneDrive, the Store). "No" is the default button.</summary>
+    private bool ConfirmWarning(TweakView tweak) =>
+        MessageBox.Show(
+            this,
+            $"{tweak.Name}\n\n{tweak.ApplyWarning}\n\nGo ahead?",
+            "Before you go on",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>Drivers can stop Windows from starting, so changing one is asked about first. "No" is the default.</summary>
+    private bool ConfirmDriverChange(ServiceItemViewModel item, Elynt.Core.Tweaks.ServiceStart start) =>
+        MessageBox.Show(
+            this,
+            $"{item.Title} is a driver. Setting it to {start} can stop Windows from starting if it is needed for your hardware.\n\n" +
+            "The previous configuration is saved and can be put back from the Services page or the Undo history.\n\nChange it anyway?",
+            "Change a driver",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The separate confirmation deleting a startup item needs. "No" is the default button.</summary>
+    private bool ConfirmDeleteStartupItem(StartupItemView item) =>
+        MessageBox.Show(
+            this,
+            $"Delete {item.Name} from startup?\n\n{item.Location}\n\nThis can't be undone. Turning it off instead stops it starting and can be undone.\n\nDelete it anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void ScanCleanup(object sender, RoutedEventArgs e) => await _model.Cleanup.ScanAsync();
+
+    private async void CleanTicked(object sender, RoutedEventArgs e) => await _model.Cleanup.CleanAsync();
+
+    /// <summary>The separate confirmation destructive cleanup categories need. "No" is the default button.</summary>
+    private bool ConfirmDestructiveCleanup(string warnings) =>
+        MessageBox.Show(
+            this,
+            $"These can't be undone:\n\n{warnings}\n\nClean them anyway?",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    private async void SetServiceStart(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.SetAsync(item);
+    }
+
+    private async void UndoServiceChange(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
+            await page.UndoAsync(item);
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
 
     private async void CheckDriver(object sender, RoutedEventArgs e)
     {

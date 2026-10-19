@@ -1,10 +1,13 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Journal;
 using Elynt.Core.Repair;
 using Elynt.Core.Safety;
+using Elynt.Core.Services;
+using Elynt.Core.Startup;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
 using Elynt.Core.UpdateControl;
@@ -38,6 +41,9 @@ public sealed record TweakView(
 
     /// <summary>For a destructive tweak: what cannot be undone, shown in the confirmation.</summary>
     public string? DestructiveWarning { get; init; }
+
+    /// <summary>What the user must read and confirm before applying, for a tweak undo can still put back.</summary>
+    public string? ApplyWarning { get; init; }
 
     public RiskFlags Risks { get; init; } = RiskFlags.None;
 
@@ -73,7 +79,8 @@ public sealed record TweakView(
 /// <summary>How the user asked for a tweak to be applied.</summary>
 /// <param name="ConfirmDestructive">The user confirmed, in a separate step, that a destructive change can't be undone.</param>
 /// <param name="Advanced">Advanced mode is on. It unlocks more, but never the hard never-touch rules.</param>
-public sealed record ApplyOptions(bool ConfirmDestructive = false, bool Advanced = false)
+/// <param name="ConfirmWarning">The user read and confirmed the tweak's <see cref="TweakView.ApplyWarning"/>.</param>
+public sealed record ApplyOptions(bool ConfirmDestructive = false, bool Advanced = false, bool ConfirmWarning = false)
 {
     public static ApplyOptions Default { get; } = new();
 }
@@ -157,6 +164,53 @@ public interface IEngine
 
     BiosReport GetBiosReport();
 
+    /// <summary>Every installed service and driver, with who may change it and any recommendation for this PC.</summary>
+    IReadOnlyList<ServiceView> ListServices();
+
+    /// <summary>
+    /// Sets a service's start type. Reviewed services take Automatic or Manual; Disabled and unreviewed services need
+    /// Advanced; protected services and boot drivers are refused in every mode. The whole configuration is journaled.
+    /// </summary>
+    ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null);
+
+    /// <summary>Puts back the whole configuration a service had before the app last changed it.</summary>
+    ServiceResult UndoServiceChange(string serviceName);
+
+    /// <summary>Every startup item (Run keys, Startup folders, sign-in tasks, Store apps) and third-party scheduled task.</summary>
+    IReadOnlyList<StartupItemView> ListStartupItems();
+
+    /// <summary>
+    /// Turns a startup item on or off through the switch Task Manager uses (Task Scheduler's for tasks). Journaled,
+    /// so it can be undone from the Undo history.
+    /// </summary>
+    StartupCommandResult SetStartupItemEnabled(string itemId, bool enabled);
+
+    /// <summary>
+    /// Deletes a startup item (the Run value, Startup folder file or scheduled task). Destructive: refused unless
+    /// <paramref name="confirmDestructive"/> says the user confirmed it separately.
+    /// </summary>
+    StartupCommandResult DeleteStartupItem(string itemId, bool confirmDestructive);
+
+    /// <summary>
+    /// Startup items that were added and are on since the last look, for the tray note. The first look for a user
+    /// only takes note of what is there. Each new item is reported once.
+    /// </summary>
+    IReadOnlyList<StartupItemView> CheckNewStartupItems();
+    /// <summary>
+    /// Measures every cleanup category without deleting anything. Safe categories come back ticked; shader caches
+    /// and destructive ones don't. Long-running: streams which category it is on.
+    /// </summary>
+    Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default);
+
+    /// <summary>Cleans the ticked categories, streaming progress.</summary>
+    /// <param name="confirmDestructive">The user confirmed, in a separate step, that the destructive categories can't be undone.</param>
+    Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default);
+
+    CleanupSchedule GetCleanupSchedule();
+
+    /// <summary>Turns weekly cleaning of safe categories on or off. Off by default.</summary>
+    CleanupSchedule SetWeeklyCleanup(bool enabled);
+
     /// <summary>
     /// "Check and install now": starts searching for and installing quality updates in the background, even while
     /// updates are paused, or shows the run already in progress.
@@ -215,6 +269,9 @@ public interface IEngine
     TuningResult RevertGpuTuning(string deviceId);
 
     TuningResult ResetGpuTuning(string deviceId);
+
+    /// <summary>The user accepted the GPU vendor's warning (Intel's overclock waiver), which unlocks its tuning.</summary>
+    TuningResult AcceptGpuWarning(string deviceId);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -223,7 +280,7 @@ public sealed record UndoOutcome(Guid ChangeId, string TweakName, bool Succeeded
 public sealed record RestoreResult(bool Succeeded, string Message, IReadOnlyList<UndoOutcome> Changes);
 
 /// <summary>Runs commands for one user, composing the catalogue, the journal and the system adapters.</summary>
-public sealed class Engine(
+public sealed partial class Engine(
     Catalogue catalogue,
     SystemAdapters system,
     ChangeJournal journal,
@@ -236,12 +293,16 @@ public sealed class Engine(
     RepairCatalogue? repairs = null,
     IGameStore? gameStore = null,
     GpuTuning? gpuTuning = null,
-    ManualUpdate? windowsUpdate = null) : IEngine
+    ManualUpdate? windowsUpdate = null,
+    CleanupCatalogue? cleanup = null,
+    ICleanupScheduleStore? cleanupSchedules = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
     private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
+
+    private readonly StartupManager _startup = new(system, journal, user, safetyNet, clock ?? TimeProvider.System, logger);
     private readonly RepairBench _repair = new(
         repairs ?? RepairCatalogue.Default,
         system,
@@ -250,6 +311,32 @@ public sealed class Engine(
         clock ?? TimeProvider.System,
         logger ?? (ILogger)NullLogger<Engine>.Instance);
 
+    private ServiceDesk Services => new(system, journal, user);
+
+    public IReadOnlyList<ServiceView> ListServices() => Services.List();
+
+    public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+
+    public ServiceResult UndoServiceChange(string serviceName) =>
+        Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
+
+    /// <summary>A catalogue tweak, or the change behind a journaled service start type.</summary>
+    private bool TryResolve(string tweakId, JournalEntry? entry, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TweakDefinition? tweak)
+    {
+        if (catalogue.TryGet(tweakId, out tweak))
+            return true;
+        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        return tweak is not null;
+    }
+
+    private readonly CleanupBench _cleanup = new(
+        cleanup ?? CleanupCatalogue.Default,
+        system,
+        cleanupSchedules ?? new InMemoryCleanupScheduleStore(),
+        user,
+        clock ?? TimeProvider.System,
+        logger ?? (ILogger)NullLogger<Engine>.Instance);
     private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
@@ -287,18 +374,23 @@ public sealed class Engine(
 
     public CommandResult Apply(string tweakId, ApplyOptions? options = null)
     {
-        options ??= ApplyOptions.Default;
         if (!catalogue.TryGet(tweakId, out var tweak))
             return Unknown(tweakId);
 
         if (tweak.PerGame)
             return Failed(tweak, "Choose a game first: this is set for one game at a time. Nothing was changed.");
 
-        if (tweak.Applicability.WhyNot(system.System) is { } whyNot)
+        return ApplyTweak(tweak, options ?? ApplyOptions.Default);
+    }
+
+    /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    {
+        if (WhyNotApplicable(tweak) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
 
         // Hard rules hold in every mode, Advanced included.
-        if (tweak.Steps.Select(step => HardRules.Violation(step.Target)).FirstOrDefault(v => v is not null) is { } violation)
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
         {
             _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
             return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
@@ -306,6 +398,9 @@ public sealed class Engine(
 
         if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
             return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
+
+        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
+            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
 
         try
         {
@@ -366,10 +461,10 @@ public sealed class Engine(
 
     public CommandResult Revert(string tweakId)
     {
-        if (!catalogue.TryGet(tweakId, out var tweak))
+        var entry = journal.LatestUndoable(tweakId, user);
+        if (!TryResolve(tweakId, entry, out var tweak))
             return Unknown(tweakId);
 
-        var entry = journal.LatestUndoable(tweak.Id, user);
         if (entry is null)
             return Failed(tweak, "Nothing to undo: this was already set before the app changed anything.");
 
@@ -381,7 +476,9 @@ public sealed class Engine(
         var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
         if (entry is null)
             return new(false, "There is no such change in your undo history.", null);
-        if (!catalogue.TryGet(entry.TweakId, out var tweak))
+        if (StartupManager.Owns(entry.TweakId))
+            return UndoStartupChange(entry);
+        if (!TryResolve(entry.TweakId, entry, out var tweak))
             return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
         if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
             return Failed(tweak, "This change has already been undone.");
@@ -399,7 +496,7 @@ public sealed class Engine(
         var results = new List<UndoOutcome>();
         foreach (var entry in open)
         {
-            var name = catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId;
+            var name = NameOf(entry);
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
@@ -446,7 +543,7 @@ public sealed class Engine(
             .Select(entry => new ChangeView(
                 entry.Id,
                 entry.TweakId,
-                catalogue.TryGet(entry.TweakId, out var tweak) ? tweak.Name : entry.TweakId,
+                NameOf(entry),
                 entry.AppliedAt,
                 entry.Status switch
                 {
@@ -484,6 +581,22 @@ public sealed class Engine(
         return BiosAdvisor.Build(hardware);
     }
 
+    public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        _cleanup.ScanAsync(progress, cancellation);
+
+    public Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
+        _cleanup.CleanAsync(categoryIds, confirmDestructive, progress, cancellation);
+
+    public CleanupSchedule GetCleanupSchedule() => _cleanup.GetSchedule();
+
+    public CleanupSchedule SetWeeklyCleanup(bool enabled) => _cleanup.SetWeekly(enabled);
+
+    /// <summary>
+    /// The service calls this regularly. When this user turned weekly cleaning on and a week has passed, cleans the
+    /// safe categories only; otherwise does nothing and returns null.
+    /// </summary>
+    public Task<CleanupReport?> RunWeeklyCleanupIfDueAsync(CancellationToken cancellation = default) =>
+        _cleanup.RunWeeklyIfDueAsync(cancellation);
     public UpdateRunStatus StartWindowsUpdate() =>
         windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
 
@@ -527,6 +640,8 @@ public sealed class Engine(
 
     public TuningResult ResetGpuTuning(string deviceId) => gpuTuning?.ResetToDefaults(deviceId) ?? NoGpuTuning;
 
+    public TuningResult AcceptGpuWarning(string deviceId) => gpuTuning?.AcceptWarning(deviceId) ?? NoGpuTuning;
+
     private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 
     private void RevertSteps(IReadOnlyList<StepRecord> records)
@@ -534,6 +649,10 @@ public sealed class Engine(
         for (var i = records.Count - 1; i >= 0; i--)
             records[i].Revert(system);
     }
+
+    private string? WhyNotApplicable(TweakDefinition tweak) =>
+        tweak.Applicability.WhyNot(system.System) ??
+        tweak.Steps.Select(step => step.WhyNotHere(system)).FirstOrDefault(reason => reason is not null);
 
     /// <summary>For the list: a setting that can't be read right now (e.g. bcdedit failing) shows as off, not as an error.</summary>
     private TweakState SafeDetect(TweakDefinition tweak)
@@ -571,13 +690,14 @@ public sealed class Engine(
     {
         Reversibility = tweak.Reversibility,
         DestructiveWarning = tweak.DestructiveWarning,
+        ApplyWarning = tweak.ApplyWarning,
         Risks = tweak.Risks,
         AntiCheat = tweak.AntiCheat,
         AffectedGames = affected,
         AntiCheatWarning = Games.AntiCheatWarning.For(affected),
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
-        NotApplicableReason = tweak.Applicability.WhyNot(system.System),
+        NotApplicableReason = WhyNotApplicable(tweak),
         Warnings = tweak.HardwareNotes
             .Where(note => (system.System.Hardware & note.When) == note.When)
             .Select(note => note.Text)

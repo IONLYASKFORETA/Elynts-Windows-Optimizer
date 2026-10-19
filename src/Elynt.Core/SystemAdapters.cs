@@ -1,10 +1,12 @@
 using Elynt.Core.Apps;
 using Elynt.Core.Bios;
+using Elynt.Core.Cleanup;
 using Elynt.Core.Boot;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Power;
 using Elynt.Core.Registry;
+using Elynt.Core.Startup;
 using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 
@@ -14,6 +16,7 @@ namespace Elynt.Core;
 /// <param name="Hardware">Read-only board, CPU and memory facts. Without it, BIOS readouts show as unknown.</param>
 /// <param name="Packages">winget. Without it, app installs report winget as missing.</param>
 /// <param name="Repair">Runs the Repair section's tools. Without it, no repair tools are listed.</param>
+/// <param name="Cleanup">The files cleanup measures and clears. Without it, a scan finds nothing.</param>
 /// <param name="Drivers">GPU driver detection, lookup, download and install. Without it, the Drivers page is unavailable.</param>
 /// <param name="Games">Where launchers record installed games. Without it, only games added by hand are known.</param>
 public sealed record SystemAdapters(
@@ -23,9 +26,19 @@ public sealed record SystemAdapters(
     IPackageManager? Packages = null,
     IRepairSystem? Repair = null,
     DriverAdapters? Drivers = null,
-    IGameSources? Games = null)
+    IGameSources? Games = null,
+    ICleanupSystem? Cleanup = null)
 {
     public IPackageManager Packages { get; init; } = Packages ?? new NoPackageManager();
+
+    /// <summary>The Service Control Manager. Without it, no services are listed and boot drivers can't be detected.</summary>
+    public Services.IServiceManager? Services { get; init; }
+
+    /// <summary>Which devices the PC has, for hardware-aware service recommendations. Without it, none are made.</summary>
+    public Services.IDevicePresence? Devices { get; init; }
+
+    /// <summary>Startup sources, scheduled tasks, signatures and impact. Without it, the Startup page is empty.</summary>
+    public StartupAdapters? Startup { get; init; }
 
     /// <summary>The current boot entry's settings (BCD). Tweaks with boot steps fail without it.</summary>
     public IBootConfig? Boot { get; init; }
@@ -35,6 +48,18 @@ public sealed record SystemAdapters(
 
     /// <summary>Driver cleaning (pnputil, DDU) and problem-driver checks. Without it, cleaning is unavailable.</summary>
     public DriverCleaningAdapters? DriverCleaning { get; init; }
+
+    /// <summary>Preinstalled apps the Debloat &amp; Privacy section removes. Without it, none show as installed.</summary>
+    public IRemovableApps Apps { get; init; } = new NoRemovableApps();
+
+    /// <summary>Windows optional features (e.g. Recall). Without it, this PC has none.</summary>
+    public IOptionalFeatures Features { get; init; } = new NoOptionalFeatures();
+
+    /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
+    public Devices.IDevices? PnpDevices { get; init; }
+
+    /// <summary>Microsoft Defender's scan exclusions. Exclusion tweaks fail without it.</summary>
+    public Security.IScanExclusions? ScanExclusions { get; init; }
 }
 
 public interface ISystemInfo

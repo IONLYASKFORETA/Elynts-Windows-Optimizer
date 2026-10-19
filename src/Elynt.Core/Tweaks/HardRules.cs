@@ -46,14 +46,80 @@ public static partial class HardRules
     {
         BootSettingTarget boot => BootViolation(boot),
         RegistryTarget registry => RegistryViolation(registry),
+        RegistryPatternTarget pattern => RegistryViolation(new RegistryTarget(pattern.Pattern, pattern.Desired)),
         ServiceTarget service when ProtectedServices.Contains(service.ServiceName) =>
             $"{service.ServiceName} is a protected service (anti-cheat, Windows Update or boot-critical)",
         DriverTarget driver when VulnerableDrivers.Contains(Path.GetFileName(driver.DriverFile.Replace('\\', '/'))) =>
             $"{driver.DriverFile} is a known-vulnerable driver that anti-cheats and Windows block",
         FileTarget file when IsUserFolder(file.Path) => "user folders and game saves are never touched",
         PackageTarget package when IsEdge(package.PackageName) => "Edge and WebView2 are never removed",
+        ScanExclusionTarget exclusion => ExclusionViolation(exclusion.Folder),
         _ => null,
     };
+
+    /// <summary>
+    /// Defender exclusions are only for one game's own folder. A whole drive, Windows, the shared program folders,
+    /// a user profile, user folders or temp folders would leave the places malware lands unscanned.
+    /// </summary>
+    private static string? ExclusionViolation(string folder)
+    {
+        var path = folder.Replace('/', '\\').TrimEnd('\\');
+        var parts = path.Split('\\');
+        if (!DriveLetter().IsMatch(parts[0]) || parts.Any(p => p is "" or "." or ".."))
+            return "Defender exclusions must be a full folder path";
+        if (parts.Length == 1)
+            return "a whole drive is never excluded from Defender scans";
+        if (parts[1].Equals("Windows", StringComparison.OrdinalIgnoreCase))
+            return "Windows' own folders are never excluded from Defender scans";
+        if (parts.Length == 2 && SharedRoots.Contains(parts[1]))
+            return $"{path} is shared by every program, so it is never excluded from Defender scans";
+        if (parts[1].Equals("Users", StringComparison.OrdinalIgnoreCase) &&
+            (parts.Length <= 3 || IsUserFolder(path) || path.Contains(@"\AppData\Local\Temp", StringComparison.OrdinalIgnoreCase)))
+            return "user profiles, user folders and temp folders are never excluded from Defender scans";
+        return null;
+    }
+
+    private static readonly HashSet<string> SharedRoots = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Program Files", "Program Files (x86)", "ProgramData", "Users",
+    };
+
+    [GeneratedRegex(@"^[A-Za-z]:$")]
+    private static partial Regex DriveLetter();
+
+    /// <summary>
+    /// The rules above, plus the ones that need to look at the PC: a driver whose current start type is Boot is
+    /// boot-critical, whatever its name.
+    /// </summary>
+    public static string? Violation(ChangeTarget target, Services.IServiceManager? services)
+    {
+        if (Violation(target) is { } violation)
+            return violation;
+
+        var name = target switch
+        {
+            ServiceTarget service => service.ServiceName,
+            RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
+                ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            _ => null,
+        };
+        if (name is null || services is null)
+            return null;
+
+        Services.ServiceInfo? current;
+        try
+        {
+            current = services.Find(name);
+        }
+        catch (Exception ex)
+        {
+            // Not knowing is treated as protected: a boot driver set wrong stops Windows from starting.
+            return $"couldn't check whether {name} is a boot driver ({ex.Message})";
+        }
+        return current?.Config.Start == ServiceStart.Boot
+            ? $"{name} is a boot driver: Windows can't start without it"
+            : null;
+    }
 
     private static string? BootViolation(BootSettingTarget boot)
     {
@@ -114,14 +180,24 @@ public static partial class HardRules
                dword is not (2 or 3 or 4 or 5 or 7);
     }
 
+    /// <summary>
+    /// The Users folder, a profile itself, or anything in a profile outside AppData (Documents, Downloads, Desktop,
+    /// Pictures, OneDrive, Saved Games and any folder the user made there). Only AppData holds app caches.
+    /// </summary>
     private static bool IsUserFolder(string path)
     {
-        var match = UserProfile().Match(path.Replace('/', '\\'));
+        var normal = path.Replace('/', '\\').TrimEnd('\\');
+        if (UsersFolder().IsMatch(normal))
+            return true;
+        var match = UserProfile().Match(normal);
         if (!match.Success)
             return false;
+        if (!match.Groups["first"].Success)
+            return true;
         var first = match.Groups["first"].Value;
         return UserFolders.Any(f => f.Equals(first, StringComparison.OrdinalIgnoreCase)) ||
-               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase);
+               first.StartsWith("OneDrive", StringComparison.OrdinalIgnoreCase) ||
+               !first.Equals("AppData", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEdge(string package) =>
@@ -135,6 +211,9 @@ public static partial class HardRules
     [GeneratedRegex(@"^SYSTEM\\(CurrentControlSet|ControlSet\d{3})\\Control\\(?<rest>.+)$", RegexOptions.IgnoreCase)]
     private static partial Regex ControlKey();
 
-    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+\\(?<first>[^\\]+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[A-Za-z]:\\Users\\[^\\]+(\\(?<first>[^\\]+))?", RegexOptions.IgnoreCase)]
     private static partial Regex UserProfile();
+
+    [GeneratedRegex(@"^[A-Za-z]:\\Users$", RegexOptions.IgnoreCase)]
+    private static partial Regex UsersFolder();
 }

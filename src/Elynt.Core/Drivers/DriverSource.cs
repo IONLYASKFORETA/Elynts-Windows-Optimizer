@@ -7,20 +7,31 @@ public enum DriverBranch
     Studio,
 }
 
-/// <summary>What a lookup needs to know about the GPU.</summary>
-/// <param name="GpuName">The device name as Windows reports it, e.g. "NVIDIA GeForce RTX 4070".</param>
+/// <summary>What a driver is for: a GPU, or the PC's chipset (the platform drivers that come with the CPU).</summary>
+public enum DriverKind
+{
+    Graphics,
+    Chipset,
+}
+
+/// <summary>What a lookup needs to know about the device.</summary>
+/// <param name="GpuName">The device name as Windows reports it, e.g. "NVIDIA GeForce RTX 4070", or the chipset's name.</param>
 /// <param name="Laptop">The PC is a laptop, so the notebook driver applies.</param>
 public sealed record DriverQuery(string GpuName, bool Laptop, DriverBranch Branch);
 
 /// <summary>The latest driver a vendor offers for a GPU.</summary>
 /// <param name="Version">In the vendor's own format, e.g. 617.42.</param>
 /// <param name="Sha512">The SHA-512 the vendor publishes for the download, when it publishes one (hex).</param>
+/// <param name="Referer">The page the download must claim to come from; AMD's servers refuse downloads without one.</param>
+/// <param name="Sha256">The SHA-256 the vendor publishes for the download, when it publishes that instead (hex).</param>
 public sealed record DriverOffer(
     string Version,
     DriverBranch Branch,
     Uri DownloadUrl,
     DateTimeOffset? Released = null,
-    string? Sha512 = null);
+    string? Sha512 = null,
+    Uri? Referer = null,
+    string? Sha256 = null);
 
 /// <summary>
 /// Looks up one vendor's latest driver. Every vendor route is undocumented, so each one is a swappable source, and
@@ -29,6 +40,9 @@ public sealed record DriverOffer(
 public interface IDriverSource
 {
     GpuVendor Vendor { get; }
+
+    /// <summary>Whether this source looks up GPU drivers or chipset drivers.</summary>
+    DriverKind Kind => DriverKind.Graphics;
 
     /// <summary>The vendor's own driver download page, offered whenever the lookup can't be trusted.</summary>
     string VendorPage { get; }

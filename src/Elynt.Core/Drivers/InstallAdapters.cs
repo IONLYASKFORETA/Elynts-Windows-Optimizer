@@ -4,7 +4,8 @@ namespace Elynt.Core.Drivers;
 public interface IDownloader
 {
     /// <summary>Downloads <paramref name="url"/> to <paramref name="path"/>, replacing any file there. Throws on failure.</summary>
-    void Download(Uri url, string path);
+    /// <param name="referer">The page the request says it came from, for servers that require one (AMD's).</param>
+    void Download(Uri url, string path, Uri? referer = null);
 }
 
 /// <summary>The Authenticode verdict on a file.</summary>

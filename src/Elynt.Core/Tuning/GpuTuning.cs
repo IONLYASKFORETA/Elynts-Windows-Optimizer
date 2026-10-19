@@ -69,6 +69,8 @@ public sealed class GpuTuning : IDisposable
             if (Find(deviceId) is not { } found)
                 return NoSuchGpu(deviceId);
             var (adapter, device) = found;
+            if (IsLocked(device))
+                return Locked(adapter, device);
             if (values.Count == 0)
                 return Result(false, "Nothing to change.", adapter, device);
 
@@ -93,6 +95,8 @@ public sealed class GpuTuning : IDisposable
             if (Find(deviceId) is not { } found)
                 return NoSuchGpu(deviceId);
             var (adapter, device) = found;
+            if (IsLocked(device))
+                return Locked(adapter, device);
             if (!device.AutoTunes.Contains(kind))
                 return Result(false, "This GPU's driver doesn't offer that automatic tuning. Nothing was changed.", adapter, device);
 
@@ -149,6 +153,36 @@ public sealed class GpuTuning : IDisposable
         }
     }
 
+    /// <summary>
+    /// The user accepted the vendor's warning: tells the driver (Intel's overclock waiver) and remembers it, so tuning
+    /// stays unlocked after restarts.
+    /// </summary>
+    public TuningResult AcceptWarning(string deviceId)
+    {
+        lock (_gate)
+        {
+            if (Find(deviceId) is not { } found)
+                return NoSuchGpu(deviceId);
+            var (adapter, device) = found;
+            if (device.Warning is null)
+                return Result(true, "This GPU has no warning to accept.", adapter, device);
+
+            try
+            {
+                adapter.AcceptWarning(device.Id);
+                _safety.AcceptWarning(Key(device));
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Accepting the warning on {Gpu} failed", device.Id);
+                return Result(false, $"The driver didn't unlock tuning: {ex.Message}", adapter, device);
+            }
+            _waiverSet.Add(Key(device));
+            _log.LogInformation("The user accepted the tuning warning for {Gpu}", device.Id);
+            return Result(true, "Warning accepted. Tuning is unlocked for this GPU.", adapter, device);
+        }
+    }
+
     /// <summary>Factory settings, straight away and without probation. Also forgets the confirmed settings.</summary>
     public TuningResult ResetToDefaults(string deviceId)
     {
@@ -188,6 +222,11 @@ public sealed class GpuTuning : IDisposable
                 .Where(a => SafeUnavailable(a) is null)
                 .SelectMany(a => SafeDevices(a).Select(d => (Adapter: a, Device: d)))
                 .ToList();
+
+            // A driver such as IGCL forgets the accepted warning when the process ends, and may refuse even a reset
+            // without it, so tell it again before touching anything.
+            foreach (var (adapter, device) in devices)
+                TryRestoreWaiver(adapter, device);
 
             if (start.Unclean)
             {
@@ -248,9 +287,13 @@ public sealed class GpuTuning : IDisposable
 
     private readonly Dictionary<string, string?> _pendingModes = [];
 
+    /// <summary>Devices whose driver has been told, in this run, that the user accepted the warning.</summary>
+    private readonly HashSet<string> _waiverSet = [];
+
     private TuningResult Change(IGpuTuningAdapter adapter, GpuDevice device, Action change, string? mode)
     {
         var key = Key(device);
+        TryRestoreWaiver(adapter, device);
         var waiting = _probation.Deadline(key) is not null;
         Action revert;
         try
@@ -395,8 +438,31 @@ public sealed class GpuTuning : IDisposable
             device.AutoTunes,
             adapter.IsAtDefaults(device.Id),
             _probation.Deadline(Key(device)),
-            _notices.GetValueOrDefault(Key(device)));
+            _notices.GetValueOrDefault(Key(device)),
+            device.Warning,
+            IsLocked(device));
     }
+
+    private void TryRestoreWaiver(IGpuTuningAdapter adapter, GpuDevice device)
+    {
+        var key = Key(device);
+        if (device.Warning is null || _waiverSet.Contains(key) || !_safety.WarningAccepted(key))
+            return;
+        try
+        {
+            adapter.AcceptWarning(device.Id);
+            _waiverSet.Add(key);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Couldn't tell the driver again that the warning for {Gpu} was accepted", device.Id);
+        }
+    }
+
+    private bool IsLocked(GpuDevice device) => device.Warning is not null && !_safety.WarningAccepted(Key(device));
+
+    private TuningResult Locked(IGpuTuningAdapter adapter, GpuDevice device) =>
+        Result(false, "Read and accept the warning first; tuning stays locked until you do. Nothing was changed.", adapter, device);
 
     private TuningResult Result(bool succeeded, string message, IGpuTuningAdapter adapter, GpuDevice device)
     {
