@@ -97,6 +97,10 @@ public class LabelTests
         { "boot-critical storage driver", new ServiceTarget("stornvme", ServiceStart.Disabled) },
         { "protected service via the registry", Reg(@"SYSTEM\CurrentControlSet\Services\vgc", "Start") },
         { "protected service via a numbered control set", Reg(@"SYSTEM\ControlSet001\Services\wuauserv", "Start") },
+        { "every service via a registry pattern", new RegistryPatternTarget(
+            new(RegistryRoot.LocalMachine, @"SYSTEM\CurrentControlSet\Services\*", "Start"), RegistryValue.DWord(4)) },
+        { "every service's settings via a registry pattern", new RegistryPatternTarget(
+            new(RegistryRoot.LocalMachine, @"SYSTEM\CurrentControlSet\Services\*\Parameters", "Anything"), RegistryValue.DWord(1)) },
         { "quality updates deferred past 30 days", Reg(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "DeferQualityUpdatesPeriodInDays", 31) },
         { "Documents", new FileTarget(@"C:\Users\aden\Documents\notes.txt") },
         { "Downloads", new FileTarget(@"C:\Users\aden\Downloads") },

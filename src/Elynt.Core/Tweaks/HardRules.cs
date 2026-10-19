@@ -103,6 +103,8 @@ public static partial class HardRules
             ServiceTarget service => service.ServiceName,
             RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
                 ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            RegistryPatternTarget { Pattern.Root: RegistryRoot.LocalMachine } pattern when
+                ServiceKey().Match(pattern.Pattern.KeyPath) is { Success: true } key => key.Groups["name"].Value,
             _ => null,
         };
         if (name is null || services is null)
@@ -141,6 +143,9 @@ public static partial class HardRules
         var key = location.KeyPath.TrimEnd('\\');
 
         var service = ServiceKey().Match(key);
+        // A pattern's * stands for every service, protected ones included.
+        if (service.Success && service.Groups["name"].Value.Contains('*'))
+            return "a pattern over every service would change protected services (anti-cheat, Windows Update or boot-critical) too";
         if (service.Success && ProtectedServices.Contains(service.Groups["name"].Value))
             return $"{service.Groups["name"].Value} is a protected service (anti-cheat, Windows Update or boot-critical)";
 
