@@ -25,6 +25,7 @@ internal sealed class ProfileHost(
     WindowsTimerResolution timer,
     GpuTuning gpuTuning,
     CpuTuning cpuTuning,
+    CommandLane lane,
     ILoggerFactory loggers) : IHostedService, IDisposable
 {
     private readonly ILogger _log = loggers.CreateLogger<ProfileHost>();
@@ -42,7 +43,7 @@ internal sealed class ProfileHost(
         try
         {
             _events = new WmiProcessEvents();
-            _runner = new ProfileRunner(_events, EngineFor, notes, logger: _log);
+            _runner = new ProfileRunner(_events, EngineFor, notes, logger: _log, lane: lane);
             _runner.RecoverLeftovers(journal.UsersWithTemporaryChanges());
             _events.Start();
         }

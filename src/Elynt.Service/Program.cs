@@ -37,6 +37,8 @@ try
     builder.Services.AddWindowsService(options => options.ServiceName = "ElyntOptimizer");
     builder.Services.AddSerilog();
     builder.Services.AddSingleton(Catalogue.Default);
+    // Pipe commands and per-game profiles take turns in this one lane.
+    builder.Services.AddSingleton<Elynt.Core.CommandLane>();
     builder.Services.AddSingleton(new ChangeJournal(new JsonFileJournalStore(ServicePaths.Journal)));
     builder.Services.AddSingleton(services => new SafetyNet(
         new WindowsRestorePoints(),

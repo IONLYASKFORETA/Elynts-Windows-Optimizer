@@ -24,12 +24,13 @@ public class ProfileRunnerTests : IDisposable
     private readonly FakeProcessEvents _events = new();
     private readonly ProfileNotes _notes = new();
     private readonly ChangeJournal _journal;
+    private readonly CommandLane _lane = new();
     private readonly ProfileRunner _runner;
 
     public ProfileRunnerTests()
     {
         _journal = new ChangeJournal(_journalStore);
-        _runner = new ProfileRunner(_events, EngineFor, _notes, _clock);
+        _runner = new ProfileRunner(_events, EngineFor, _notes, _clock, lane: _lane);
         Save(Valorant, GamingTweaks.HighPerformancePlan.Id);
         Save(Cs2, GamingTweaks.UltimatePerformancePlan.Id);
     }
@@ -183,6 +184,21 @@ public class ProfileRunnerTests : IDisposable
         restarted.RecoverLeftovers(new ChangeJournal(_journalStore).UsersWithTemporaryChanges());
 
         Assert.Equal(PowerPlans.Balanced, _power.Active);
+    }
+
+    [Fact]
+    public async Task A_profile_waits_for_the_command_in_progress_so_the_two_never_interleave()
+    {
+        var command = _lane.Enter();
+        var launch = Task.Run(() => Launch(Valorant, 1), TestContext.Current.CancellationToken);
+
+        var first = await Task.WhenAny(launch, Task.Delay(300, TestContext.Current.CancellationToken));
+        Assert.NotSame(launch, first);
+        Assert.Equal(PowerPlans.Balanced, _power.Active);
+
+        command.Dispose();
+        await launch.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.Equal(PowerPlans.HighPerformance, _power.Active);
     }
 }
 

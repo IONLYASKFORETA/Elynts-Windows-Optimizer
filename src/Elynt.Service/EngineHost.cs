@@ -35,6 +35,7 @@ internal sealed class EngineHost(
     WindowsProcesses processes,
     WindowsTimerResolution timer,
     ProfileHost profileHost,
+    Elynt.Core.CommandLane commandLane,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -96,7 +97,7 @@ internal sealed class EngineHost(
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var server = new EnginePipeServer(CreatePipe, EngineForClient, loggers.CreateLogger<EnginePipeServer>());
+        var server = new EnginePipeServer(CreatePipe, EngineForClient, loggers.CreateLogger<EnginePipeServer>(), commandLane);
         return server.RunAsync(stoppingToken);
     }
 
