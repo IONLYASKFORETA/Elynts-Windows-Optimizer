@@ -280,7 +280,8 @@ public sealed partial class Engine(
     GpuTuning? gpuTuning = null,
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
-    ICleanupScheduleStore? cleanupSchedules = null) : IEngine
+    ICleanupScheduleStore? cleanupSchedules = null,
+    Profiles.IProfileStore? profiles = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -301,7 +302,7 @@ public sealed partial class Engine(
     public IReadOnlyList<ServiceView> ListServices() => Services.List();
 
     public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
-        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o) => ApplyTweak(tweak, o));
 
     public ServiceResult UndoServiceChange(string serviceName) =>
         Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
@@ -311,7 +312,7 @@ public sealed partial class Engine(
     {
         if (catalogue.TryGet(tweakId, out tweak))
             return true;
-        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        tweak = ServiceChange.Resolve(tweakId, entry, system) ?? Profiles.CloseApp.Resolve(tweakId, entry);
         return tweak is not null;
     }
 
@@ -369,7 +370,8 @@ public sealed partial class Engine(
     }
 
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
-    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    /// <param name="temporary">Made by a per-game profile, so undone when the game closes or after a crash or reboot.</param>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false)
     {
         if (WhyNotApplicable(tweak) is { } whyNot)
             return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
@@ -410,7 +412,7 @@ public sealed partial class Engine(
             try
             {
                 records = tweak.Steps.Select(step => step.Capture(system)).ToList();
-                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, temporary);
             }
             catch (Exception ex)
             {
