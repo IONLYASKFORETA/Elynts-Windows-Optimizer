@@ -50,6 +50,18 @@ public sealed class LeanNvidiaInstallTests : IDisposable
     }
 
     [Fact]
+    public void A_lean_install_never_keeps_nvidia_telemetry_even_when_a_kept_component_says_it_requires_it()
+    {
+        _extractor.Components["Display.Driver"] = ("Display.Driver", ["PhysX", "NvContainer.LocalSystem", "NvTelemetry.Container"]);
+        _extractor.Components["PhysX"] = ("PhysX", ["NvTelemetry"]);
+
+        var result = Engine().InstallDriver(Lean());
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal(["Display.Driver", "NVI2", "NvContainer", "PhysX"], Assert.Single(_installer.Runs).Folders);
+    }
+
+    [Fact]
     public void A_lean_install_on_a_laptop_keeps_dynamic_boost_and_the_usb_c_power_controller()
     {
         _system.Hardware |= HardwareTraits.Laptop;

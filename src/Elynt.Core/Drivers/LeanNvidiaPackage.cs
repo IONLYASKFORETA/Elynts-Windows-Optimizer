@@ -19,6 +19,9 @@ public sealed record LeanPackage(IReadOnlyList<string> Kept, IReadOnlyList<strin
 /// <item>Components are the package's subfolders that hold a <c>.nvi</c> manifest. Kept: <c>Display.Driver</c>,
 /// on laptops also <c>NVPCF</c> (Dynamic Boost) and <c>PPC</c>, plus everything those require, followed through the
 /// manifests' <c>requires</c> dependencies. Every other component is deleted.</item>
+/// <item>NVIDIA's telemetry components (<c>NvTelemetry*</c>) are always deleted, even when a kept component's manifest
+/// says it requires one: the display driver installs without them (research/driver-install-flow.md lists NvTelemetry
+/// as dropped), and the app sends no telemetry.</item>
 /// <item>Folders without a manifest (<c>NVI2</c>, the installer's own engine) and top-level files are kept.</item>
 /// <item>The EULA, functional-consent and privacy-policy entries are removed from <c>setup.cfg</c>, without which
 /// setup fails once their components are gone, and the installer's telemetry/advert URLs in
@@ -31,6 +34,9 @@ public static class LeanNvidiaPackage
 
     /// <summary>Laptop-only components that must stay: Dynamic Boost and the USB-C power controller.</summary>
     public static IReadOnlyList<string> LaptopComponents { get; } = ["NVPCF", "PPC"];
+
+    /// <summary>Components never kept, whatever requires them.</summary>
+    private const string TelemetryPrefix = "NvTelemetry";
 
     private static readonly string[] ConsentFiles = ["${{EulaHtmlFile}}", "${{FunctionalConsentFile}}", "${{PrivacyPolicyFile}}"];
     private static readonly string[] PresentationUrls = ["ProgressPresentationUrl", "ProgressPresentationSelectedPackageUrl"];
@@ -60,7 +66,7 @@ public static class LeanNvidiaPackage
         var pending = new Queue<Component>(wanted.Select(w => Resolve(components, w)).OfType<Component>());
         while (pending.TryDequeue(out var component))
         {
-            if (!kept.Add(component))
+            if (IsTelemetry(component) || !kept.Add(component))
                 continue;
             foreach (var dependency in component.Requires)
                 if (Resolve(components, dependency) is { } required)
@@ -92,6 +98,10 @@ public static class LeanNvidiaPackage
             url.SetAttributeValue("value", "");
         presentations.Save(path, SaveOptions.DisableFormatting);
     }
+
+    private static bool IsTelemetry(Component component) =>
+        component.Name.StartsWith(TelemetryPrefix, StringComparison.OrdinalIgnoreCase) ||
+        Path.GetFileName(component.Folder).StartsWith(TelemetryPrefix, StringComparison.OrdinalIgnoreCase);
 
     private sealed record Component(string Folder, string Name, IReadOnlyList<string> Requires);
 
