@@ -13,6 +13,7 @@ using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
 using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
+using Elynt.Core.Tuning.Cpu;
 
 namespace Elynt.Core.Ipc;
 
@@ -65,6 +66,13 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
 [JsonDerivedType(typeof(UninstallPawnIoRequest), "uninstallPawnIo")]
 [JsonDerivedType(typeof(GetSensorsRequest), "getSensors")]
+[JsonDerivedType(typeof(GetCpuTuningRequest), "getCpuTuning")]
+[JsonDerivedType(typeof(SetCpuTuningRequest), "setCpuTuning")]
+[JsonDerivedType(typeof(ConfirmCpuTuningRequest), "confirmCpuTuning")]
+[JsonDerivedType(typeof(RevertCpuTuningRequest), "revertCpuTuning")]
+[JsonDerivedType(typeof(ResetCpuTuningRequest), "resetCpuTuning")]
+[JsonDerivedType(typeof(RunCpuStressTestRequest), "runCpuStressTest")]
+[JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -160,6 +168,21 @@ public sealed record UninstallPawnIoRequest : EngineRequest;
 
 public sealed record GetSensorsRequest : EngineRequest;
 
+public sealed record GetCpuTuningRequest(bool Advanced) : EngineRequest;
+
+public sealed record SetCpuTuningRequest(CpuTune Tune, CpuTuningOptions Options) : EngineRequest;
+
+public sealed record ConfirmCpuTuningRequest : EngineRequest;
+
+public sealed record RevertCpuTuningRequest : EngineRequest;
+
+public sealed record ResetCpuTuningRequest : EngineRequest;
+
+/// <summary>Long-running: the stress test takes minutes.</summary>
+public sealed record RunCpuStressTestRequest : EngineRequest;
+
+public sealed record SetCpuAutoApplyRequest(bool On) : EngineRequest;
+
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
 /// stream; each kind of event is one derived record.
@@ -213,7 +236,9 @@ public sealed record EngineResponse(
     StartupCommandResult? StartupResult = null,
     CleanupScan? CleanupScan = null,
     CleanupReport? CleanupReport = null,
-    CleanupSchedule? CleanupSchedule = null)
+    CleanupSchedule? CleanupSchedule = null,
+    CpuTuningReport? CpuTuning = null,
+    CpuTuningResult? CpuResult = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -297,12 +322,20 @@ public static class EngineProtocol
         InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),
         UninstallPawnIoRequest => new(PawnIoResult: engine.UninstallPawnIo()),
         GetSensorsRequest => new(Sensors: engine.GetSensors()),
+        GetCpuTuningRequest get => new(CpuTuning: engine.GetCpuTuning(get.Advanced)),
+        SetCpuTuningRequest set => new(CpuResult: engine.SetCpuTuning(set.Tune, set.Options)),
+        ConfirmCpuTuningRequest => new(CpuResult: engine.ConfirmCpuTuning()),
+        RevertCpuTuningRequest => new(CpuResult: engine.RevertCpuTuning()),
+        ResetCpuTuningRequest => new(CpuResult: engine.ResetCpuTuning()),
+        RunCpuStressTestRequest => new(CpuResult: engine.RunCpuStressTest(cancellation)),
+        SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
     public static bool IsLongRunning(EngineRequest request) =>
-        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest or InstallPawnIoRequest or UninstallPawnIoRequest;
+        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest or InstallPawnIoRequest or UninstallPawnIoRequest
+           or RunCpuStressTestRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>

@@ -1,3 +1,4 @@
+using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Games;
 using System.IO.Pipes;
 using Elynt.Core.Apps;
@@ -217,6 +218,31 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<SensorReport> GetSensorsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetSensorsRequest(), cancellation)).Sensors ?? throw Missing("sensors");
+
+    public async Task<CpuTuningReport> GetCpuTuningAsync(bool advanced, CancellationToken cancellation = default) =>
+        (await SendAsync(new GetCpuTuningRequest(advanced), cancellation)).CpuTuning ?? throw Missing("CPU tuning");
+
+    public Task<CpuTuningResult> SetCpuTuningAsync(CpuTune tune, CpuTuningOptions options, CancellationToken cancellation = default) =>
+        CpuAsync(new SetCpuTuningRequest(tune, options), cancellation);
+
+    public Task<CpuTuningResult> ConfirmCpuTuningAsync(CancellationToken cancellation = default) =>
+        CpuAsync(new ConfirmCpuTuningRequest(), cancellation);
+
+    public Task<CpuTuningResult> RevertCpuTuningAsync(CancellationToken cancellation = default) =>
+        CpuAsync(new RevertCpuTuningRequest(), cancellation);
+
+    public Task<CpuTuningResult> ResetCpuTuningAsync(CancellationToken cancellation = default) =>
+        CpuAsync(new ResetCpuTuningRequest(), cancellation);
+
+    /// <summary>Takes minutes: the service runs the stress test before replying.</summary>
+    public Task<CpuTuningResult> RunCpuStressTestAsync(CancellationToken cancellation = default) =>
+        CpuAsync(new RunCpuStressTestRequest(), cancellation);
+
+    public Task<CpuTuningResult> SetCpuAutoApplyAsync(bool on, CancellationToken cancellation = default) =>
+        CpuAsync(new SetCpuAutoApplyRequest(on), cancellation);
+
+    private async Task<CpuTuningResult> CpuAsync(EngineRequest request, CancellationToken cancellation) =>
+        (await SendAsync(request, cancellation)).CpuResult ?? throw Missing("CPU tuning result");
 
     public async ValueTask DisposeAsync()
     {

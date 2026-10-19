@@ -8,6 +8,7 @@ using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Sensors;
+using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Startup;
 using Elynt.Core.Repair;
 using Elynt.Core.Services;
@@ -513,6 +514,34 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CPU_tuning_commands_arrive_unchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var tune = new CpuTune(CurveOptimizer: -12, PptWatts: 120);
+        var options = new CpuTuningOptions(Advanced: true, Unofficial: true);
+
+        AssertSameJson(_engine.GetCpuTuning(true), await _client.GetCpuTuningAsync(advanced: true, ct));
+        Assert.Equal("GetCpuTuning True", _engine.LastCall);
+        AssertSameJson(_engine.SetCpuTuning(tune, options), await _client.SetCpuTuningAsync(tune, options, ct));
+        Assert.Equal($"SetCpuTuning {tune} {options}", _engine.LastCall);
+        AssertSameJson(_engine.ConfirmCpuTuning(), await _client.ConfirmCpuTuningAsync(ct));
+        AssertSameJson(_engine.RevertCpuTuning(), await _client.RevertCpuTuningAsync(ct));
+        Assert.Equal("RevertCpuTuning", _engine.LastCall);
+        AssertSameJson(_engine.ResetCpuTuning(), await _client.ResetCpuTuningAsync(ct));
+        Assert.Equal("ResetCpuTuning", _engine.LastCall);
+        AssertSameJson(_engine.RunCpuStressTest(ct), await _client.RunCpuStressTestAsync(ct));
+        Assert.Equal("RunCpuStressTest", _engine.LastCall);
+        AssertSameJson(_engine.SetCpuAutoApply(true), await _client.SetCpuAutoApplyAsync(true, ct));
+        Assert.Equal("SetCpuAutoApply True", _engine.LastCall);
+    }
+
+    [Fact]
+    public void The_CPU_stress_test_runs_in_the_long_running_lane()
+    {
+        Assert.True(EngineProtocol.IsLongRunning(new RunCpuStressTestRequest()));
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -746,6 +775,55 @@ public sealed class PipeContractTests : IAsyncLifetime
         {
             LastCall = $"RevertGpuTuning {deviceId}";
             return new TuningResult(true, "Put back.", Gpu);
+        }
+
+        private static readonly CpuTuningReport Cpu = new(
+            true, "AMD Ryzen 7 7800X3D", CpuMaker.Amd,
+            [new TuningControl(CpuControls.CurveOptimizer, "Curve Optimizer (all cores)", "counts", -15, 0, 1, 0, -10)],
+            new CpuTune(CurveOptimizer: -10), new CpuTune(CurveOptimizer: -10, PptWatts: 120),
+            new DateTimeOffset(2026, 10, 19, 12, 1, 0, TimeSpan.Zero), true, false, 1, false, false,
+            new CpuTune(Pl1Watts: 125, Pl2Watts: 253), ["FACEIT's anti-cheat blocks PawnIO."], "A note.");
+
+        public CpuTuningReport GetCpuTuning(bool advanced)
+        {
+            LastCall = $"GetCpuTuning {advanced}";
+            return Cpu;
+        }
+
+        public CpuTuningResult SetCpuTuning(CpuTune tune, CpuTuningOptions options)
+        {
+            LastCall = $"SetCpuTuning {tune} {options}";
+            return new CpuTuningResult(true, "Changed.", Cpu);
+        }
+
+        public CpuTuningResult ConfirmCpuTuning()
+        {
+            LastCall = "ConfirmCpuTuning";
+            return new CpuTuningResult(true, "Kept.", Cpu);
+        }
+
+        public CpuTuningResult RevertCpuTuning()
+        {
+            LastCall = "RevertCpuTuning";
+            return new CpuTuningResult(true, "Put back.", Cpu with { Active = null });
+        }
+
+        public CpuTuningResult ResetCpuTuning()
+        {
+            LastCall = "ResetCpuTuning";
+            return new CpuTuningResult(true, "Reset.", Cpu with { Kept = null });
+        }
+
+        public CpuTuningResult RunCpuStressTest(CancellationToken cancellation = default)
+        {
+            LastCall = "RunCpuStressTest";
+            return new CpuTuningResult(false, "Core 3 returned a wrong result.", Cpu);
+        }
+
+        public CpuTuningResult SetCpuAutoApply(bool on)
+        {
+            LastCall = $"SetCpuAutoApply {on}";
+            return new CpuTuningResult(true, "On.", Cpu with { AutoApply = on });
         }
 
         private static readonly PawnIoReport PawnIo = new(

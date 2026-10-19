@@ -114,7 +114,7 @@ public sealed record ChangeView(
 /// The service's command surface. The pipe mirrors these commands one-to-one, and tests drive the app through
 /// them, so this is the single test seam.
 /// </summary>
-public interface IEngine
+public partial interface IEngine
 {
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
@@ -300,7 +300,8 @@ public sealed partial class Engine(
     GpuTuning? gpuTuning = null,
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
-    ICleanupScheduleStore? cleanupSchedules = null) : IEngine
+    ICleanupScheduleStore? cleanupSchedules = null,
+    Tuning.Cpu.CpuTuning? cpuTuning = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;

@@ -4,6 +4,7 @@ using Elynt.Core.Repair;
 using Elynt.Core.Safety;
 using Elynt.Core.Setup;
 using Elynt.Core.Tuning;
+using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Tweaks;
 using Elynt.Service;
 using Elynt.Windows;
@@ -49,11 +50,20 @@ try
         [sp.GetRequiredService<AdlxGpuTuning>(), sp.GetRequiredService<IgclGpuTuning>()],
         sp.GetRequiredService<TuningSafety>(),
         logger: sp.GetRequiredService<ILogger<GpuTuning>>()));
+    // CPU tuning reaches the CPU only through PawnIO, and only once the user has turned PawnIO on.
+    builder.Services.AddSingleton(sp => new CpuTuning(
+        new PawnIoCpuTuning(new WindowsPawnIo(new ProcessInstallerRunner(TimeSpan.FromMinutes(5))), Path.Combine(ServicePaths.PawnIo, "modules")),
+        sp.GetRequiredService<TuningSafety>(),
+        new JsonFileCpuProfileStore(ServicePaths.CpuProfile),
+        new CpuStressTest(),
+        new WindowsCpuStabilityEvents(),
+        logger: sp.GetRequiredService<ILogger<CpuTuning>>()));
     // Before the pipe: hardware is recovered before any command arrives, and closed after the pipe stops.
     builder.Services.AddHostedService<TuningHost>();
     builder.Services.AddHostedService<EngineHost>();
     builder.Services.AddHostedService<WeeklyCleanupService>();
     builder.Services.AddHostedService<StandbyListCleanerHost>();
+    builder.Services.AddHostedService<CpuReapplyHost>();
 
     builder.Build().Run();
     return 0;

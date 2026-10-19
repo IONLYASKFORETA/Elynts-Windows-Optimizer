@@ -27,6 +27,7 @@ internal sealed class EngineHost(
     IRepairLogStore repairLogs,
     ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
+    Core.Tuning.Cpu.CpuTuning cpuTuning,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -155,6 +156,7 @@ internal sealed class EngineHost(
             cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
+            cpuTuning: cpuTuning,
             windowsUpdate: _windowsUpdate);
     }
 }

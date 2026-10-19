@@ -45,3 +45,7 @@
 **Release channel**: beta (every build, Aden first) or stable (a beta promoted by hand, for friends). The app updates itself from the channel it follows.
 
 **Lean install**: an NVIDIA driver install stripped, on the user's PC, to the display driver and what it requires (plus NVPCF and PPC on laptops), with the installer's consent entries and telemetry URLs removed. Optional; the full package is the default.
+
+**SMU allowlist**: the only Ryzen SMU messages the app may send to one CPU codename (all-core Curve Optimizer, PPT, TDC, EDC). PawnIO's RyzenSMU module passes any message, so the Engine's allowlist is the only guard; a CPU not on it is never sent anything.
+
+**Strike**: an unclean shutdown or WHEA hardware error while a CPU tune was on. Each one skips that start's re-apply and steps Curve Optimizer back by 5; the second turns the tune off until it passes the stress test again.
