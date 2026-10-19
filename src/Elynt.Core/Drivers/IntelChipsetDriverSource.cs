@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 namespace Elynt.Core.Drivers;
 
 /// <summary>
-/// Intel's latest Chipset Device Software (the chipset INF utility), from Intel's download page 19347. Intel publishes a
-/// SHA-256 for it rather than a SHA-512; a page without one fails the lookup, so it is never installed unchecked.
+/// Intel's latest Chipset Device Software (the chipset INF utility), from Intel's download page 19347. The spec asks for
+/// Intel's published SHA-512; when the page shows one the offer carries it, and otherwise it carries the SHA-256 the
+/// page showed on 2026-10-16 (unverified.md). A page with neither fails the lookup, so it is never installed unchecked.
 /// </summary>
 public sealed partial class IntelChipsetDriverSource(HttpClient http) : IDriverSource
 {
@@ -32,11 +33,11 @@ public sealed partial class IntelChipsetDriverSource(HttpClient http) : IDriverS
         var url = IntelDownloadPage.Meta(page, "RecommendedDownloadUrl")
             ?? SetupLinks().Matches(page).Select(m => m.Value).Distinct().SingleOrDefault()
             ?? throw new InvalidDataException("Intel's chipset page no longer links SetupChipset.exe.");
-        return new DriverOffer(
-            IntelDownloadPage.Version(page),
-            DriverBranch.GameReady,
-            IntelDownloadPage.Download(url),
-            Sha256: IntelDownloadPage.Hash(page, "SHA256", 64));
+        var version = IntelDownloadPage.Version(page);
+        var download = IntelDownloadPage.Download(url);
+        return IntelDownloadPage.HasHash(page, "SHA512")
+            ? new DriverOffer(version, DriverBranch.GameReady, download, Sha512: IntelDownloadPage.Hash(page, "SHA512", 128))
+            : new DriverOffer(version, DriverBranch.GameReady, download, Sha256: IntelDownloadPage.Hash(page, "SHA256", 64));
     }
 
     [GeneratedRegex(@"https://downloadmirror\.intel\.com/\d+/SetupChipset\.exe", RegexOptions.IgnoreCase)]

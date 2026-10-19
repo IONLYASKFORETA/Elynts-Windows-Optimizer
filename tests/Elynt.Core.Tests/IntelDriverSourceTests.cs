@@ -105,6 +105,18 @@ public class IntelDriverSourceTests
     }
 
     [Fact]
+    public void A_chipset_page_that_publishes_a_sha512_is_checked_against_it_instead()
+    {
+        _http.Bodies[ChipsetPage] = Chipset.Replace($"SHA256: {ChipsetSha256}", $"SHA512: {GraphicsSha512}");
+
+        var offer = ChipsetSource().FindLatest(Query("Intel chipset"));
+
+        Assert.NotNull(offer);
+        Assert.Equal(GraphicsSha512, offer.Sha512, ignoreCase: true);
+        Assert.Null(offer.Sha256);
+    }
+
+    [Fact]
     public void A_chipset_page_without_a_hash_fails_the_lookup()
     {
         _http.Bodies[ChipsetPage] = Chipset.Replace($"SHA256: {ChipsetSha256}", "");
