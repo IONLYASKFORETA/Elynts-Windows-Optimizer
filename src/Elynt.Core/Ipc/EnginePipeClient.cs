@@ -14,7 +14,7 @@ using Elynt.Core.Tuning;
 namespace Elynt.Core.Ipc;
 
 /// <summary>The UI's side of the pipe: one async method per <see cref="IEngine"/> command.</summary>
-public sealed class EnginePipeClient : IAsyncDisposable
+public sealed partial class EnginePipeClient : IAsyncDisposable
 {
     private readonly NamedPipeClientStream _pipe;
     private readonly StreamReader _reader;

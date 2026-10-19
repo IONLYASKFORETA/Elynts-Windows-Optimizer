@@ -11,6 +11,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Repair;
 using Elynt.Core.Tuning;
+using Elynt.Core.Drift;
 
 namespace Elynt.Core.Ipc;
 
@@ -57,6 +58,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(CheckDriftRequest), "checkDrift")]
+[JsonDerivedType(typeof(ReapplyDriftRequest), "reapplyDrift")]
+[JsonDerivedType(typeof(GetDriftSettingsRequest), "getDriftSettings")]
+[JsonDerivedType(typeof(SetAutoReapplyRequest), "setAutoReapply")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -190,7 +195,10 @@ public sealed record EngineResponse(
     StartupCommandResult? StartupResult = null,
     CleanupScan? CleanupScan = null,
     CleanupReport? CleanupReport = null,
-    CleanupSchedule? CleanupSchedule = null)
+    CleanupSchedule? CleanupSchedule = null,
+    DriftReport? Drift = null,
+    ReapplyResult? Reapply = null,
+    DriftSettings? DriftSettings = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -268,6 +276,10 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        CheckDriftRequest => new(Drift: engine.CheckDrift()),
+        ReapplyDriftRequest reapply => new(Reapply: engine.ReapplyDrift(reapply.TweakIds, reapply.ConfirmDestructive)),
+        GetDriftSettingsRequest => new(DriftSettings: engine.GetDriftSettings()),
+        SetAutoReapplyRequest auto => new(DriftSettings: engine.SetAutoReapply(auto.Enabled)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

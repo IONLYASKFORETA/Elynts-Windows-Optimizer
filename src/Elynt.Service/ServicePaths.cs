@@ -14,6 +14,9 @@ internal static class ServicePaths
     /// <summary>Each user's weekly cleaning choice and when it last ran.</summary>
     public static string CleanupSchedule { get; } = Path.Combine(Root, "cleanup-schedule.json");
 
+    /// <summary>Each user's drift state: the Windows build last checked, automatic re-apply, and changes not supported on this build.</summary>
+    public static string Drift { get; } = Path.Combine(Root, "drift.json");
+
     /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
     public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
 

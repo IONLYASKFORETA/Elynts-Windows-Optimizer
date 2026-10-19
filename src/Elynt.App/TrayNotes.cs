@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows.Threading;
 using Elynt.App.ViewModels;
+using Elynt.Core.Drift;
 using Elynt.Core.Startup;
 using Serilog;
 using Forms = System.Windows.Forms;
@@ -16,6 +17,9 @@ public sealed class TrayNoteSettings
 
     /// <summary>A note when an app adds itself to startup.</summary>
     public bool NewStartupItems { get; set; } = true;
+
+    /// <summary>A note when a Windows update undid changes the app made.</summary>
+    public bool Drift { get; set; } = true;
 
     /// <summary>The one copy the tray and the pages share.</summary>
     public static TrayNoteSettings Current { get; } = Load();
@@ -59,6 +63,7 @@ public sealed class TrayNotes : IDisposable
     private readonly DispatcherTimer _timer;
     private readonly StartupPageViewModel _startup;
     private IReadOnlyList<StartupItemView> _shown = [];
+    private Action? _driftClicked;
 
     public TrayNotes(StartupPageViewModel startup, Action showWindow)
     {
@@ -70,7 +75,17 @@ public sealed class TrayNotes : IDisposable
             Visible = true,
         };
         _icon.DoubleClick += (_, _) => showWindow();
-        _icon.BalloonTipClicked += async (_, _) => await TurnOffShownAsync();
+        _icon.BalloonTipClicked += async (_, _) =>
+        {
+            // A click acts on the note last shown.
+            if (_driftClicked is { } openDrift)
+            {
+                _driftClicked = null;
+                openDrift();
+                return;
+            }
+            await TurnOffShownAsync();
+        };
         _timer = new DispatcherTimer { Interval = CheckEvery };
         _timer.Tick += async (_, _) => await CheckAsync();
         _timer.Start();
@@ -84,11 +99,32 @@ public sealed class TrayNotes : IDisposable
             return;
 
         _shown = added;
+        _driftClicked = null;
         var names = string.Join(", ", added.Select(i => i.Name));
         var text = added.Count == 1
             ? $"{names} added itself to startup. Click here to turn it off."
             : $"{added.Count} apps added themselves to startup: {names}. Click here to turn them off.";
         _icon.ShowBalloonTip(15_000, "New startup item", text, Forms.ToolTipIcon.Info);
+    }
+
+    /// <summary>
+    /// A note listing what Windows undid, or what was put back automatically. Clicking it opens the list, where the
+    /// user re-applies all or picks.
+    /// </summary>
+    public void ShowDrift(DriftReport report, Action openDrift)
+    {
+        if (!TrayNoteSettings.Current.Drift)
+            return;
+        if (report.Drifted.Count > 0)
+        {
+            _driftClicked = openDrift;
+            _icon.ShowBalloonTip(15_000, "Windows undid some changes", $"{report.Message} Click here to choose.", Forms.ToolTipIcon.Info);
+        }
+        else if (report.Reapplied.Count > 0 || report.NewlyUnsupported.Count > 0)
+        {
+            _driftClicked = openDrift;
+            _icon.ShowBalloonTip(10_000, "After a Windows update", report.Message, Forms.ToolTipIcon.Info);
+        }
     }
 
     private async Task TurnOffShownAsync()

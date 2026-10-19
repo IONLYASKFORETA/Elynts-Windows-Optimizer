@@ -112,7 +112,7 @@ public sealed record ChangeView(
 /// The service's command surface. The pipe mirrors these commands one-to-one, and tests drive the app through
 /// them, so this is the single test seam.
 /// </summary>
-public interface IEngine
+public partial interface IEngine
 {
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
@@ -280,7 +280,8 @@ public sealed partial class Engine(
     GpuTuning? gpuTuning = null,
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
-    ICleanupScheduleStore? cleanupSchedules = null) : IEngine
+    ICleanupScheduleStore? cleanupSchedules = null,
+    Drift.IDriftStore? driftStore = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
@@ -371,21 +372,8 @@ public sealed partial class Engine(
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
     private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
     {
-        if (WhyNotApplicable(tweak) is { } whyNot)
-            return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
-
-        // Hard rules hold in every mode, Advanced included.
-        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
-        {
-            _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
-            return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
-        }
-
-        if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
-            return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
-
-        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
-            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
+        if (Refusal(tweak, options) is { } refused)
+            return refused;
 
         try
         {
@@ -442,6 +430,28 @@ public sealed partial class Engine(
             _log.LogError(ex, "Applying {Tweak} failed and could not be fully put back", tweak.Id);
             return Failed(tweak, $"Couldn't turn this on: {ex.Message} The prior state is saved; switch it off to undo.");
         }
+    }
+
+    /// <summary>Why the Engine won't apply this tweak with these options, or null when it may.</summary>
+    private CommandResult? Refusal(TweakDefinition tweak, ApplyOptions options)
+    {
+        if (WhyNotApplicable(tweak) is { } whyNot)
+            return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
+
+        // Hard rules hold in every mode, Advanced included.
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
+        {
+            _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
+            return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
+        }
+
+        if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
+            return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
+
+        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
+            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
+
+        return null;
     }
 
     public CommandResult Revert(string tweakId)
@@ -626,6 +636,7 @@ public sealed partial class Engine(
     }
 
     private string? WhyNotApplicable(TweakDefinition tweak) =>
+        UnsupportedReason(tweak.Id) ??
         tweak.Applicability.WhyNot(system.System) ??
         tweak.Steps.Select(step => step.WhyNotHere(system)).FirstOrDefault(reason => reason is not null);
 
