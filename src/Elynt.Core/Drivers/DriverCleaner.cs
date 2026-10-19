@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Elynt.Core.Drivers;
 
 /// <summary>Cleans old display drivers with pnputil (exported first, so restorable) or opt-in DDU, and spots problem drivers.</summary>
-internal sealed class DriverCleaner(DriverCleaningAdapters? adapters, ILogger log)
+internal sealed class DriverCleaner(DriverCleaningAdapters? adapters, Func<IReadOnlyList<Games.InstalledGame>> games, ILogger log)
 {
     /// <summary>The Display device setup class. pnputil prints the class name localised, but the GUID never changes.</summary>
     private const string DisplayClass = "{4d36e968-e325-11ce-bfc1-08002be10318}";
@@ -25,7 +25,7 @@ internal sealed class DriverCleaner(DriverCleaningAdapters? adapters, ILogger lo
         string? problem = null;
         try
         {
-            problems = ProblemDrivers.Find(adapters.KernelDrivers.Installed());
+            problems = ProblemDrivers.Find(adapters.KernelDrivers.Installed(), InstalledGames());
         }
         catch (Exception ex)
         {
@@ -34,6 +34,19 @@ internal sealed class DriverCleaner(DriverCleaningAdapters? adapters, ILogger lo
         }
 
         return new DriverCleaningReport(backups, problems, DduLabel, problem);
+    }
+
+    private IReadOnlyList<Games.InstalledGame> InstalledGames()
+    {
+        try
+        {
+            return games();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Couldn't list installed games for the problem-driver warning");
+            return [];
+        }
     }
 
     public const string DduLabel =

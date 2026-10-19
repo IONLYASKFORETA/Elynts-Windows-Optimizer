@@ -20,11 +20,11 @@ public sealed record DriverAdapters(
 /// <summary>
 /// Detects GPUs and the chipset driver, looks up their latest drivers, and downloads, verifies and installs them.
 /// </summary>
-internal sealed class DriverFlow(SystemAdapters system, ILogger log)
+internal sealed class DriverFlow(SystemAdapters system, DriverCleaner cleaner, ILogger log)
 {
     private readonly DriverAdapters? _adapters = system.Drivers;
 
-    private DriverCleaner Cleaner => new(system.DriverCleaning, log);
+    private DriverCleaner Cleaner => cleaner;
 
     public DriverReport Report()
     {

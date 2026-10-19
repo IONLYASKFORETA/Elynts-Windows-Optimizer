@@ -592,7 +592,7 @@ public sealed partial class Engine(
         }
     }
 
-    private DriverFlow DriverFlow => field ??= new(system, _log);
+    private DriverFlow DriverFlow => field ??= new(system, DriverCleaner, _log);
 
     public IReadOnlyList<ChangeView> ListHistory()
     {
@@ -674,7 +674,7 @@ public sealed partial class Engine(
 
     public DriverCleanResult RestoreDrivers(string backupId) => DriverCleaner.Restore(backupId);
 
-    private DriverCleaner DriverCleaner => field ??= new(system.DriverCleaning, _log);
+    private DriverCleaner DriverCleaner => field ??= new(system.DriverCleaning, _games.List, _log);
 
     public IReadOnlyList<InstalledGame> ListGames() => _games.List();
 

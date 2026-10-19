@@ -22,6 +22,8 @@ public sealed class DriverCleaningTests : IDisposable
     private readonly FakeDownloader _downloader = new() { Content = "pretend DDU setup"u8.ToArray() };
     private readonly FakeSignatureVerifier _signatures = new() { Result = new(true, "Wagnardsoft") };
     private readonly string _root = Directory.CreateTempSubdirectory("elynt-cleaning-").FullName;
+    private readonly FakeGameSources _pc = new();
+    private readonly Games.InMemoryGameStore _games = new();
 
     public DriverCleaningTests()
     {
@@ -34,13 +36,14 @@ public sealed class DriverCleaningTests : IDisposable
 
     private Engine Engine() => new(
         Catalogue.Default,
-        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo())
+        new SystemAdapters(new FakeRegistry(), new FakeSystemInfo(), Games: _pc)
         {
             DriverCleaning = new DriverCleaningAdapters(
                 _store, _kernel, Backups, _ddu, Path.Combine(_root, "ddu"), _downloader, _signatures, _runner),
         },
         new ChangeJournal(new InMemoryJournalStore()),
-        "S-1-5-21-test");
+        "S-1-5-21-test",
+        gameStore: _games);
 
     [Fact]
     public void Cleaning_exports_every_display_driver_of_that_vendor_before_deleting_it()
@@ -354,6 +357,20 @@ public sealed class DriverCleaningTests : IDisposable
         Assert.Contains("Valorant", problem.Warning);
         Assert.Contains("League of Legends", problem.Warning);
         Assert.Contains("FACEIT", problem.Warning);
+    }
+
+    [Fact]
+    public void The_warning_names_the_users_own_affected_games_when_it_finds_any()
+    {
+        _kernel.Drivers.Add(new KernelDriver("secnvme", "3.3.0.2003"));
+        _pc.File(@"C:\Games\CS2\game\bin\win64\cs2.exe");
+        var engine = Engine();
+        Assert.True(engine.AddGame(@"C:\Games\CS2\game\bin\win64\cs2.exe").Succeeded);
+
+        var problem = Assert.Single(engine.GetDriverCleaning().ProblemDrivers);
+
+        Assert.Contains("cs2 (FACEIT)", problem.Warning);
+        Assert.DoesNotContain("Valorant", problem.Warning);
     }
 
     [Fact]
