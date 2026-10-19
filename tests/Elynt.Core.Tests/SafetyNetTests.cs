@@ -82,6 +82,22 @@ public class SafetyNetTests
     }
 
     [Fact]
+    public void A_skipped_restore_point_is_still_reported_for_later_changes_that_day()
+    {
+        _restorePoints.Next = RestorePointResult.Skipped("System Protection is turned off for C:.");
+        var engine = NewEngine();
+        engine.Apply(Mouse.Id);
+        engine.Revert(Mouse.Id);
+        _clock.Advance(TimeSpan.FromHours(3));
+
+        var later = engine.Apply(Mouse.Id);
+
+        Assert.Single(_restorePoints.Attempts);
+        Assert.Contains("Windows didn't make a restore point", later.Message);
+        Assert.Contains("System Protection is turned off", later.Message);
+    }
+
+    [Fact]
     public void No_restore_point_when_nothing_is_going_to_change()
     {
         foreach (var step in Mouse.Steps.OfType<RegistryValueStep>())
