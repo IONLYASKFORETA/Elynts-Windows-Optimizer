@@ -10,7 +10,9 @@ using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Profiles;
+using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
+using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
 
 namespace Elynt.Core.Ipc;
@@ -49,6 +51,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
 [JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
 [JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(GetDriverCleaningRequest), "getDriverCleaning")]
+[JsonDerivedType(typeof(CleanDriversRequest), "cleanDrivers")]
+[JsonDerivedType(typeof(RestoreDriversRequest), "restoreDrivers")]
 [JsonDerivedType(typeof(ListGamesRequest), "listGames")]
 [JsonDerivedType(typeof(AddGameRequest), "addGame")]
 [JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
@@ -62,6 +67,11 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(SaveProfileRequest), "saveProfile")]
 [JsonDerivedType(typeof(DeleteProfileRequest), "deleteProfile")]
 [JsonDerivedType(typeof(TakeProfileNotesRequest), "takeProfileNotes")]
+[JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
+[JsonDerivedType(typeof(GetPawnIoRequest), "getPawnIo")]
+[JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
+[JsonDerivedType(typeof(UninstallPawnIoRequest), "uninstallPawnIo")]
+[JsonDerivedType(typeof(GetSensorsRequest), "getSensors")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -127,6 +137,14 @@ public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
 /// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
 public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
 
+public sealed record GetDriverCleaningRequest : EngineRequest;
+
+/// <summary>Long-running: exports, then deletes; DDU also downloads and runs a third-party tool.</summary>
+public sealed record CleanDriversRequest(DriverCleanRequest Request) : EngineRequest;
+
+/// <summary>Long-running: reinstalls the exported drivers.</summary>
+public sealed record RestoreDriversRequest(string BackupId) : EngineRequest;
+
 public sealed record ListGamesRequest : EngineRequest;
 
 public sealed record AddGameRequest(string ExePath) : EngineRequest;
@@ -144,6 +162,18 @@ public sealed record ConfirmGpuTuningRequest(string DeviceId) : EngineRequest;
 public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
 
 public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record AcceptGpuWarningRequest(string DeviceId) : EngineRequest;
+
+public sealed record GetPawnIoRequest : EngineRequest;
+
+/// <summary>Long-running: downloads and runs PawnIO's setup.</summary>
+public sealed record InstallPawnIoRequest(bool AcceptFaceitWarning) : EngineRequest;
+
+/// <summary>Long-running: runs PawnIO's uninstaller.</summary>
+public sealed record UninstallPawnIoRequest : EngineRequest;
+
+public sealed record GetSensorsRequest : EngineRequest;
 
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
@@ -183,12 +213,17 @@ public sealed record EngineResponse(
     DriverReport? Drivers = null,
     DriverCheck? DriverCheck = null,
     DriverInstallResult? DriverInstall = null,
+    DriverCleaningReport? DriverCleaning = null,
+    DriverCleanResult? DriverClean = null,
     IReadOnlyList<InstalledGame>? Games = null,
     GameCommandResult? GameResult = null,
     GpuTuningReport? GpuTuning = null,
     TuningResult? Tuning = null,
     UpdateRunStatus? WindowsUpdate = null,
     EngineEvent? Event = null,
+    PawnIoReport? PawnIo = null,
+    PawnIoResult? PawnIoResult = null,
+    SensorReport? Sensors = null,
     IReadOnlyList<ServiceView>? Services = null,
     ServiceResult? ServiceResult = null,
     IReadOnlyList<StartupItemView>? StartupItems = null,
@@ -267,6 +302,9 @@ public static class EngineProtocol
         CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
         InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
             install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        GetDriverCleaningRequest => new(DriverCleaning: engine.GetDriverCleaning()),
+        CleanDriversRequest clean => new(DriverClean: engine.CleanDrivers(clean.Request)),
+        RestoreDriversRequest restore => new(DriverClean: engine.RestoreDrivers(restore.BackupId)),
         ListGamesRequest => new(Games: engine.ListGames()),
         AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
         RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
@@ -280,11 +318,18 @@ public static class EngineProtocol
         SaveProfileRequest save => new(ProfileResult: engine.SaveProfile(save.Profile)),
         DeleteProfileRequest delete => new(ProfileResult: engine.DeleteProfile(delete.ExePath)),
         TakeProfileNotesRequest => new(ProfileNotes: engine.TakeProfileNotes()),
+        AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
+        GetPawnIoRequest => new(PawnIo: engine.GetPawnIo()),
+        InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),
+        UninstallPawnIoRequest => new(PawnIoResult: engine.UninstallPawnIo()),
+        GetSensorsRequest => new(Sensors: engine.GetSensors()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
-    public static bool IsLongRunning(EngineRequest request) => request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest;
+    public static bool IsLongRunning(EngineRequest request) =>
+        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest
+            or InstallPawnIoRequest or UninstallPawnIoRequest or CleanDriversRequest or RestoreDriversRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>

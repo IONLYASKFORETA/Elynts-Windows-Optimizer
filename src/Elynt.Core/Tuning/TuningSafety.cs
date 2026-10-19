@@ -18,6 +18,9 @@ public sealed record TuningState
 
     /// <summary>Confirmed settings by hardware key.</summary>
     public IReadOnlyDictionary<string, SavedTuning> Saved { get; init; } = new Dictionary<string, SavedTuning>();
+
+    /// <summary>Hardware keys whose vendor warning (such as Intel's overclock waiver) the user has accepted.</summary>
+    public IReadOnlyList<string> AcceptedWarnings { get; init; } = [];
 }
 
 public interface ITuningStore
@@ -154,6 +157,24 @@ public sealed class TuningSafety(ITuningStore store)
         lock (_gate)
         {
             return State.Saved.GetValueOrDefault(key);
+        }
+    }
+
+    /// <summary>The user accepted this hardware's vendor warning; it stays accepted across restarts.</summary>
+    public void AcceptWarning(string key)
+    {
+        lock (_gate)
+        {
+            if (!State.AcceptedWarnings.Contains(key))
+                Save(State with { AcceptedWarnings = [.. State.AcceptedWarnings, key] });
+        }
+    }
+
+    public bool WarningAccepted(string key)
+    {
+        lock (_gate)
+        {
+            return State.AcceptedWarnings.Contains(key);
         }
     }
 

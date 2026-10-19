@@ -9,12 +9,16 @@ namespace Elynt.Core.Journal;
 [JsonDerivedType(typeof(Services.ServiceConfigRecord), "serviceConfig")]
 [JsonDerivedType(typeof(Startup.ScheduledTaskRecord), "scheduledTask")]
 [JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
+[JsonDerivedType(typeof(RegistryEachKeyRecord), "registryEachKey")]
 [JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
 [JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
 [JsonDerivedType(typeof(Tweaks.AppRemovalRecord), "appRemoval")]
 [JsonDerivedType(typeof(Tweaks.AppDeprovisionRecord), "appDeprovision")]
 [JsonDerivedType(typeof(Tweaks.OptionalFeatureRecord), "optionalFeature")]
 [JsonDerivedType(typeof(Profiles.ClosedAppRecord), "closedApp")]
+[JsonDerivedType(typeof(Power.PowerSettingRecord), "powerSetting")]
+[JsonDerivedType(typeof(Devices.DeviceEnabledRecord), "deviceEnabled")]
+[JsonDerivedType(typeof(Security.ScanExclusionRecord), "scanExclusion")]
 public abstract record StepRecord
 {
     /// <summary>

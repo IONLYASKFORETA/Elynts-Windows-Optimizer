@@ -44,6 +44,13 @@ public sealed class FakeRegistry : IRegistry
     /// <summary>Nothing was ever written.</summary>
     public bool IsEmpty => _keys.Count == 0;
 
+    public IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath) =>
+        _keys.Keys
+            .Where(k => k.Item1 == root && k.Item2.StartsWith(keyPath + "\\", StringComparison.OrdinalIgnoreCase))
+            .Select(k => k.Item2[(keyPath.Length + 1)..])
+            .Where(rest => !rest.Contains('\\'))
+            .ToList();
+
     public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath)
     {
         ThrowIfBroken();

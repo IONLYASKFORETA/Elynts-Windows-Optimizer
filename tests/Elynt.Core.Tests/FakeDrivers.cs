@@ -6,14 +6,24 @@ public sealed class FakeDriverInventory : IDriverInventory
 {
     public IReadOnlyList<DisplayAdapter> Adapters { get; set; } = [];
 
+    public Dictionary<GpuVendor, string> ChipsetVersions { get; } = [];
+
     public IReadOnlyList<DisplayAdapter> DisplayAdapters() => Adapters;
+
+    public string? ChipsetVersion(GpuVendor vendor) => ChipsetVersions.GetValueOrDefault(vendor);
 }
 
-public sealed class FakeDriverSource : IDriverSource
+/// <summary>A driver lookup; NVIDIA's GPU lookup unless told otherwise.</summary>
+public sealed class FakeDriverSource(
+    GpuVendor vendor = GpuVendor.Nvidia,
+    DriverKind kind = DriverKind.Graphics,
+    string vendorPage = "https://www.nvidia.com/en-us/drivers/",
+    InstallerProfile? installer = null) : IDriverSource
 {
-    public GpuVendor Vendor => GpuVendor.Nvidia;
-    public string VendorPage => "https://www.nvidia.com/en-us/drivers/";
-    public InstallerProfile Installer { get; } = new("NVIDIA Corporation", ["-s", "-noreboot"], ["-clean"], [1, 3010, 1641]);
+    public GpuVendor Vendor => vendor;
+    public DriverKind Kind => kind;
+    public string VendorPage => vendorPage;
+    public InstallerProfile Installer { get; } = installer ?? new("NVIDIA Corporation", ["-s", "-noreboot"], ["-clean"], [1, 3010, 1641]);
     public Dictionary<DriverBranch, DriverOffer> Offers { get; } = [];
     public Exception? Fail { get; set; }
     public DriverQuery? LastQuery { get; private set; }
@@ -32,10 +42,12 @@ public sealed class FakeDownloader : IDownloader
     public byte[] Content { get; set; } = [];
     public Exception? Fail { get; set; }
     public Uri? LastUrl { get; private set; }
+    public Uri? LastReferer { get; private set; }
 
-    public void Download(Uri url, string path)
+    public void Download(Uri url, string path, Uri? referer = null)
     {
         LastUrl = url;
+        LastReferer = referer;
         if (Fail is not null)
             throw Fail;
         File.WriteAllBytes(path, Content);

@@ -38,6 +38,10 @@
 
 **Confirm-or-revert**: every GPU or CPU tuning change goes back on its own after a short window (15 s for GPUs, 60 s for CPUs) unless the user keeps it. Several unkept changes in a row go back to the last kept settings.
 
+**Vendor warning**: a GPU vendor's risk notice the user must accept before any tuning on that GPU unlocks (Intel's overclock waiver for IGCL). Accepted once per GPU and remembered; the service tells the driver again on every start.
+
 **Unclean shutdown**: the service didn't stop normally (crash, freeze, power cut) while hardware was tuned. The next start puts that hardware on defaults and doesn't re-apply the kept tune, so a bad tune can't loop.
 
 **Release channel**: beta (every build, Aden first) or stable (a beta promoted by hand, for friends). The app updates itself from the channel it follows.
+
+**Lean install**: an NVIDIA driver install stripped, on the user's PC, to the display driver and what it requires (plus NVPCF and PPC on laptops), with the installer's consent entries and telemetry URLs removed. Optional; the full package is the default.

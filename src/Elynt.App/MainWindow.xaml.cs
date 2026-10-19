@@ -261,6 +261,24 @@ public partial class MainWindow : Window
             await gpu.InstallAsync();
     }
 
+    private async void CleanDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverCleaningViewModel cleaning)
+            await cleaning.CleanAsync();
+    }
+
+    private async void DeepCleanDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverCleaningViewModel cleaning)
+            await cleaning.DeepCleanAsync();
+    }
+
+    private async void RestoreDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverBackupItemViewModel backup)
+            await backup.RestoreAsync();
+    }
+
     /// <summary>The reboot prompt after a driver installer reported that Windows must restart. "Later" is the default.</summary>
     private void AskToReboot(DriverInstallResult result)
     {

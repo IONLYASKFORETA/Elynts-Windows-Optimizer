@@ -11,6 +11,12 @@ public abstract record ChangeTarget;
 /// <summary>Sets one registry value.</summary>
 public sealed record RegistryTarget(RegistryLocation Location, RegistryValue Desired) : ChangeTarget;
 
+/// <summary>
+/// Sets one registry value under every key matching <paramref name="Pattern"/>'s key path, where a <c>*</c> segment
+/// matches any one subkey (per-device and per-interface settings).
+/// </summary>
+public sealed record RegistryPatternTarget(RegistryLocation Pattern, RegistryValue Desired) : ChangeTarget;
+
 /// <summary>Sets one BCD element of the current boot entry, or deletes it when <paramref name="Value"/> is null.</summary>
 public sealed record BootSettingTarget(string Element, string? Value) : ChangeTarget;
 
@@ -29,11 +35,17 @@ public sealed record ServiceTarget(string ServiceName, ServiceStart Start) : Cha
 /// <summary>Installs or loads a kernel driver, by its file name or path.</summary>
 public sealed record DriverTarget(string DriverFile) : ChangeTarget;
 
+/// <summary>Enables or disables every present device with a hardware ID, in Device Manager.</summary>
+public sealed record DeviceTarget(string HardwareId, bool Enabled) : ChangeTarget;
+
 /// <summary>Deletes a file or folder.</summary>
 public sealed record FileTarget(string Path) : ChangeTarget;
 
 /// <summary>Removes an app package (Appx, provisioned or winget).</summary>
 public sealed record PackageTarget(string PackageName) : ChangeTarget;
+
+/// <summary>Sets one power setting on the active plan, plugged in and on battery.</summary>
+public sealed record PowerSettingTarget(Guid Subgroup, Guid Setting, uint Value) : ChangeTarget;
 
 /// <summary>Makes a power plan the active one.</summary>
 public sealed record PowerPlanTarget(Guid Plan) : ChangeTarget;
@@ -43,3 +55,6 @@ public sealed record ProcessTarget(string ExePath) : ChangeTarget;
 
 /// <summary>Turns a Windows optional feature on or off (its files stay on disk).</summary>
 public sealed record OptionalFeatureTarget(string Feature, bool Enabled) : ChangeTarget;
+
+/// <summary>Stops Microsoft Defender scanning one folder.</summary>
+public sealed record ScanExclusionTarget(string Folder) : ChangeTarget;

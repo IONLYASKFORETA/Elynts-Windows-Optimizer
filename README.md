@@ -8,8 +8,9 @@ a described tweak with its own switch, and every tweak can be undone exactly. Th
 | Project | What it is |
 |---|---|
 | `src/Elynt.Core` | Tweak catalogue, change journal, Engine and the pipe protocol. Cross-platform: it touches Windows only through adapter interfaces. |
-| `src/Elynt.Windows` | The real system adapters (registry, hardware readouts, AMD GPU tuning). The only code that touches Windows. |
+| `src/Elynt.Windows` | The real system adapters (registry, hardware readouts, AMD and Intel GPU tuning). The only code that touches Windows. |
 | `native/ElyntAdlx` | A thin C bridge to AMD ADLX for GPU tuning, built by hand with MSVC and the ADLX SDK (see the file header). Without `elynt_adlx.dll` next to the service, AMD tuning shows as unavailable. |
+| `native/ElyntIgcl` | The same kind of bridge to Intel IGCL (Arc GPU tuning), built by hand with MSVC and Intel's control-library headers (see the file header). Without `elynt_igcl.dll` next to the service, Intel tuning shows as unavailable. |
 | `src/Elynt.Service` | The elevated Windows Service. Owns the journal and makes every change. |
 | `src/Elynt.App` | The WPF window. Runs without admin rights and sends every change to the service over a named pipe. |
 | `tests/Elynt.Core.Tests` | Logic tests: Engine commands against fake adapters, and the pipe contract. |

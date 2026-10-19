@@ -171,11 +171,11 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             "Import-Module Microsoft.WinGet.Client; ";
         if (user is null)
         {
-            var script = prelude + "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " +
-                $"ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline}";
+            var script = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; try { " + prelude +
+                $"ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline} }} catch {{ Write-Output $_.ToString(); exit 1 }}";
             var (exit, output) = Run(powershell, PowerShellArgs(script), ModuleTimeout, logOutput: false);
             if (exit != 0)
-                throw new InvalidOperationException($"The WinGet PowerShell module failed (exit code {exit}).");
+                throw new InvalidOperationException($"The WinGet PowerShell module failed (exit code {exit}): {output.Trim()}");
             return output;
         }
 
@@ -201,11 +201,12 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
             "if (Get-Module -ListAvailable -Name Microsoft.WinGet.Client) { exit 0 }; " +
             "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; " +
-            "Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers | Out-Null; " +
-            "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers -AllowClobber";
-        var exit = Run(PowerShellPath(), PowerShellArgs(script), TimeSpan.FromMinutes(10)).Exit;
+            "try { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers | Out-Null; " +
+            "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers -AllowClobber } " +
+            "catch { Write-Output $_.ToString(); exit 1 }";
+        var (exit, output) = Run(PowerShellPath(), PowerShellArgs(script), TimeSpan.FromMinutes(10));
         if (exit != 0)
-            throw new InvalidOperationException($"Installing the WinGet PowerShell module failed (exit code {exit}).");
+            throw new InvalidOperationException($"Installing the WinGet PowerShell module failed (exit code {exit}): {output.Trim()}");
     }
 
     private static readonly TimeSpan ModuleTimeout = TimeSpan.FromMinutes(5);
@@ -291,6 +292,9 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
         };
         foreach (var arg in args)
             start.ArgumentList.Add(arg);
+        // A PowerShell 7 parent (a terminal, CI) puts its own module folders here, which break Windows PowerShell's
+        // PowerShellGet; without it Windows PowerShell uses its default folders.
+        start.Environment.Remove("PSModulePath");
 
         using var process = Process.Start(start) ?? throw new InvalidOperationException($"Couldn't start {exe}.");
         var output = process.StandardOutput.ReadToEndAsync();

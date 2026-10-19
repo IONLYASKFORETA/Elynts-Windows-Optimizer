@@ -31,6 +31,15 @@ internal static class ServicePaths
     /// <summary>Driver installers, between download and install. Users can't write here, so a verified file can't be swapped.</summary>
     public static string Downloads { get; } = Path.Combine(Root, "downloads");
 
+    /// <summary>PawnIO's setup between download and install, and its modules. Users can't write here, so a verified file can't be swapped.</summary>
+    public static string PawnIo { get; } = Path.Combine(Root, "pawnio");
+
+    /// <summary>Display drivers exported by pnputil before a clean, one folder per clean, so it can be restored.</summary>
+    public static string DriverBackups { get; } = Path.Combine(Backups, "drivers-cleaned");
+
+    /// <summary>DDU, downloaded and installed here only when the user opts in to a deep clean.</summary>
+    public static string Ddu { get; } = Path.Combine(Root, "tools", "ddu");
+
     /// <summary>Games each user added by hand, one file per user SID.</summary>
     public static string Games { get; } = Path.Combine(Root, "games");
 
@@ -69,5 +78,8 @@ internal static class ServicePaths
         Directory.CreateDirectory(Downloads);
         Directory.CreateDirectory(Games);
         Directory.CreateDirectory(Profiles);
+        Directory.CreateDirectory(PawnIo);
+        Directory.CreateDirectory(DriverBackups);
+        Directory.CreateDirectory(Ddu);
     }
 }

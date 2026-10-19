@@ -7,18 +7,24 @@ namespace Elynt.Core.Drivers;
 /// <param name="Inventory">Reads the display adapters and their installed drivers.</param>
 /// <param name="Sources">One latest-driver lookup per vendor. A vendor without one falls back to its download page.</param>
 /// <param name="DownloadFolder">Where installers are downloaded to; only the service can write there.</param>
+/// <param name="Extractor">Unpacks NVIDIA's package for a lean install. Without it, lean installs are unavailable.</param>
 public sealed record DriverAdapters(
     IDriverInventory Inventory,
     IReadOnlyList<IDriverSource> Sources,
     string DownloadFolder,
     IDownloader Downloader,
     ISignatureVerifier Signatures,
-    IInstallerRunner Installer);
+    IInstallerRunner Installer,
+    IPackageExtractor? Extractor = null);
 
-/// <summary>Detects GPUs, looks up their latest drivers, and downloads, verifies and installs them.</summary>
+/// <summary>
+/// Detects GPUs and the chipset driver, looks up their latest drivers, and downloads, verifies and installs them.
+/// </summary>
 internal sealed class DriverFlow(SystemAdapters system, ILogger log)
 {
     private readonly DriverAdapters? _adapters = system.Drivers;
+
+    private DriverCleaner Cleaner => new(system.DriverCleaning, log);
 
     public DriverReport Report()
     {
@@ -26,7 +32,7 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
             return new DriverReport([], "Driver detection isn't available.");
         try
         {
-            return new DriverReport(_adapters.Inventory.DisplayAdapters().Select(Describe).ToList());
+            return new DriverReport(_adapters.Inventory.DisplayAdapters().Select(Describe).ToList(), Chipset: Chipset());
         }
         catch (Exception ex)
         {
@@ -40,8 +46,8 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         if (Find(request.DeviceId, out var problem) is not { } target)
             return new DriverCheck(false, problem.Message, problem.Gpu, null, false, null);
 
-        var (gpu, source) = target;
-        var query = new DriverQuery(gpu.Name, system.System.Hardware.HasFlag(HardwareTraits.Laptop), request.Branch);
+        var (gpu, source) = (target.Gpu, target.Source);
+        var query = new DriverQuery(target.Name, system.System.Hardware.HasFlag(HardwareTraits.Laptop), request.Branch);
         DriverOffer? offer;
         try
         {
@@ -49,17 +55,26 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Looking up the latest driver for {Gpu} failed", gpu.Name);
+            log.LogWarning(ex, "Looking up the latest driver for {Device} failed", target.Name);
             return new DriverCheck(false, $"Couldn't look up the latest driver: {ex.Message} Get it from the vendor's page instead.", gpu, null, false, source.VendorPage);
         }
 
+        // Only NVIDIA GPUs have branches, so only their messages name one.
+        var branch = source is { Vendor: GpuVendor.Nvidia, Kind: DriverKind.Graphics } ? $"{Describe(request.Branch)} " : "";
         if (offer is null)
-            return new DriverCheck(false, $"The lookup found no {Describe(request.Branch)} driver for the {gpu.Name}. Get it from the vendor's page instead.", gpu, null, false, source.VendorPage);
+            return new DriverCheck(false, $"The lookup found no {branch}driver for the {target.Name}. Get it from the vendor's page instead.", gpu, null, false, source.VendorPage);
 
-        var newer = IsNewer(offer.Version, gpu.DriverVersion);
-        var message = newer
-            ? $"Driver {offer.Version} is available; you have {gpu.DriverVersion}."
-            : $"You have the latest {Describe(request.Branch)} driver ({gpu.DriverVersion}).";
+        var (newer, message) = target.InstalledVersion switch
+        {
+            null when source.Kind == DriverKind.Chipset =>
+                (true, $"The {target.Name} isn't installed. Driver {offer.Version} is available."),
+            null =>
+                (true, $"Driver {offer.Version} is available. The app can't tell which version you have (Windows reports {target.WindowsVersion}), so check before reinstalling."),
+            var installed when IsNewer(offer.Version, installed) =>
+                (true, $"Driver {offer.Version} is available; you have {installed}."),
+            var installed =>
+                (false, $"You have the latest {branch}driver ({installed})."),
+        };
         return new DriverCheck(true, message, gpu, offer, newer, source.VendorPage);
     }
 
@@ -74,7 +89,7 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         if (!check.Found || check.Latest is not { } offer || Find(request.DeviceId, out _) is not { } target)
             return new DriverInstallResult(false, false, check.Message, VendorPage: check.VendorPage);
 
-        var (gpu, source) = target;
+        var source = target.Source;
         var vendorPage = source.VendorPage;
         var profile = source.Installer;
         if (offer.DownloadUrl.Scheme != Uri.UriSchemeHttps)
@@ -82,14 +97,15 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
 
         var adapters = _adapters!;
         Directory.CreateDirectory(adapters.DownloadFolder);
-        var path = Path.Combine(adapters.DownloadFolder, $"{gpu.Vendor}-{offer.Version}-{Guid.NewGuid():N}.exe");
+        var path = Path.Combine(adapters.DownloadFolder, $"{source.Vendor}-{source.Kind}-{offer.Version}-{Guid.NewGuid():N}.exe");
+        string? leanFolder = null;
         try
         {
             try
             {
                 progress?.Report(new(DriverInstallStage.Downloading, $"Downloading driver {offer.Version}…"));
-                log.LogInformation("Downloading driver {Version} for {Gpu} from {Url}", offer.Version, gpu.Name, offer.DownloadUrl);
-                adapters.Downloader.Download(offer.DownloadUrl, path);
+                log.LogInformation("Downloading driver {Version} for {Device} from {Url}", offer.Version, target.Name, offer.DownloadUrl);
+                adapters.Downloader.Download(offer.DownloadUrl, path, offer.Referer);
             }
             catch (Exception ex)
             {
@@ -104,18 +120,35 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
                 return Rejected($"{refusal} The download was deleted and nothing was installed.");
             }
 
+            var installer = path;
+            if (request.Lean && source.Vendor == GpuVendor.Nvidia && source.Kind == DriverKind.Graphics)
+            {
+                progress?.Report(new(DriverInstallStage.Slimming, "Unpacking the driver and removing everything but the display driver…"));
+                leanFolder = Path.ChangeExtension(path, null);
+                var laptop = system.System.Hardware.HasFlag(HardwareTraits.Laptop);
+                if (LeanInstall.Prepare(adapters, path, leanFolder, laptop, profile, log) is { } leanRefusal)
+                    return Rejected($"{leanRefusal} Nothing was installed; untick lean install to install the full package.");
+                installer = Path.Combine(leanFolder, "setup.exe");
+            }
+
+            // Last step before installing, so a refused download or failed lean prep never removes anything.
+            string? oldDrivers = null;
+            if (request.RemoveOldDrivers && source.Kind == DriverKind.Graphics &&
+                Cleaner.RemoveBeforeReinstall(source.Vendor, out oldDrivers) is { } cleanRefusal)
+                return Rejected($"{cleanRefusal} The new driver wasn't installed.");
+
             var arguments = request.CleanInstall ? [.. profile.Arguments, .. profile.CleanInstallArguments] : profile.Arguments;
             int exitCode;
             try
             {
                 progress?.Report(new(DriverInstallStage.Installing, $"Installing driver {offer.Version}. The screen may flicker…"));
-                log.LogInformation("Installing driver {Version} for {Gpu} with {Arguments}", offer.Version, gpu.Name, arguments);
-                exitCode = adapters.Installer.RunInstaller(path, arguments);
+                log.LogInformation("Installing driver {Version} for {Device} with {Arguments}", offer.Version, target.Name, arguments);
+                exitCode = adapters.Installer.RunInstaller(installer, arguments);
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Running the driver installer failed");
-                return Rejected($"Couldn't run the driver installer: {ex.Message}");
+                return Rejected($"Couldn't run the driver installer: {ex.Message}{Cleaner.PutBack(oldDrivers)}");
             }
 
             log.LogInformation("Driver installer for {Version} exited with {ExitCode}", offer.Version, exitCode);
@@ -123,11 +156,15 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
                 return new DriverInstallResult(true, false, $"Installed driver {offer.Version}.", offer.Version);
             if (profile.RebootCodes.Contains(exitCode))
                 return new DriverInstallResult(true, true, $"Installed driver {offer.Version}. Restart the PC to finish.", offer.Version);
-            return Rejected($"The driver installer failed with exit code {exitCode}. Your current driver should still be in place.");
+            return Rejected(oldDrivers is null
+                ? $"The driver installer failed with exit code {exitCode}. Your current driver should still be in place."
+                : $"The driver installer failed with exit code {exitCode}.{Cleaner.PutBack(oldDrivers)}");
         }
         finally
         {
             TryDelete(path);
+            if (leanFolder is not null)
+                LeanInstall.TryDeleteFolder(leanFolder, log);
         }
 
         DriverInstallResult Rejected(string message) => new(false, false, message, VendorPage: vendorPage);
@@ -152,15 +189,18 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         if (!string.Equals(signature.Signer?.Trim(), profile.Signer, StringComparison.OrdinalIgnoreCase))
             return $"The download is signed by \"{signature.Signer}\", not {profile.Signer}.";
 
-        if (offer.Sha512 is { } expected)
-        {
-            using var file = File.OpenRead(path);
-            var actual = Convert.ToHexString(System.Security.Cryptography.SHA512.HashData(file));
-            if (!string.Equals(actual, expected.Trim(), StringComparison.OrdinalIgnoreCase))
-                return "The download doesn't match the SHA-512 hash the vendor published.";
-        }
+        if (offer.Sha512 is { } sha512 && !Matches(path, sha512, System.Security.Cryptography.SHA512.HashData))
+            return "The download doesn't match the SHA-512 hash the vendor published.";
+        if (offer.Sha256 is { } sha256 && !Matches(path, sha256, System.Security.Cryptography.SHA256.HashData))
+            return "The download doesn't match the SHA-256 hash the vendor published.";
 
         return null;
+    }
+
+    private static bool Matches(string path, string expected, Func<Stream, byte[]> hash)
+    {
+        using var file = File.OpenRead(path);
+        return string.Equals(Convert.ToHexString(hash(file)), expected.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private void TryDelete(string path)
@@ -175,43 +215,102 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         }
     }
 
-    private sealed record Target(InstalledGpu Gpu, IDriverSource Source);
+    /// <summary>A device whose driver the flow can look up.</summary>
+    /// <param name="InstalledVersion">The installed version in the lookup's format, or null when it can't be told or isn't installed.</param>
+    /// <param name="Gpu">The GPU, or null for the chipset.</param>
+    private sealed record Target(string Name, string? InstalledVersion, string WindowsVersion, InstalledGpu? Gpu, IDriverSource Source);
 
     private sealed record Problem(string Message, InstalledGpu? Gpu = null);
 
-    /// <summary>The detected GPU with this device ID and the lookup for its vendor, or why there isn't one.</summary>
+    /// <summary>The detected GPU (or the chipset) with this device ID and the lookup for it, or why there isn't one.</summary>
     private Target? Find(string deviceId, out Problem problem)
     {
         problem = new Problem("");
-        var report = Report();
-        if (report.Problem is not null)
+        if (_adapters is null)
         {
-            problem = new Problem(report.Problem);
+            problem = new Problem("Driver detection isn't available.");
             return null;
         }
 
-        var gpu = report.Gpus.FirstOrDefault(g => string.Equals(g.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
-        if (gpu is null)
+        if (string.Equals(deviceId, DriverRequest.Chipset, StringComparison.OrdinalIgnoreCase))
+        {
+            if (Chipset() is not { } chipset)
+            {
+                problem = new Problem("The app can't tell who made this PC's CPU, so it can't pick a chipset driver.");
+                return null;
+            }
+
+            if (SourceFor(chipset.Vendor, DriverKind.Chipset) is not { } chipsetSource)
+            {
+                problem = new Problem($"The app can't look up the {chipset.Name} yet.");
+                return null;
+            }
+
+            return new Target(chipset.Name, chipset.DriverVersion, chipset.DriverVersion ?? "none", null, chipsetSource);
+        }
+
+        IReadOnlyList<DisplayAdapter> adapters;
+        try
+        {
+            adapters = _adapters.Inventory.DisplayAdapters();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Couldn't read the display adapters");
+            problem = new Problem($"Couldn't read the display adapters: {ex.Message}");
+            return null;
+        }
+
+        var adapter = adapters.FirstOrDefault(a => string.Equals(a.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+        if (adapter is null)
         {
             problem = new Problem("That GPU isn't in this PC any more.");
             return null;
         }
 
-        var source = _adapters!.Sources.FirstOrDefault(s => s.Vendor == gpu.Vendor);
-        if (source is null)
+        var gpu = Describe(adapter);
+        if (SourceFor(gpu.Vendor, DriverKind.Graphics) is not { } source)
         {
             problem = new Problem($"The app can't look up drivers for the {gpu.Name} yet.", gpu);
             return null;
         }
 
-        return new Target(gpu, source);
+        var installed = DriverVersions.Vendor(adapter.Vendor, adapter.DriverVersion, adapter.VendorVersion);
+        return new Target(gpu.Name, installed, adapter.DriverVersion, gpu, source);
+    }
+
+    private IDriverSource? SourceFor(GpuVendor vendor, DriverKind kind) =>
+        _adapters!.Sources.FirstOrDefault(s => s.Vendor == vendor && s.Kind == kind);
+
+    /// <summary>The chipset driver package for the CPU's maker, or null when the maker isn't AMD or Intel.</summary>
+    private InstalledChipset? Chipset()
+    {
+        var hardware = system.System.Hardware;
+        var (vendor, name) =
+            hardware.HasFlag(HardwareTraits.AmdCpu) ? (GpuVendor.Amd, "AMD chipset driver") :
+            hardware.HasFlag(HardwareTraits.IntelCpu) ? (GpuVendor.Intel, "Intel chipset driver") :
+            (GpuVendor.Unknown, "");
+        if (vendor == GpuVendor.Unknown)
+            return null;
+
+        string? version = null;
+        try
+        {
+            version = _adapters!.Inventory.ChipsetVersion(vendor);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Couldn't read the installed {Vendor} chipset driver version", vendor);
+        }
+
+        return new InstalledChipset(name, vendor, version);
     }
 
     private static InstalledGpu Describe(DisplayAdapter adapter) => new(
         adapter.Name,
         adapter.DeviceId,
         adapter.Vendor,
-        DriverVersions.Display(adapter.Vendor, adapter.DriverVersion),
+        DriverVersions.Display(adapter.Vendor, adapter.DriverVersion, adapter.VendorVersion),
         adapter.DriverVersion);
 
     private static bool IsNewer(string offered, string installed) =>

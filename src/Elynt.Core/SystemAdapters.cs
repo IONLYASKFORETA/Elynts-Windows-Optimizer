@@ -4,10 +4,12 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.Boot;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.LowLevel;
 using Elynt.Core.Power;
 using Elynt.Core.Registry;
 using Elynt.Core.Startup;
 using Elynt.Core.Repair;
+using Elynt.Core.Sensors;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core;
@@ -46,6 +48,15 @@ public sealed record SystemAdapters(
     /// <summary>Power plans. Tweaks with power plan steps fail without it.</summary>
     public IPowerPlans? Power { get; init; }
 
+    /// <summary>The optional PawnIO driver, installed only when the user turns it on. Without it, PawnIO is unavailable.</summary>
+    public PawnIoAdapters? PawnIo { get; init; }
+
+    /// <summary>Sensor sources that need no extra driver (vendor SDKs, then Windows), best first.</summary>
+    public IReadOnlyList<ISensorSource> Sensors { get; init; } = [];
+
+    /// <summary>Driver cleaning (pnputil, DDU) and problem-driver checks. Without it, cleaning is unavailable.</summary>
+    public DriverCleaningAdapters? DriverCleaning { get; init; }
+
     /// <summary>Preinstalled apps the Debloat &amp; Privacy section removes. Without it, none show as installed.</summary>
     public IRemovableApps Apps { get; init; } = new NoRemovableApps();
 
@@ -57,6 +68,11 @@ public sealed record SystemAdapters(
 
     /// <summary>The system timer's resolution, for per-game profiles.</summary>
     public Profiles.ITimerResolution Timer { get; init; } = new Profiles.NoTimerResolution();
+    /// <summary>Plug and Play devices. Tweaks with device steps fail without it.</summary>
+    public Devices.IDevices? PnpDevices { get; init; }
+
+    /// <summary>Microsoft Defender's scan exclusions. Exclusion tweaks fail without it.</summary>
+    public Security.IScanExclusions? ScanExclusions { get; init; }
 }
 
 public interface ISystemInfo
