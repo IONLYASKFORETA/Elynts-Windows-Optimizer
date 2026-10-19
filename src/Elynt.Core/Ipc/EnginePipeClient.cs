@@ -17,7 +17,7 @@ using Elynt.Core.Sensors;
 namespace Elynt.Core.Ipc;
 
 /// <summary>The UI's side of the pipe: one async method per <see cref="IEngine"/> command.</summary>
-public sealed class EnginePipeClient : IAsyncDisposable
+public sealed partial class EnginePipeClient : IAsyncDisposable
 {
     private readonly NamedPipeClientStream _pipe;
     private readonly StreamReader _reader;
@@ -176,6 +176,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
             e => { if (e is DriverInstallProgressEvent p) progress?.Report(p.Progress); })).DriverInstall
             ?? throw Missing("driver install result");
 
+    public async Task<DriverCleaningReport> GetDriverCleaningAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetDriverCleaningRequest(), cancellation)).DriverCleaning ?? throw Missing("driver cleaning report");
+
+    public async Task<DriverCleanResult> CleanDriversAsync(DriverCleanRequest request, CancellationToken cancellation = default) =>
+        (await SendAsync(new CleanDriversRequest(request), cancellation)).DriverClean ?? throw Missing("driver clean result");
+
+    public async Task<DriverCleanResult> RestoreDriversAsync(string backupId, CancellationToken cancellation = default) =>
+        (await SendAsync(new RestoreDriversRequest(backupId), cancellation)).DriverClean ?? throw Missing("driver restore result");
+
     public async Task<IReadOnlyList<InstalledGame>> ListGamesAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListGamesRequest(), cancellation)).Games ?? throw Missing("games");
 
@@ -184,6 +193,18 @@ public sealed class EnginePipeClient : IAsyncDisposable
 
     public async Task<GameCommandResult> RemoveGameAsync(string exePath, CancellationToken cancellation = default) =>
         (await SendAsync(new RemoveGameRequest(exePath), cancellation)).GameResult ?? throw Missing("result");
+
+    public async Task<IReadOnlyList<Profiles.GameProfile>> ListProfilesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new ListProfilesRequest(), cancellation)).Profiles ?? throw Missing("profiles");
+
+    public async Task<Profiles.ProfileResult> SaveProfileAsync(Profiles.GameProfile profile, CancellationToken cancellation = default) =>
+        (await SendAsync(new SaveProfileRequest(profile), cancellation)).ProfileResult ?? throw Missing("result");
+
+    public async Task<Profiles.ProfileResult> DeleteProfileAsync(string exePath, CancellationToken cancellation = default) =>
+        (await SendAsync(new DeleteProfileRequest(exePath), cancellation)).ProfileResult ?? throw Missing("result");
+
+    public async Task<IReadOnlyList<Profiles.ProfileNote>> TakeProfileNotesAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new TakeProfileNotesRequest(), cancellation)).ProfileNotes ?? throw Missing("notes");
 
     public async Task<GpuTuningReport> GetGpuTuningAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new GetGpuTuningRequest(), cancellation)).GpuTuning ?? throw Missing("GPU tuning");

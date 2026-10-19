@@ -416,6 +416,8 @@
                                         <CheckBox Content="Lean install (display driver only: no NVIDIA App, telemetry or extras; laptops keep their power components; needs 7-Zip)"
                                                   IsChecked="{Binding LeanInstall}" IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
                                                   Visibility="{Binding CanInstallLean, Converter={StaticResource Visible}}" />
+                                        <CheckBox Content="Remove the old drivers first (backed up, put back if the install fails)" IsChecked="{Binding RemoveOldDrivers}"
+                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button Content="Check for a newer driver" Click="CheckDriver" Padding="12,4"
                                                     IsEnabled="{Binding IsIdle}" />
@@ -434,12 +436,63 @@
                         </ItemsControl>
                         <TextBlock TextWrapping="Wrap" Opacity="0.7" Margin="0,8,0,0"
                                    Text="Every download is checked for the vendor's signature before it runs; anything unsigned or tampered with is deleted." />
+
+                        <!-- Driver cleaning: problem drivers, pnputil clean (restorable), opt-in DDU, backups. -->
+                        <StackPanel DataContext="{Binding Cleaning}" Margin="0,16,0,0">
+                            <TextBlock Text="Drivers that stop anti-cheats" FontSize="16" FontWeight="SemiBold"
+                                       Visibility="{Binding HasProblemDrivers, Converter={StaticResource Visible}}" />
+                            <ItemsControl ItemsSource="{Binding ProblemDrivers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,4,0,8">
+                                            <TextBlock FontWeight="SemiBold" TextWrapping="Wrap">
+                                                <Run Text="{Binding Name, Mode=OneWay}" /> <Run Text="(" /><Run Text="{Binding Driver, Mode=OneWay}" /> <Run Text="{Binding Version, Mode=OneWay}" /><Run Text=")" />
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Foreground="DarkOrange" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="Clean old drivers" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <TextBlock Text="Vendor:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ComboBox ItemsSource="{Binding Vendors}" SelectedItem="{Binding Vendor}" MinWidth="100" IsEnabled="{Binding IsIdle}" />
+                                <Button Content="Remove old drivers (backed up first)" Click="CleanDrivers" Padding="12,4" Margin="8,0,0,0"
+                                        IsEnabled="{Binding IsIdle}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding DduLabel}" TextWrapping="Wrap" Opacity="0.8" Margin="0,10,0,0" />
+                            <CheckBox Content="I understand: use DDU for a vendor switch or a broken install" IsChecked="{Binding DduAccepted}"
+                                      IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
+                            <Button Content="Deep clean with DDU" Click="DeepCleanDrivers" Padding="12,4" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                    IsEnabled="{Binding DduAccepted}" />
+                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,8,0,0" FontWeight="SemiBold" />
+
+                            <TextBlock Text="Driver backups" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,0"
+                                       Visibility="{Binding HasBackups, Converter={StaticResource Visible}}" />
+                            <ItemsControl ItemsSource="{Binding Backups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:DriverBackupItemViewModel}">
+                                        <DockPanel Margin="0,4,0,4">
+                                            <Button DockPanel.Dock="Right" Content="Restore" Click="RestoreDrivers" Padding="12,4"
+                                                    IsEnabled="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}" />
+                                                <TextBlock Text="{Binding Contents}" Opacity="0.7" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- Installed games: what the launchers report, plus games added by their .exe. -->
                 <DockPanel DataContext="{Binding Games}" Margin="4"
                            Visibility="{Binding DataContext.IsGamesPage, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}">
+                    <local:ProfilesPage DockPanel.Dock="Top"
+                                        DataContext="{Binding DataContext.Profiles, RelativeSource={RelativeSource AncestorType=Window}}" />
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="Installed games" FontSize="16" FontWeight="SemiBold" />
                         <TextBlock Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games."
@@ -562,6 +615,31 @@
             </DockPanel>
             <TextBlock DockPanel.Dock="Top" Margin="4,0,4,8" TextWrapping="Wrap" Opacity="0.8"
                        Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+            <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
+            <StackPanel DockPanel.Dock="Top" Margin="4,0,4,12" DataContext="{Binding Drift}">
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Items}" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:DriftItemViewModel}">
+                            <CheckBox IsChecked="{Binding Ticked}" Margin="0,2"
+                                      AutomationProperties.Name="{Binding Name, StringFormat='Re-apply {0}'}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Detail}" Opacity="0.8" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
+                    <Button Content="Re-apply all" Padding="16,6" Margin="0,0,8,0" Click="ReapplyAllDrift" IsEnabled="{Binding CanReapply}" />
+                    <Button Content="Re-apply ticked" Padding="16,6" Click="ReapplyTickedDrift" IsEnabled="{Binding CanReapply}" />
+                </StackPanel>
+                <CheckBox Content="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)"
+                          IsChecked="{Binding AutoReapply}" Margin="0,8,0,0" />
+                <CheckBox Content="Show a tray note when a Windows update undoes changes"
+                          IsChecked="{Binding NotifyDrift}" Margin="0,4,0,0" />
+            </StackPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding HistoryMessage}" Margin="4,0,4,8" TextWrapping="Wrap" FontWeight="SemiBold" />
             <Grid>
                 <ListView ItemsSource="{Binding History}" BorderThickness="0" HorizontalContentAlignment="Stretch">

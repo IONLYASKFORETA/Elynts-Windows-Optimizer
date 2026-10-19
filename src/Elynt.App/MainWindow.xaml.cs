@@ -22,15 +22,20 @@ public partial class MainWindow : Window
         _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
         _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
         _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
+        _model.Drift = new DriftViewModel(() => _model.Client, ConfirmDestructiveReapply, _model.RefreshAsync);
         InitializeComponent();
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
+        _model.Profiles.PickApp = PickApp;
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
-            _tray = new TrayNotes(_model.Startup, ShowFromTray);
+            _tray = new TrayNotes(_model.Startup, ShowFromTray, () => _model.Client);
             // The first look after connecting takes note of what is already there.
             await _tray.CheckAsync();
+            // Once per sign-in: the window starts with Windows, so this is the per-boot drift check.
+            if (await _model.Drift!.CheckAsync() is { } drift)
+                _tray.ShowDrift(drift, ShowDrift);
             await _model.CheckForUpdatesAsync();
         };
         Closed += (_, _) => _tray?.Dispose();
@@ -240,6 +245,25 @@ public partial class MainWindow : Window
             await page.UndoAsync(item);
     }
 
+    private void ShowDrift()
+    {
+        ShowFromTray();
+        _model.SelectedPage = MainViewModel.UndoHistory;
+    }
+
+    private async void ReapplyAllDrift(object sender, RoutedEventArgs e) => await _model.Drift!.ReapplyAllAsync();
+
+    private async void ReapplyTickedDrift(object sender, RoutedEventArgs e) => await _model.Drift!.ReapplyTickedAsync();
+
+    private bool ConfirmDestructiveReapply(string names) =>
+        MessageBox.Show(
+            this,
+            $"Windows undid these, and putting them back can't be undone:\n\n{names}\n\nRe-apply them too? Choose No to re-apply only the rest.",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
     private void ShowFromTray()
     {
         Show();
@@ -258,6 +282,24 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.DataContext is GpuItemViewModel gpu)
             await gpu.InstallAsync();
+    }
+
+    private async void CleanDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverCleaningViewModel cleaning)
+            await cleaning.CleanAsync();
+    }
+
+    private async void DeepCleanDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverCleaningViewModel cleaning)
+            await cleaning.DeepCleanAsync();
+    }
+
+    private async void RestoreDrivers(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is DriverBackupItemViewModel backup)
+            await backup.RestoreAsync();
     }
 
     /// <summary>The reboot prompt after a driver installer reported that Windows must restart. "Later" is the default.</summary>
@@ -279,6 +321,17 @@ public partial class MainWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Choose the game's .exe",
+            Filter = "Programs (*.exe)|*.exe",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private string? PickApp()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Choose the app to close while playing",
             Filter = "Programs (*.exe)|*.exe",
             CheckFileExists = true,
         };

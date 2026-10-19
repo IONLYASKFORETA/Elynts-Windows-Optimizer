@@ -9,11 +9,13 @@ using Elynt.Core.Cleanup;
 using Elynt.Core.UpdateControl;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Profiles;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
 using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
+using Elynt.Core.Drift;
 
 namespace Elynt.Core.Ipc;
 
@@ -51,6 +53,9 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(GetDriversRequest), "getDrivers")]
 [JsonDerivedType(typeof(CheckDriverRequest), "checkDriver")]
 [JsonDerivedType(typeof(InstallDriverRequest), "installDriver")]
+[JsonDerivedType(typeof(GetDriverCleaningRequest), "getDriverCleaning")]
+[JsonDerivedType(typeof(CleanDriversRequest), "cleanDrivers")]
+[JsonDerivedType(typeof(RestoreDriversRequest), "restoreDrivers")]
 [JsonDerivedType(typeof(ListGamesRequest), "listGames")]
 [JsonDerivedType(typeof(AddGameRequest), "addGame")]
 [JsonDerivedType(typeof(RemoveGameRequest), "removeGame")]
@@ -60,8 +65,15 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(CheckDriftRequest), "checkDrift")]
+[JsonDerivedType(typeof(ReapplyDriftRequest), "reapplyDrift")]
+[JsonDerivedType(typeof(GetDriftSettingsRequest), "getDriftSettings")]
+[JsonDerivedType(typeof(SetAutoReapplyRequest), "setAutoReapply")]
+[JsonDerivedType(typeof(ListProfilesRequest), "listProfiles")]
+[JsonDerivedType(typeof(SaveProfileRequest), "saveProfile")]
+[JsonDerivedType(typeof(DeleteProfileRequest), "deleteProfile")]
+[JsonDerivedType(typeof(TakeProfileNotesRequest), "takeProfileNotes")]
 [JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
-
 [JsonDerivedType(typeof(GetPawnIoRequest), "getPawnIo")]
 [JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
 [JsonDerivedType(typeof(UninstallPawnIoRequest), "uninstallPawnIo")]
@@ -137,6 +149,14 @@ public sealed record CheckDriverRequest(DriverRequest Request) : EngineRequest;
 
 /// <summary>Long-running: streams a <see cref="DriverInstallProgressEvent"/> per step, then the result.</summary>
 public sealed record InstallDriverRequest(DriverRequest Request) : EngineRequest;
+
+public sealed record GetDriverCleaningRequest : EngineRequest;
+
+/// <summary>Long-running: exports, then deletes; DDU also downloads and runs a third-party tool.</summary>
+public sealed record CleanDriversRequest(DriverCleanRequest Request) : EngineRequest;
+
+/// <summary>Long-running: reinstalls the exported drivers.</summary>
+public sealed record RestoreDriversRequest(string BackupId) : EngineRequest;
 
 public sealed record ListGamesRequest : EngineRequest;
 
@@ -221,6 +241,8 @@ public sealed record EngineResponse(
     DriverReport? Drivers = null,
     DriverCheck? DriverCheck = null,
     DriverInstallResult? DriverInstall = null,
+    DriverCleaningReport? DriverCleaning = null,
+    DriverCleanResult? DriverClean = null,
     IReadOnlyList<InstalledGame>? Games = null,
     GameCommandResult? GameResult = null,
     GpuTuningReport? GpuTuning = null,
@@ -237,6 +259,12 @@ public sealed record EngineResponse(
     CleanupScan? CleanupScan = null,
     CleanupReport? CleanupReport = null,
     CleanupSchedule? CleanupSchedule = null,
+    DriftReport? Drift = null,
+    ReapplyResult? Reapply = null,
+    DriftSettings? DriftSettings = null,
+    IReadOnlyList<GameProfile>? Profiles = null,
+    ProfileResult? ProfileResult = null,
+    IReadOnlyList<ProfileNote>? ProfileNotes = null,
     CpuTuningReport? CpuTuning = null,
     CpuTuningResult? CpuResult = null)
 {
@@ -307,6 +335,9 @@ public static class EngineProtocol
         CheckDriverRequest check => new(DriverCheck: engine.CheckDriver(check.Request)),
         InstallDriverRequest install => new(DriverInstall: engine.InstallDriver(
             install.Request, Relay<DriverInstallProgress>(p => new DriverInstallProgressEvent(p), sendEvent))),
+        GetDriverCleaningRequest => new(DriverCleaning: engine.GetDriverCleaning()),
+        CleanDriversRequest clean => new(DriverClean: engine.CleanDrivers(clean.Request)),
+        RestoreDriversRequest restore => new(DriverClean: engine.RestoreDrivers(restore.BackupId)),
         ListGamesRequest => new(Games: engine.ListGames()),
         AddGameRequest add => new(GameResult: engine.AddGame(add.ExePath)),
         RemoveGameRequest remove => new(GameResult: engine.RemoveGame(remove.ExePath)),
@@ -316,8 +347,15 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        CheckDriftRequest => new(Drift: engine.CheckDrift()),
+        ReapplyDriftRequest reapply => new(Reapply: engine.ReapplyDrift(reapply.TweakIds, reapply.ConfirmDestructive)),
+        GetDriftSettingsRequest => new(DriftSettings: engine.GetDriftSettings()),
+        SetAutoReapplyRequest auto => new(DriftSettings: engine.SetAutoReapply(auto.Enabled)),
+        ListProfilesRequest => new(Profiles: engine.ListProfiles()),
+        SaveProfileRequest save => new(ProfileResult: engine.SaveProfile(save.Profile)),
+        DeleteProfileRequest delete => new(ProfileResult: engine.DeleteProfile(delete.ExePath)),
+        TakeProfileNotesRequest => new(ProfileNotes: engine.TakeProfileNotes()),
         AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
-
         GetPawnIoRequest => new(PawnIo: engine.GetPawnIo()),
         InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),
         UninstallPawnIoRequest => new(PawnIoResult: engine.UninstallPawnIo()),
@@ -334,8 +372,9 @@ public static class EngineProtocol
 
     /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
     public static bool IsLongRunning(EngineRequest request) =>
-        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest or InstallPawnIoRequest or UninstallPawnIoRequest
-           or RunCpuStressTestRequest;
+        request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest
+            or InstallPawnIoRequest or UninstallPawnIoRequest or CleanDriversRequest or RestoreDriversRequest
+            or RunCpuStressTestRequest;
 
     /// <summary>Whether nothing else may run alongside the command, not even a long-running one (an app install, update or uninstall queue).</summary>
     public static bool IsExclusive(EngineRequest request) =>

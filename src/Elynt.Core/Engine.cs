@@ -235,6 +235,18 @@ public partial interface IEngine
     /// <param name="progress">Told as each step (lookup, download, signature check, install) starts.</param>
     DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null);
 
+    /// <summary>Backups of cleaned drivers, installed drivers known to stop anti-cheats, and DDU's label.</summary>
+    DriverCleaningReport GetDriverCleaning();
+
+    /// <summary>
+    /// Removes a vendor's display drivers. pnputil exports every package first, so <see cref="RestoreDrivers"/> can
+    /// put them back; DDU (downloaded from Wagnardsoft only now) also exports first, and runs only when confirmed.
+    /// </summary>
+    DriverCleanResult CleanDrivers(DriverCleanRequest request);
+
+    /// <summary>Reinstalls the drivers a clean exported.</summary>
+    DriverCleanResult RestoreDrivers(string backupId);
+
     /// <summary>Installed games from every supported launcher, plus the ones the user added by hand.</summary>
     IReadOnlyList<InstalledGame> ListGames();
 
@@ -243,6 +255,20 @@ public partial interface IEngine
 
     /// <summary>Removes a game the user added by hand.</summary>
     GameCommandResult RemoveGame(string exePath);
+
+    /// <summary>This user's per-game profiles.</summary>
+    IReadOnlyList<Profiles.GameProfile> ListProfiles();
+
+    /// <summary>
+    /// Saves (or replaces) the profile for a game. Only instant changes may go in: reboot-only tweaks and Defender or
+    /// other Security tweaks are refused. Anti-cheat clashes with the game come back as warnings.
+    /// </summary>
+    Profiles.ProfileResult SaveProfile(Profiles.GameProfile profile);
+
+    Profiles.ProfileResult DeleteProfile(string exePath);
+
+    /// <summary>Tray notes about profiles applied, undone or skipped since the last call. Each note is returned once.</summary>
+    IReadOnlyList<Profiles.ProfileNote> TakeProfileNotes();
 
     /// <summary>Every tunable GPU with its SDK-reported sliders, current values and any change waiting to be kept.</summary>
     GpuTuningReport GetGpuTuning();
@@ -301,6 +327,9 @@ public sealed partial class Engine(
     ManualUpdate? windowsUpdate = null,
     CleanupCatalogue? cleanup = null,
     ICleanupScheduleStore? cleanupSchedules = null,
+    Drift.IDriftStore? driftStore = null,
+    Profiles.IProfileStore? profiles = null,
+    Profiles.ProfileNotes? profileNotes = null,
     Tuning.Cpu.CpuTuning? cpuTuning = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -322,7 +351,7 @@ public sealed partial class Engine(
     public IReadOnlyList<ServiceView> ListServices() => Services.List();
 
     public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
-        Services.Set(serviceName, start, options ?? ApplyOptions.Default, ApplyTweak);
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o) => ApplyTweak(tweak, o));
 
     public ServiceResult UndoServiceChange(string serviceName) =>
         Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
@@ -332,7 +361,7 @@ public sealed partial class Engine(
     {
         if (catalogue.TryGet(tweakId, out tweak))
             return true;
-        tweak = ServiceChange.Resolve(tweakId, entry, system);
+        tweak = ServiceChange.Resolve(tweakId, entry, system) ?? Profiles.CloseApp.Resolve(tweakId, entry);
         return tweak is not null;
     }
 
@@ -390,23 +419,11 @@ public sealed partial class Engine(
     }
 
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
-    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options)
+    /// <param name="temporary">Made by a per-game profile, so undone when the game closes or after a crash or reboot.</param>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false)
     {
-        if (WhyNotApplicable(tweak) is { } whyNot)
-            return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
-
-        // Hard rules hold in every mode, Advanced included.
-        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
-        {
-            _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
-            return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
-        }
-
-        if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
-            return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
-
-        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
-            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
+        if (Refusal(tweak, options) is { } refused)
+            return refused;
 
         try
         {
@@ -431,7 +448,7 @@ public sealed partial class Engine(
             try
             {
                 records = tweak.Steps.Select(step => step.Capture(system)).ToList();
-                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, temporary);
             }
             catch (Exception ex)
             {
@@ -463,6 +480,28 @@ public sealed partial class Engine(
             _log.LogError(ex, "Applying {Tweak} failed and could not be fully put back", tweak.Id);
             return Failed(tweak, $"Couldn't turn this on: {ex.Message} The prior state is saved; switch it off to undo.");
         }
+    }
+
+    /// <summary>Why the Engine won't apply this tweak with these options, or null when it may.</summary>
+    private CommandResult? Refusal(TweakDefinition tweak, ApplyOptions options)
+    {
+        if (WhyNotApplicable(tweak) is { } whyNot)
+            return Failed(tweak, $"This doesn't apply to this PC. {whyNot} Nothing was changed.");
+
+        // Hard rules hold in every mode, Advanced included.
+        if (tweak.Steps.Select(step => HardRules.Violation(step.Target, system.Services)).FirstOrDefault(v => v is not null) is { } violation)
+        {
+            _log.LogWarning("Refused {Tweak}: {Violation}", tweak.Id, violation);
+            return Failed(tweak, $"This change is never allowed: {violation}. Nothing was changed.");
+        }
+
+        if (tweak.Reversibility == Reversibility.Destructive && !options.ConfirmDestructive)
+            return Failed(tweak, $"This can't be undone, so it needs a separate confirmation first. {tweak.DestructiveWarning} Nothing was changed.");
+
+        if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
+            return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
+
+        return null;
     }
 
     public CommandResult Revert(string tweakId)
@@ -617,6 +656,14 @@ public sealed partial class Engine(
 
     private DriverFlow DriverFlow => new(system, _log);
 
+    public DriverCleaningReport GetDriverCleaning() => DriverCleaner.Report();
+
+    public DriverCleanResult CleanDrivers(DriverCleanRequest request) => DriverCleaner.Clean(request);
+
+    public DriverCleanResult RestoreDrivers(string backupId) => DriverCleaner.Restore(backupId);
+
+    private DriverCleaner DriverCleaner => new(system.DriverCleaning, _log);
+
     public IReadOnlyList<InstalledGame> ListGames() => _games.List();
 
     public GameCommandResult AddGame(string exePath) => _games.Add(exePath);
@@ -659,6 +706,7 @@ public sealed partial class Engine(
     }
 
     private string? WhyNotApplicable(TweakDefinition tweak) =>
+        UnsupportedReason(tweak.Id) ??
         tweak.Applicability.WhyNot(system.System) ??
         tweak.Steps.Select(step => step.WhyNotHere(system)).FirstOrDefault(reason => reason is not null);
 

@@ -7,6 +7,7 @@ using Elynt.Core.Drivers;
 using Elynt.Core.Games;
 using Elynt.Core.Ipc;
 using Elynt.Core.Journal;
+using Elynt.Core.Profiles;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Sensors;
 using Elynt.Core.Repair;
@@ -28,6 +29,12 @@ internal sealed class EngineHost(
     ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
     Core.Tuning.Cpu.CpuTuning cpuTuning,
+    Elynt.Core.Drift.IDriftStore driftStore,
+    IProfileStore profiles,
+    ProfileNotes profileNotes,
+    WindowsProcesses processes,
+    WindowsTimerResolution timer,
+    ProfileHost profileHost,
     ILoggerFactory loggers) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
@@ -67,6 +74,16 @@ internal sealed class EngineHost(
 
     // Best first: the GPU vendor's SDK, then Windows. PawnIO, when installed, comes before both.
     private readonly IReadOnlyList<ISensorSource> _sensors = [new NvmlSensors(), new WindowsSensors()];
+
+    private readonly DriverCleaningAdapters _driverCleaning = new(
+        new PnputilDriverStore(),
+        new WindowsKernelDrivers(),
+        ServicePaths.DriverBackups,
+        new WingetDduSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }),
+        ServicePaths.Ddu,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(10) }),
+        new WinTrustSignatureVerifier(),
+        new ProcessInstallerRunner());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
@@ -122,6 +139,7 @@ internal sealed class EngineHost(
         WindowsIdentity? identity = null;
         pipe.RunAsClient(() => identity = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed));
         var sid = identity?.User?.Value ?? throw new InvalidOperationException("Couldn't tell which user is connected.");
+        profileHost.RecoverLeftovers(sid);
 
         return new Engine(
             catalogue,
@@ -145,8 +163,11 @@ internal sealed class EngineHost(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
                 Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
                 Features = new WindowsOptionalFeatures(),
+                Processes = processes,
+                Timer = timer,
                 PawnIo = _pawnIo,
                 Sensors = _sensors,
+                DriverCleaning = _driverCleaning,
             },
             journal,
             sid,
@@ -157,6 +178,9 @@ internal sealed class EngineHost(
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
             cpuTuning: cpuTuning,
-            windowsUpdate: _windowsUpdate);
+            windowsUpdate: _windowsUpdate,
+            driftStore: driftStore,
+            profiles: profiles,
+            profileNotes: profileNotes);
     }
 }

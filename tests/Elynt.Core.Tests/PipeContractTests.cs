@@ -5,6 +5,7 @@ using Elynt.Core.Bios;
 using Elynt.Core.Cleanup;
 using Elynt.Core.Drivers;
 using Elynt.Core.Games;
+using Elynt.Core.Profiles;
 using Elynt.Core.Ipc;
 using Elynt.Core.LowLevel;
 using Elynt.Core.Sensors;
@@ -320,6 +321,24 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Drift_commands_arrive_unchanged()
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        AssertSameJson(StubEngine.DriftFound, await _client.CheckDriftAsync(token));
+
+        var reapplied = await _client.ReapplyDriftAsync(["debloat.remove-copilot"], confirmDestructive: true, token);
+        Assert.Equal("ReapplyDrift debloat.remove-copilot True", _engine.LastCall);
+        AssertSameJson(StubEngine.Reapplied, reapplied);
+
+        await _client.ReapplyDriftAsync(null, cancellation: token);
+        Assert.Equal("ReapplyDrift <all> False", _engine.LastCall);
+
+        Assert.True((await _client.SetAutoReapplyAsync(true, token)).AutoReapply);
+        Assert.True((await _client.GetDriftSettingsAsync(token)).AutoReapply);
+    }
+
+    [Fact]
     public async Task Other_commands_still_answer_while_a_clean_runs()
     {
         _engine.HoldRepair = new TaskCompletionSource();
@@ -445,6 +464,36 @@ public sealed class PipeContractTests : IAsyncLifetime
             Assert.IsType<DriverInstallProgressEvent>(EngineProtocol.Deserialize<EngineResponse>(line).Event).Progress);
     }
 
+    [Fact]
+    public async Task GetDriverCleaning_arrives_unchanged()
+    {
+        var report = await _client.GetDriverCleaningAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetDriverCleaning(), report);
+    }
+
+    [Fact]
+    public async Task CleanDrivers_arrives_unchanged_and_runs_in_the_long_running_lane()
+    {
+        var request = new DriverCleanRequest(GpuVendor.Amd, DriverCleanMethod.Ddu, Confirmed: true);
+
+        var result = await _client.CleanDriversAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(request, _engine.LastCleanRequest);
+        AssertSameJson(_engine.CleanDrivers(request), result);
+        Assert.True(EngineProtocol.IsLongRunning(new CleanDriversRequest(request)));
+    }
+
+    [Fact]
+    public async Task RestoreDrivers_arrives_unchanged_and_runs_in_the_long_running_lane()
+    {
+        var result = await _client.RestoreDriversAsync("20261016-120000-Nvidia", TestContext.Current.CancellationToken);
+
+        Assert.Equal("20261016-120000-Nvidia", _engine.LastRestoredBackup);
+        AssertSameJson(_engine.RestoreDrivers("20261016-120000-Nvidia"), result);
+        Assert.True(EngineProtocol.IsLongRunning(new RestoreDriversRequest("x")));
+    }
+
     private sealed class SyncCollect<T>(List<T> into) : IProgress<T>
     {
         public void Report(T value) => into.Add(value);
@@ -539,6 +588,23 @@ public sealed class PipeContractTests : IAsyncLifetime
     public void The_CPU_stress_test_runs_in_the_long_running_lane()
     {
         Assert.True(EngineProtocol.IsLongRunning(new RunCpuStressTestRequest()));
+    }
+
+    [Fact]
+    public async Task Profile_commands_arrive_unchanged()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        AssertSameJson(_engine.ListProfiles(), await _client.ListProfilesAsync(cancellation));
+
+        var saved = await _client.SaveProfileAsync(StubEngine.Profile, cancellation);
+        Assert.Equal($"SaveProfile {StubEngine.Profile.ExePath}", _engine.LastCall);
+        AssertSameJson(_engine.SaveProfile(StubEngine.Profile), saved);
+
+        var deleted = await _client.DeleteProfileAsync(@"C:\Steam\cs2.exe", cancellation);
+        Assert.Equal(@"DeleteProfile C:\Steam\cs2.exe", _engine.LastCall);
+        AssertSameJson(_engine.DeleteProfile(@"C:\Steam\cs2.exe"), deleted);
+
+        AssertSameJson(_engine.TakeProfileNotes(), await _client.TakeProfileNotesAsync(cancellation));
     }
 
     [Fact]
@@ -726,6 +792,26 @@ public sealed class PipeContractTests : IAsyncLifetime
             return new DriverInstallResult(true, RebootNeeded: true, "Restart to finish.", "617.42", "https://www.nvidia.com/en-us/drivers/");
         }
 
+        public DriverCleanRequest? LastCleanRequest { get; private set; }
+        public string? LastRestoredBackup { get; private set; }
+
+        public DriverCleaningReport GetDriverCleaning() => new(
+            [new DriverBackup("20261016-120000-Nvidia", GpuVendor.Nvidia, new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero), ["nv_dispi.inf 32.0.15.9174"])],
+            [new ProblemDriver("Samsung NVMe storage driver", "secnvme.sys", "3.3.0.2003", "Stops Valorant from launching.")],
+            "DDU is a third-party tool.");
+
+        public DriverCleanResult CleanDrivers(DriverCleanRequest request)
+        {
+            LastCleanRequest = request;
+            return new DriverCleanResult(true, RebootNeeded: true, "Cleaned.", "20261016-120000-Nvidia", "https://www.wagnardsoft.com/");
+        }
+
+        public DriverCleanResult RestoreDrivers(string backupId)
+        {
+            LastRestoredBackup = backupId;
+            return new DriverCleanResult(true, false, "Restored.", backupId);
+        }
+
         private static readonly InstalledGame Game = new(
             "Counter-Strike 2", GameLauncher.Steam, @"C:\Steam\steamapps\common\Counter-Strike Global Offensive", @"C:\Steam\cs2.exe", [AntiCheat.FaceIt]);
 
@@ -743,6 +829,31 @@ public sealed class PipeContractTests : IAsyncLifetime
             return new GameCommandResult(true, "Removed.", null);
         }
 
+        public static readonly GameProfile Profile = new(@"C:\Steam\cs2.exe")
+        {
+            TweakIds = ["gaming.game-mode-on", "gaming.high-performance-plan"],
+            AppsToClose = [@"C:\Users\Aden\AppData\Local\Discord\Discord.exe"],
+            Priority = GamePriority.High,
+            RaiseTimerResolution = true,
+        };
+
+        public IReadOnlyList<GameProfile> ListProfiles() => [Profile];
+
+        public ProfileResult SaveProfile(GameProfile profile)
+        {
+            LastCall = $"SaveProfile {profile.ExePath}";
+            return new ProfileResult(true, "Saved.", profile, ["Game Mode: FACEIT in Counter-Strike 2 (test)."]);
+        }
+
+        public ProfileResult DeleteProfile(string exePath)
+        {
+            LastCall = $"DeleteProfile {exePath}";
+            return new ProfileResult(true, "Deleted.", null, []);
+        }
+
+        public IReadOnlyList<ProfileNote> TakeProfileNotes() =>
+            [new ProfileNote("S-1-5-21-test", ProfileNoteKind.Skipped, "Profile skipped", "cs2's profile was skipped.")];
+
         private static readonly GpuTuningView Gpu = new(
             "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,
             [new TuningControl(GpuControls.MaxClock, "Max GPU clock", "MHz", 500, 3000, 5, 2500, 2600)],
@@ -751,7 +862,16 @@ public sealed class PipeContractTests : IAsyncLifetime
             RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
             Notice: "Waiting.");
 
-        public GpuTuningReport GetGpuTuning() => new([Gpu, IntelGpu], "A page note.");
+        private static readonly GpuTuningView Nvidia = new(
+            "nvidia:GPU-1234", "NVIDIA GeForce RTX 4070", GpuVendor.Nvidia,
+            [new TuningControl(GpuControls.CoreClockOffset, "Core clock offset", "MHz", -500, 1000, 1, 0, 150)],
+            [],
+            AtDefaults: false,
+            RevertsAt: null,
+            Notice: null,
+            Readouts: [new GpuReadout("Temperature", 61, "°C"), new GpuReadout("Power draw", 187, "W")]);
+
+        public GpuTuningReport GetGpuTuning() => new([Gpu, IntelGpu, Nvidia], "A page note.");
 
         public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
         {
@@ -1000,6 +1120,30 @@ public sealed class PipeContractTests : IAsyncLifetime
                 await HoldRepair.Task.WaitAsync(cancellation);
             return Cleaned;
         }
+
+        public static readonly Drift.DriftReport DriftFound = new(
+            Drift.DriftCheckKind.Full, "26200.1",
+            [new("debloat.remove-copilot", "Remove Copilot", Drift.DriftKind.AppReturned, ["Uninstall Copilot"], false, false)],
+            [new("debloat.start-recommendations-off", "Start recommendations", Drift.DriftKind.SettingChanged, ["Set it"], false, false)],
+            [new("privacy.remove-recall", "Remove Recall", "Gone.")],
+            "Windows undid 1 change: Remove Copilot. Re-apply it?");
+
+        public static readonly Drift.ReapplyResult Reapplied = new(true, "Re-applied 1 change.",
+            [new("debloat.remove-copilot", "Remove Copilot", true, "Re-applied.")]);
+
+        private Drift.DriftSettings _driftSettings = new(false);
+
+        public Drift.DriftReport CheckDrift() => DriftFound;
+
+        public Drift.ReapplyResult ReapplyDrift(IReadOnlyList<string>? tweakIds, bool confirmDestructive = false)
+        {
+            LastCall = $"ReapplyDrift {(tweakIds is null ? "<all>" : string.Join(",", tweakIds))} {confirmDestructive}";
+            return Reapplied;
+        }
+
+        public Drift.DriftSettings GetDriftSettings() => _driftSettings;
+
+        public Drift.DriftSettings SetAutoReapply(bool enabled) => _driftSettings = new(enabled);
 
         public CleanupSchedule GetCleanupSchedule() => _schedule;
 

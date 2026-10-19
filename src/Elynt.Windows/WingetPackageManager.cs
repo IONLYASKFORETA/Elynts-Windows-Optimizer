@@ -26,7 +26,8 @@ namespace Elynt.Windows;
 /// Search and the installed-apps list read winget through Microsoft's own WinGet PowerShell module
 /// (<c>Find-WinGetPackage</c>, <c>Get-WinGetPackage</c>), which returns objects instead of a console table that
 /// truncates long names and ids. They run as the signed-in user when there is one, so per-user apps are listed
-/// too; updates and uninstalls fall back to the signed-in user the same way installs do.
+/// too; updates and uninstalls fall back to the signed-in user the same way installs do. Where the module can't run
+/// (the system account with nobody signed in), they read winget's command-line tables instead (<see cref="WingetTable"/>).
 /// </para>
 /// </summary>
 /// <param name="user">The signed-in user, as impersonated from the pipe client. Null disables per-user installs.</param>
@@ -133,28 +134,69 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
 
     private const string NotFoundError = "winget couldn't find it installed.";
 
-    public IReadOnlyList<PackageInfo> Search(string query, string source)
+    public IReadOnlyList<PackageInfo> Search(string query, string source) => ModuleOrCommandLine(
+        () =>
+        {
+            var json = RunModule(
+                $"@(Find-WinGetPackage -Query {Literal(query)} -Source {Literal(source)} | Select-Object -First 100 | " +
+                "ForEach-Object { [pscustomobject]@{ Id = $_.Id; Name = $_.Name; Version = $_.Version } })");
+            return Parse(json)
+                .Select(e => new PackageInfo(Text(e, "Id") ?? "", Text(e, "Name") ?? "", Text(e, "Version") ?? ""))
+                .Where(p => p.Id.Length > 0)
+                .ToList();
+        },
+        () => WingetTable.ParseSearch(RunTable(["search", "--query", query, "--source", source, "--count", "100"])));
+
+    public IReadOnlyList<InstalledPackage> ListInstalled() => ModuleOrCommandLine(
+        () =>
+        {
+            var json = RunModule(
+                "@(Get-WinGetPackage | ForEach-Object { [pscustomobject]@{ Id = $_.Id; Name = $_.Name; Version = $_.InstalledVersion; " +
+                "Available = $(if ($_.IsUpdateAvailable -and $_.AvailableVersions) { $_.AvailableVersions[0] } else { $null }); Source = $_.Source } })");
+            return Parse(json)
+                .Select(e => new InstalledPackage(
+                    Text(e, "Id") ?? "", Text(e, "Name") ?? "", Text(e, "Version") ?? "", Text(e, "Available"),
+                    Text(e, "Source") is { Length: > 0 } s ? s : null))
+                .Where(p => p.Id.Length > 0)
+                .ToList();
+        },
+        () => WingetTable.ParseList(RunTable(["list"])));
+
+    private volatile bool _moduleFailed;
+
+    /// <summary>
+    /// Reads through the WinGet PowerShell module, or through winget's command line when the module can't run.
+    /// The module talks to winget's COM server, which can't be started for the system account when nobody is
+    /// signed in ("Failed to create instance: -2147023174"); once it has failed, the command line is used straight
+    /// away. The command line runs as the service, so it doesn't see apps installed for the signed-in user only.
+    /// </summary>
+    private IReadOnlyList<T> ModuleOrCommandLine<T>(Func<IReadOnlyList<T>> module, Func<IReadOnlyList<T>> commandLine)
     {
-        var json = RunModule(
-            $"@(Find-WinGetPackage -Query {Literal(query)} -Source {Literal(source)} | Select-Object -First 100 | " +
-            "ForEach-Object { [pscustomobject]@{ Id = $_.Id; Name = $_.Name; Version = $_.Version } })");
-        return Parse(json)
-            .Select(e => new PackageInfo(Text(e, "Id") ?? "", Text(e, "Name") ?? "", Text(e, "Version") ?? ""))
-            .Where(p => p.Id.Length > 0)
-            .ToList();
+        if (!_moduleFailed)
+        {
+            try
+            {
+                return module();
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or JsonException)
+            {
+                _moduleFailed = true;
+                _log.LogWarning(ex, "The WinGet PowerShell module failed; using winget's command line instead");
+            }
+        }
+        return commandLine();
     }
 
-    public IReadOnlyList<InstalledPackage> ListInstalled()
+    /// <summary>Runs a read-only winget command as the service and returns the table it prints.</summary>
+    private string RunTable(string[] args)
     {
-        var json = RunModule(
-            "@(Get-WinGetPackage | ForEach-Object { [pscustomobject]@{ Id = $_.Id; Name = $_.Name; Version = $_.InstalledVersion; " +
-            "Available = $(if ($_.IsUpdateAvailable -and $_.AvailableVersions) { $_.AvailableVersions[0] } else { $null }); Source = $_.Source } })");
-        return Parse(json)
-            .Select(e => new InstalledPackage(
-                Text(e, "Id") ?? "", Text(e, "Name") ?? "", Text(e, "Version") ?? "", Text(e, "Available"),
-                Text(e, "Source") is { Length: > 0 } s ? s : null))
-            .Where(p => p.Id.Length > 0)
-            .ToList();
+        var winget = FindSystemWinget() ?? throw new InvalidOperationException("winget isn't installed.");
+        var (exit, output) = Run(winget, [.. args, "--accept-source-agreements", "--disable-interactivity"], ModuleTimeout, logOutput: false);
+        if (exit == NoPackagesFound)
+            return "";
+        if (exit != 0)
+            throw new InvalidOperationException($"winget {args[0]} failed (exit code 0x{exit:X8}).");
+        return output;
     }
 
     /// <summary>

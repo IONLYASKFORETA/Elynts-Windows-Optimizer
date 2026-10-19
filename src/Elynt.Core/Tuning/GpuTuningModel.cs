@@ -22,6 +22,8 @@ public static class GpuControls
     public const string ClockOffset = "gpuClockOffset";
     public const string VoltageOffset = "gpuVoltageOffset";
     public const string TemperatureLimit = "temperatureLimit";
+    public const string CoreClockOffset = "coreClockOffset";
+    public const string MemoryClockOffset = "vramClockOffset";
 }
 
 /// <summary>One slider as the vendor SDK reports it. The SDK's range is the only range the app allows.</summary>
@@ -84,6 +86,15 @@ public interface IGpuTuningAdapter
     }
 }
 
+/// <summary>One live sensor value, such as the GPU temperature.</summary>
+public sealed record GpuReadout(string Name, int Value, string Unit);
+
+/// <summary>An adapter that can also report live sensor values. Optional: adapters without it show no readouts.</summary>
+public interface IGpuReadouts
+{
+    IReadOnlyList<GpuReadout> Readouts(string deviceId);
+}
+
 /// <summary>A slider ready to show: the SDK's range and default plus the card's current value.</summary>
 public sealed record TuningControl(string Id, string Name, string Unit, int Min, int Max, int Step, int Default, int Current);
 
@@ -92,6 +103,7 @@ public sealed record TuningControl(string Id, string Name, string Unit, int Min,
 /// <param name="Notice">Something the user should know, such as a change that went back because it wasn't confirmed.</param>
 /// <param name="Warning">The vendor's warning to accept before tuning, or null when the vendor has none.</param>
 /// <param name="Locked">The warning hasn't been accepted yet, so nothing can be changed.</param>
+/// <param name="Readouts">Live sensor values, or null when the vendor's SDK has none.</param>
 public sealed record GpuTuningView(
     string DeviceId,
     string Name,
@@ -102,7 +114,8 @@ public sealed record GpuTuningView(
     DateTimeOffset? RevertsAt,
     string? Notice,
     string? Warning = null,
-    bool Locked = false);
+    bool Locked = false,
+    IReadOnlyList<GpuReadout>? Readouts = null);
 
 /// <param name="Notice">A page-wide note, such as tuning being unavailable or settings reset after a crash.</param>
 public sealed record GpuTuningReport(IReadOnlyList<GpuTuningView> Gpus, string? Notice);

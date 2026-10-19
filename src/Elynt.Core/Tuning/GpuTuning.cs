@@ -440,7 +440,23 @@ public sealed class GpuTuning : IDisposable
             _probation.Deadline(Key(device)),
             _notices.GetValueOrDefault(Key(device)),
             device.Warning,
-            IsLocked(device));
+            IsLocked(device),
+            Readouts(adapter, device));
+    }
+
+    private IReadOnlyList<GpuReadout>? Readouts(IGpuTuningAdapter adapter, GpuDevice device)
+    {
+        if (adapter is not IGpuReadouts sensors)
+            return null;
+        try
+        {
+            return sensors.Readouts(device.Id);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read {Gpu}'s sensors", device.Id);
+            return [];
+        }
     }
 
     private void TryRestoreWaiver(IGpuTuningAdapter adapter, GpuDevice device)

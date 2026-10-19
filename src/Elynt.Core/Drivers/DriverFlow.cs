@@ -24,6 +24,8 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
 {
     private readonly DriverAdapters? _adapters = system.Drivers;
 
+    private DriverCleaner Cleaner => new(system.DriverCleaning, log);
+
     public DriverReport Report()
     {
         if (_adapters is null)
@@ -129,6 +131,12 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
                 installer = Path.Combine(leanFolder, "setup.exe");
             }
 
+            // Last step before installing, so a refused download or failed lean prep never removes anything.
+            string? oldDrivers = null;
+            if (request.RemoveOldDrivers && source.Kind == DriverKind.Graphics &&
+                Cleaner.RemoveBeforeReinstall(source.Vendor, out oldDrivers) is { } cleanRefusal)
+                return Rejected($"{cleanRefusal} The new driver wasn't installed.");
+
             var arguments = request.CleanInstall ? [.. profile.Arguments, .. profile.CleanInstallArguments] : profile.Arguments;
             int exitCode;
             try
@@ -140,7 +148,7 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
             catch (Exception ex)
             {
                 log.LogError(ex, "Running the driver installer failed");
-                return Rejected($"Couldn't run the driver installer: {ex.Message}");
+                return Rejected($"Couldn't run the driver installer: {ex.Message}{Cleaner.PutBack(oldDrivers)}");
             }
 
             log.LogInformation("Driver installer for {Version} exited with {ExitCode}", offer.Version, exitCode);
@@ -148,7 +156,9 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
                 return new DriverInstallResult(true, false, $"Installed driver {offer.Version}.", offer.Version);
             if (profile.RebootCodes.Contains(exitCode))
                 return new DriverInstallResult(true, true, $"Installed driver {offer.Version}. Restart the PC to finish.", offer.Version);
-            return Rejected($"The driver installer failed with exit code {exitCode}. Your current driver should still be in place.");
+            return Rejected(oldDrivers is null
+                ? $"The driver installer failed with exit code {exitCode}. Your current driver should still be in place."
+                : $"The driver installer failed with exit code {exitCode}.{Cleaner.PutBack(oldDrivers)}");
         }
         finally
         {

@@ -14,6 +14,9 @@ internal static class ServicePaths
     /// <summary>Each user's weekly cleaning choice and when it last ran.</summary>
     public static string CleanupSchedule { get; } = Path.Combine(Root, "cleanup-schedule.json");
 
+    /// <summary>Each user's drift state: the Windows build last checked, automatic re-apply, and changes not supported on this build.</summary>
+    public static string Drift { get; } = Path.Combine(Root, "drift.json");
+
     /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
     public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
 
@@ -37,8 +40,17 @@ internal static class ServicePaths
     /// <summary>PawnIO's setup between download and install, and its modules. Users can't write here, so a verified file can't be swapped.</summary>
     public static string PawnIo { get; } = Path.Combine(Root, "pawnio");
 
+    /// <summary>Display drivers exported by pnputil before a clean, one folder per clean, so it can be restored.</summary>
+    public static string DriverBackups { get; } = Path.Combine(Backups, "drivers-cleaned");
+
+    /// <summary>DDU, downloaded and installed here only when the user opts in to a deep clean.</summary>
+    public static string Ddu { get; } = Path.Combine(Root, "tools", "ddu");
+
     /// <summary>Games each user added by hand, one file per user SID.</summary>
     public static string Games { get; } = Path.Combine(Root, "games");
+
+    /// <summary>Per-game profiles, one file per user SID.</summary>
+    public static string Profiles { get; } = Path.Combine(Root, "profiles");
 
     /// <summary>
     /// Creates the folders. Only SYSTEM and Administrators may write the journal; users may read it and the logs
@@ -71,6 +83,9 @@ internal static class ServicePaths
         Directory.CreateDirectory(RepairLogs);
         Directory.CreateDirectory(Downloads);
         Directory.CreateDirectory(Games);
+        Directory.CreateDirectory(Profiles);
         Directory.CreateDirectory(PawnIo);
+        Directory.CreateDirectory(DriverBackups);
+        Directory.CreateDirectory(Ddu);
     }
 }
