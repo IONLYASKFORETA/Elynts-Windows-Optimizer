@@ -319,6 +319,24 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Drift_commands_arrive_unchanged()
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        AssertSameJson(StubEngine.DriftFound, await _client.CheckDriftAsync(token));
+
+        var reapplied = await _client.ReapplyDriftAsync(["debloat.remove-copilot"], confirmDestructive: true, token);
+        Assert.Equal("ReapplyDrift debloat.remove-copilot True", _engine.LastCall);
+        AssertSameJson(StubEngine.Reapplied, reapplied);
+
+        await _client.ReapplyDriftAsync(null, cancellation: token);
+        Assert.Equal("ReapplyDrift <all> False", _engine.LastCall);
+
+        Assert.True((await _client.SetAutoReapplyAsync(true, token)).AutoReapply);
+        Assert.True((await _client.GetDriftSettingsAsync(token)).AutoReapply);
+    }
+
+    [Fact]
     public async Task Other_commands_still_answer_while_a_clean_runs()
     {
         _engine.HoldRepair = new TaskCompletionSource();
@@ -981,6 +999,30 @@ public sealed class PipeContractTests : IAsyncLifetime
                 await HoldRepair.Task.WaitAsync(cancellation);
             return Cleaned;
         }
+
+        public static readonly Drift.DriftReport DriftFound = new(
+            Drift.DriftCheckKind.Full, "26200.1",
+            [new("debloat.remove-copilot", "Remove Copilot", Drift.DriftKind.AppReturned, ["Uninstall Copilot"], false, false)],
+            [new("debloat.start-recommendations-off", "Start recommendations", Drift.DriftKind.SettingChanged, ["Set it"], false, false)],
+            [new("privacy.remove-recall", "Remove Recall", "Gone.")],
+            "Windows undid 1 change: Remove Copilot. Re-apply it?");
+
+        public static readonly Drift.ReapplyResult Reapplied = new(true, "Re-applied 1 change.",
+            [new("debloat.remove-copilot", "Remove Copilot", true, "Re-applied.")]);
+
+        private Drift.DriftSettings _driftSettings = new(false);
+
+        public Drift.DriftReport CheckDrift() => DriftFound;
+
+        public Drift.ReapplyResult ReapplyDrift(IReadOnlyList<string>? tweakIds, bool confirmDestructive = false)
+        {
+            LastCall = $"ReapplyDrift {(tweakIds is null ? "<all>" : string.Join(",", tweakIds))} {confirmDestructive}";
+            return Reapplied;
+        }
+
+        public Drift.DriftSettings GetDriftSettings() => _driftSettings;
+
+        public Drift.DriftSettings SetAutoReapply(bool enabled) => _driftSettings = new(enabled);
 
         public CleanupSchedule GetCleanupSchedule() => _schedule;
 

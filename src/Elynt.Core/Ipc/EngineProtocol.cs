@@ -13,6 +13,7 @@ using Elynt.Core.LowLevel;
 using Elynt.Core.Repair;
 using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
+using Elynt.Core.Drift;
 
 namespace Elynt.Core.Ipc;
 
@@ -62,6 +63,10 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(CheckDriftRequest), "checkDrift")]
+[JsonDerivedType(typeof(ReapplyDriftRequest), "reapplyDrift")]
+[JsonDerivedType(typeof(GetDriftSettingsRequest), "getDriftSettings")]
+[JsonDerivedType(typeof(SetAutoReapplyRequest), "setAutoReapply")]
 [JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
 [JsonDerivedType(typeof(GetPawnIoRequest), "getPawnIo")]
 [JsonDerivedType(typeof(InstallPawnIoRequest), "installPawnIo")]
@@ -225,7 +230,10 @@ public sealed record EngineResponse(
     StartupCommandResult? StartupResult = null,
     CleanupScan? CleanupScan = null,
     CleanupReport? CleanupReport = null,
-    CleanupSchedule? CleanupSchedule = null)
+    CleanupSchedule? CleanupSchedule = null,
+    DriftReport? Drift = null,
+    ReapplyResult? Reapply = null,
+    DriftSettings? DriftSettings = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -306,6 +314,10 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        CheckDriftRequest => new(Drift: engine.CheckDrift()),
+        ReapplyDriftRequest reapply => new(Reapply: engine.ReapplyDrift(reapply.TweakIds, reapply.ConfirmDestructive)),
+        GetDriftSettingsRequest => new(DriftSettings: engine.GetDriftSettings()),
+        SetAutoReapplyRequest auto => new(DriftSettings: engine.SetAutoReapply(auto.Enabled)),
         AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
         GetPawnIoRequest => new(PawnIo: engine.GetPawnIo()),
         InstallPawnIoRequest install => new(PawnIoResult: engine.InstallPawnIo(install.AcceptFaceitWarning)),

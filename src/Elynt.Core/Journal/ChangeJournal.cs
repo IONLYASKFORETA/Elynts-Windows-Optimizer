@@ -130,6 +130,20 @@ public sealed class ChangeJournal
         }
     }
 
+    /// <summary>
+    /// Marks an older change as superseded by a newer change to the same tweak (a re-apply after drift), so undo
+    /// returns to the newer change's before-state and never to the older, stale one.
+    /// </summary>
+    public void Supersede(JournalEntry older, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            older.Status = EntryStatus.Superseded;
+            older.ClosedAt = at;
+            _store.Save(_entries);
+        }
+    }
+
     /// <summary>When this tweak was last applied or undone for this user, or null if it never was.</summary>
     public DateTimeOffset? LastChangedAt(string tweakId, string user)
     {

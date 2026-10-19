@@ -27,7 +27,8 @@ internal sealed class EngineHost(
     IRepairLogStore repairLogs,
     ICleanupScheduleStore cleanupSchedules,
     GpuTuning gpuTuning,
-    ILoggerFactory loggers) : BackgroundService
+    ILoggerFactory loggers,
+    Elynt.Core.Drift.IDriftStore driftStore) : BackgroundService
 {
     private readonly ISystemInfo _systemInfo = new WindowsSystemInfo();
     private readonly WindowsHardwareInfo _hardware = new();
@@ -166,6 +167,7 @@ internal sealed class EngineHost(
             cleanupSchedules: cleanupSchedules,
             gameStore: _gameStore,
             gpuTuning: gpuTuning,
-            windowsUpdate: _windowsUpdate);
+            windowsUpdate: _windowsUpdate,
+            driftStore: driftStore);
     }
 }

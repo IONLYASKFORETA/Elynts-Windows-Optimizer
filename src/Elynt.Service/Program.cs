@@ -42,6 +42,7 @@ try
         logger: services.GetRequiredService<ILogger<SafetyNet>>()));
     builder.Services.AddSingleton<IRepairLogStore>(new FileRepairLogStore(ServicePaths.RepairLogs));
     builder.Services.AddSingleton<ICleanupScheduleStore>(new JsonFileCleanupScheduleStore(ServicePaths.CleanupSchedule));
+    builder.Services.AddSingleton<Elynt.Core.Drift.IDriftStore>(new Elynt.Core.Drift.JsonFileDriftStore(ServicePaths.Drift));
     builder.Services.AddSingleton(new TuningSafety(new JsonFileTuningStore(ServicePaths.Tuning)));
     builder.Services.AddSingleton<AdlxGpuTuning>();
     builder.Services.AddSingleton<IgclGpuTuning>();

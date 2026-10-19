@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
         _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
         _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
+        _model.Drift = new DriftViewModel(() => _model.Client, ConfirmDestructiveReapply, _model.RefreshAsync);
         InitializeComponent();
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
@@ -31,6 +32,9 @@ public partial class MainWindow : Window
             _tray = new TrayNotes(_model.Startup, ShowFromTray);
             // The first look after connecting takes note of what is already there.
             await _tray.CheckAsync();
+            // Once per sign-in: the window starts with Windows, so this is the per-boot drift check.
+            if (await _model.Drift!.CheckAsync() is { } drift)
+                _tray.ShowDrift(drift, ShowDrift);
             await _model.CheckForUpdatesAsync();
         };
         Closed += (_, _) => _tray?.Dispose();
@@ -239,6 +243,25 @@ public partial class MainWindow : Window
         if ((sender as FrameworkElement)?.DataContext is ServiceItemViewModel item && _model.ServicesPage is { } page)
             await page.UndoAsync(item);
     }
+
+    private void ShowDrift()
+    {
+        ShowFromTray();
+        _model.SelectedPage = MainViewModel.UndoHistory;
+    }
+
+    private async void ReapplyAllDrift(object sender, RoutedEventArgs e) => await _model.Drift!.ReapplyAllAsync();
+
+    private async void ReapplyTickedDrift(object sender, RoutedEventArgs e) => await _model.Drift!.ReapplyTickedAsync();
+
+    private bool ConfirmDestructiveReapply(string names) =>
+        MessageBox.Show(
+            this,
+            $"Windows undid these, and putting them back can't be undone:\n\n{names}\n\nRe-apply them too? Choose No to re-apply only the rest.",
+            "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
 
     private void ShowFromTray()
     {

@@ -611,6 +611,31 @@
             </DockPanel>
             <TextBlock DockPanel.Dock="Top" Margin="4,0,4,8" TextWrapping="Wrap" Opacity="0.8"
                        Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+            <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
+            <StackPanel DockPanel.Dock="Top" Margin="4,0,4,12" DataContext="{Binding Drift}">
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Items}" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:DriftItemViewModel}">
+                            <CheckBox IsChecked="{Binding Ticked}" Margin="0,2"
+                                      AutomationProperties.Name="{Binding Name, StringFormat='Re-apply {0}'}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Detail}" Opacity="0.8" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
+                    <Button Content="Re-apply all" Padding="16,6" Margin="0,0,8,0" Click="ReapplyAllDrift" IsEnabled="{Binding CanReapply}" />
+                    <Button Content="Re-apply ticked" Padding="16,6" Click="ReapplyTickedDrift" IsEnabled="{Binding CanReapply}" />
+                </StackPanel>
+                <CheckBox Content="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)"
+                          IsChecked="{Binding AutoReapply}" Margin="0,8,0,0" />
+                <CheckBox Content="Show a tray note when a Windows update undoes changes"
+                          IsChecked="{Binding NotifyDrift}" Margin="0,4,0,0" />
+            </StackPanel>
             <TextBlock DockPanel.Dock="Top" Text="{Binding HistoryMessage}" Margin="4,0,4,8" TextWrapping="Wrap" FontWeight="SemiBold" />
             <Grid>
                 <ListView ItemsSource="{Binding History}" BorderThickness="0" HorizontalContentAlignment="Stretch">
