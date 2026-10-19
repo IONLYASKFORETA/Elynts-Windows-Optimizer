@@ -252,6 +252,22 @@ public sealed class DriverTests : IDisposable
         Assert.Null(_downloader.LastUrl);
     }
 
+    [Theory]
+    [InlineData(@"..\..\Windows\System32\evil")]
+    [InlineData("617.42/../../x")]
+    [InlineData("617.42:stream")]
+    [InlineData("617.42\n")]
+    public void A_version_from_the_lookup_that_isnt_a_plain_version_is_refused_before_anything_is_downloaded(string version)
+    {
+        _nvidia.Offers[DriverBranch.GameReady] = Offer("617.42") with { Version = version };
+
+        var result = Engine().InstallDriver(new DriverRequest(Rtx4070));
+
+        Assert.False(result.Succeeded);
+        Assert.Null(_downloader.LastUrl);
+        Assert.Empty(_installer.Runs);
+    }
+
     [Fact]
     public void A_failed_download_installs_nothing()
     {
