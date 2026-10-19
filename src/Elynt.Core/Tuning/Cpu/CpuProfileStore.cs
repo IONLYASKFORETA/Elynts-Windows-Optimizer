@@ -39,6 +39,8 @@ public sealed class InMemoryCpuProfileStore : ICpuProfileStore
 /// <summary>The CPU profile as a JSON file, replaced atomically on every save.</summary>
 public sealed class JsonFileCpuProfileStore(string path) : ICpuProfileStore
 {
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+
     public CpuProfile Load()
     {
         try
@@ -54,13 +56,6 @@ public sealed class JsonFileCpuProfileStore(string path) : ICpuProfileStore
 
     public void Save(CpuProfile profile)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        var temp = path + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            stream.Write(JsonSerializer.SerializeToUtf8Bytes(profile, new JsonSerializerOptions { WriteIndented = true }));
-            stream.Flush(flushToDisk: true);
-        }
-        File.Move(temp, path, overwrite: true);
+        AtomicFile.Write(path, JsonSerializer.SerializeToUtf8Bytes(profile, Indented));
     }
 }

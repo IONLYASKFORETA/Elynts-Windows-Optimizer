@@ -61,10 +61,7 @@ public sealed class JsonFileDriftStore(string path) : IDriftStore
         {
             var states = States();
             states[user] = state;
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            var temp = path + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(states, Options));
-            File.Move(temp, path, overwrite: true);
+            AtomicFile.Write(path, JsonSerializer.Serialize(states, Options));
         }
     }
 
