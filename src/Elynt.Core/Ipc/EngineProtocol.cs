@@ -71,6 +71,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(SetAutoReapplyRequest), "setAutoReapply")]
 [JsonDerivedType(typeof(ListProfilesRequest), "listProfiles")]
 [JsonDerivedType(typeof(SaveProfileRequest), "saveProfile")]
+[JsonDerivedType(typeof(CheckProfileRequest), "checkProfile")]
 [JsonDerivedType(typeof(DeleteProfileRequest), "deleteProfile")]
 [JsonDerivedType(typeof(TakeProfileNotesRequest), "takeProfileNotes")]
 [JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
@@ -353,6 +354,7 @@ public static class EngineProtocol
         SetAutoReapplyRequest auto => new(DriftSettings: engine.SetAutoReapply(auto.Enabled)),
         ListProfilesRequest => new(Profiles: engine.ListProfiles()),
         SaveProfileRequest save => new(ProfileResult: engine.SaveProfile(save.Profile)),
+        CheckProfileRequest check => new(ProfileResult: engine.CheckProfile(check.Profile)),
         DeleteProfileRequest delete => new(ProfileResult: engine.DeleteProfile(delete.ExePath)),
         TakeProfileNotesRequest => new(ProfileNotes: engine.TakeProfileNotes()),
         AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),

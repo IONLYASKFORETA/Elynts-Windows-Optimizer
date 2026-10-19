@@ -12,8 +12,7 @@ public enum GamePriority
 
 /// <summary>
 /// A per-game profile: instant changes made when the game's .exe starts and undone 15 seconds after it closes.
-/// New kinds of change (e.g. GPU and CPU tuning profiles) are added as further init properties, so saved profiles
-/// keep loading.
+/// New kinds of change are added as further init properties, so saved profiles keep loading.
 /// </summary>
 /// <param name="ExePath">The game's .exe, matched against starting processes by full path.</param>
 public sealed record GameProfile(string ExePath)
@@ -30,9 +29,16 @@ public sealed record GameProfile(string ExePath)
     /// <summary>Asks Windows for a 0.5 ms timer while the game runs.</summary>
     public bool RaiseTimerResolution { get; init; }
 
+    /// <summary>GPU settings while the game runs, one entry per GPU. Applied without the confirm window, since nobody is watching.</summary>
+    public IReadOnlyList<GpuProfileTuning> GpuTuning { get; init; } = [];
+
+    /// <summary>A CPU tune while the game runs, or null to leave the CPU as it is.</summary>
+    public CpuProfileTuning? CpuTuning { get; init; }
+
     public bool Equals(GameProfile? other) =>
         other is not null && WinPath.Same(ExePath, other.ExePath) && TweakIds.SequenceEqual(other.TweakIds) &&
-        AppsToClose.SequenceEqual(other.AppsToClose) && Priority == other.Priority && RaiseTimerResolution == other.RaiseTimerResolution;
+        AppsToClose.SequenceEqual(other.AppsToClose) && Priority == other.Priority && RaiseTimerResolution == other.RaiseTimerResolution &&
+        GpuTuning.SequenceEqual(other.GpuTuning) && CpuTuning == other.CpuTuning;
 
     public override int GetHashCode() => HashCode.Combine(ExePath.ToUpperInvariant(), Priority, RaiseTimerResolution);
 }

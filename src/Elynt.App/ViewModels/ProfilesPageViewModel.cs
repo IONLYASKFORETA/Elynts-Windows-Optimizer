@@ -2,13 +2,15 @@ using System.Collections.ObjectModel;
 using System.IO;
 using Elynt.Core.Ipc;
 using Elynt.Core.Profiles;
+using Elynt.Core.Tuning.Cpu;
 using Serilog;
 
 namespace Elynt.App.ViewModels;
 
 /// <summary>
 /// The per-game profile editor: pick a game, tick instant changes (power plan, Game Mode and the like), background
-/// apps to close, the game's priority and the timer resolution, then save. The service applies it when the game starts.
+/// apps to close, the game's priority, the timer resolution and GPU/CPU tuning, then save. The service applies it when
+/// the game starts. Anti-cheat warnings for the game show while editing.
 /// </summary>
 /// <param name="client">The current connection to the service, or null while disconnected.</param>
 public sealed class ProfilesPageViewModel(Func<EnginePipeClient?> client) : ObservableObject
@@ -19,6 +21,9 @@ public sealed class ProfilesPageViewModel(Func<EnginePipeClient?> client) : Obse
     private bool _raiseTimerResolution;
     private string? _message;
     private string? _selectedApp;
+    private IReadOnlyList<GpuProfileTuning> _gpuTuning = [];
+    private CpuProfileTuning? _cpuTuning;
+    private string? _warnings;
 
     /// <summary>Games with a known .exe; marked when they already have a profile.</summary>
     public ObservableCollection<GameChoice> Games { get; } = [];
@@ -64,6 +69,27 @@ public sealed class ProfilesPageViewModel(Func<EnginePipeClient?> client) : Obse
     {
         get => _selectedApp;
         set => Set(ref _selectedApp, value);
+    }
+
+    /// <summary>GPU settings while the game runs, taken from the Overclocking page.</summary>
+    public string GpuTuningSummary => _gpuTuning.Count == 0
+        ? "None: the GPU stays as it is."
+        : string.Join("; ", _gpuTuning.Select(g => $"{g.DeviceId}: {string.Join(", ", g.Values.Select(v => $"{v.Key} {v.Value}"))}"));
+
+    /// <summary>The CPU tune while the game runs, taken from the Overclocking page.</summary>
+    public string CpuTuningSummary => _cpuTuning?.Tune is not { } tune
+        ? "None: the CPU stays as it is."
+        : string.Join(", ", new (string Name, int? Value, string Unit)[]
+            {
+                ("Curve Optimizer", tune.CurveOptimizer, ""), ("PPT", tune.PptWatts, " W"), ("TDC", tune.TdcAmps, " A"),
+                ("EDC", tune.EdcAmps, " A"), ("PL1", tune.Pl1Watts, " W"), ("PL2", tune.Pl2Watts, " W"),
+            }.Where(p => p.Value is not null).Select(p => $"{p.Name} {p.Value}{p.Unit}"));
+
+    /// <summary>Anti-cheat warnings for this game and the profile as edited so far. They warn; saving still works.</summary>
+    public string? Warnings
+    {
+        get => _warnings;
+        private set => Set(ref _warnings, value);
     }
 
     /// <summary>The service's answer to the last save or delete, with any anti-cheat warnings.</summary>
@@ -130,19 +156,112 @@ public sealed class ProfilesPageViewModel(Func<EnginePipeClient?> client) : Obse
             AppsToClose.Remove(app);
     }
 
+    /// <summary>Takes the settings of every GPU that isn't on factory settings, as the Overclocking page set them.</summary>
+    public async Task UseCurrentGpuAsync()
+    {
+        if (client() is not { } engine)
+            return;
+        try
+        {
+            var report = await engine.GetGpuTuningAsync();
+            var tuned = report.Gpus.Where(g => !g.AtDefaults)
+                .Select(g => new GpuProfileTuning(g.DeviceId, g.Controls.ToDictionary(c => c.Id, c => c.Current)))
+                .ToList();
+            if (tuned.Count == 0)
+            {
+                Message = "Every GPU is on factory settings. Tune it on the Overclocking page first, then take its settings here.";
+                return;
+            }
+            SetGpuTuning(tuned);
+            Message = "The GPU settings will be applied while this game runs, once you save.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Reading the GPU tuning failed");
+            Message = $"Couldn't read the GPU settings: {ex.Message}";
+        }
+    }
+
+    /// <summary>Takes the CPU tune on now (or the kept one) from the Overclocking page.</summary>
+    public async Task UseCurrentCpuAsync()
+    {
+        if (client() is not { } engine)
+            return;
+        try
+        {
+            var report = await engine.GetCpuTuningAsync(advanced: true);
+            if ((report.Active ?? report.Kept) is not { } tune)
+            {
+                Message = "The CPU is on its BIOS settings. Tune it on the Overclocking page first, then take the tune here.";
+                return;
+            }
+            SetCpuTuning(new CpuProfileTuning(tune, Advanced: tune.CurveOptimizer < CpuTuning.CurveOptimizerCap, Unofficial: report.CurveOptimizerUnofficial));
+            Message = "The CPU tune will be applied while this game runs, once you save.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Reading the CPU tuning failed");
+            Message = $"Couldn't read the CPU settings: {ex.Message}";
+        }
+    }
+
+    public void ClearGpu() => SetGpuTuning([]);
+
+    public void ClearCpu() => SetCpuTuning(null);
+
+    private void SetGpuTuning(IReadOnlyList<GpuProfileTuning> tuning)
+    {
+        _gpuTuning = tuning;
+        OnPropertyChanged(nameof(GpuTuningSummary));
+        _ = RefreshWarningsAsync();
+    }
+
+    private void SetCpuTuning(CpuProfileTuning? tuning)
+    {
+        _cpuTuning = tuning;
+        OnPropertyChanged(nameof(CpuTuningSummary));
+        _ = RefreshWarningsAsync();
+    }
+
+    /// <summary>Asks the service for the game's anti-cheat warnings on the profile as edited. Saves nothing.</summary>
+    public async Task RefreshWarningsAsync()
+    {
+        if (client() is not { } engine || Edited() is not { } profile)
+        {
+            Warnings = null;
+            return;
+        }
+        try
+        {
+            var check = await engine.CheckProfileAsync(profile);
+            Warnings = !check.Succeeded ? check.Message
+                : check.Warnings.Count == 0 ? null
+                : $"Anti-cheat warnings: {string.Join(" ", check.Warnings)}";
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Checking the profile failed");
+            Warnings = null;
+        }
+    }
+
     public async Task SaveAsync()
     {
-        if (client() is not { } engine || SelectedGame is not { } game)
+        if (client() is not { } engine || Edited() is not { } profile)
             return;
-        var profile = new GameProfile(game.ExePath)
-        {
-            TweakIds = Tweaks.Where(t => t.IsChecked).Select(t => t.Id).ToList(),
-            AppsToClose = [.. AppsToClose],
-            Priority = Priority.Value,
-            RaiseTimerResolution = RaiseTimerResolution,
-        };
         await RunAsync(() => engine.SaveProfileAsync(profile));
     }
+
+    /// <summary>The profile as the editor shows it now, or null when no game is picked.</summary>
+    private GameProfile? Edited() => SelectedGame is not { } game ? null : new GameProfile(game.ExePath)
+    {
+        TweakIds = Tweaks.Where(t => t.IsChecked).Select(t => t.Id).ToList(),
+        AppsToClose = [.. AppsToClose],
+        Priority = Priority.Value,
+        RaiseTimerResolution = RaiseTimerResolution,
+        GpuTuning = _gpuTuning,
+        CpuTuning = _cpuTuning,
+    };
 
     public async Task DeleteAsync()
     {
@@ -178,6 +297,11 @@ public sealed class ProfilesPageViewModel(Func<EnginePipeClient?> client) : Obse
             AppsToClose.Add(app);
         Priority = PriorityChoice.All.First(p => p.Value == profile?.Priority);
         RaiseTimerResolution = profile?.RaiseTimerResolution == true;
+        _gpuTuning = profile?.GpuTuning ?? [];
+        _cpuTuning = profile?.CpuTuning;
+        OnPropertyChanged(nameof(GpuTuningSummary));
+        OnPropertyChanged(nameof(CpuTuningSummary));
+        _ = RefreshWarningsAsync();
         Message = SelectedGame is null ? null : profile is null ? "This game has no profile yet." : null;
     }
 

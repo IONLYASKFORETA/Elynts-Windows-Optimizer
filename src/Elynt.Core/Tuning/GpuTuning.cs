@@ -8,7 +8,7 @@ namespace Elynt.Core.Tuning;
 /// and every Engine routes its GPU commands here. Every change reverts after <see cref="ConfirmWindow"/> unless
 /// confirmed; only confirmed settings are re-applied, and only after a clean shutdown.
 /// </summary>
-public sealed class GpuTuning : IDisposable
+public sealed partial class GpuTuning : IDisposable
 {
     public static readonly TimeSpan ConfirmWindow = TimeSpan.FromSeconds(15);
 
@@ -71,17 +71,13 @@ public sealed class GpuTuning : IDisposable
             var (adapter, device) = found;
             if (IsLocked(device))
                 return Locked(adapter, device);
+            if (HeldByProfile(device))
+                return HeldByProfile(adapter, device);
             if (values.Count == 0)
                 return Result(false, "Nothing to change.", adapter, device);
 
-            foreach (var (id, value) in values)
-            {
-                var spec = device.Controls.FirstOrDefault(c => c.Id == id);
-                if (spec is null)
-                    return Result(false, $"This GPU has no '{id}' setting. Nothing was changed.", adapter, device);
-                if (spec.WhyNot(value) is { } why)
-                    return Result(false, why + " Nothing was changed.", adapter, device);
-            }
+            if (WhyNot(device, values) is { } why)
+                return Result(false, why + " Nothing was changed.", adapter, device);
 
             return Change(adapter, device, () => adapter.Write(device.Id, values), mode: null);
         }
@@ -97,6 +93,8 @@ public sealed class GpuTuning : IDisposable
             var (adapter, device) = found;
             if (IsLocked(device))
                 return Locked(adapter, device);
+            if (HeldByProfile(device))
+                return HeldByProfile(adapter, device);
             if (!device.AutoTunes.Contains(kind))
                 return Result(false, "This GPU's driver doesn't offer that automatic tuning. Nothing was changed.", adapter, device);
 
@@ -194,6 +192,8 @@ public sealed class GpuTuning : IDisposable
             var key = Key(device);
             _probation.Cancel(key);
             _pendingModes.Remove(key);
+            // Factory settings win over a running game's profile too; nothing is put back after the game.
+            _profileHolds.Remove(key);
             try
             {
                 adapter.ResetToDefaults(device.Id);
@@ -273,12 +273,15 @@ public sealed class GpuTuning : IDisposable
         }
     }
 
-    /// <summary>A clean stop: unconfirmed changes go back, then the session is marked as ended cleanly.</summary>
+    /// <summary>
+    /// A clean stop: unconfirmed changes and a running game's profile go back, then the session is marked as ended cleanly.
+    /// </summary>
     public void Shutdown()
     {
         lock (_gate)
         {
             _probation.RevertAll();
+            EndProfile();
             _safety.EndSession();
         }
     }
@@ -473,6 +476,20 @@ public sealed class GpuTuning : IDisposable
         {
             _log.LogError(ex, "Couldn't tell the driver again that the warning for {Gpu} was accepted", device.Id);
         }
+    }
+
+    /// <summary>Why these values can't go on the card, or null: every control must exist and be inside the SDK's range.</summary>
+    private static string? WhyNot(GpuDevice device, IReadOnlyDictionary<string, int> values)
+    {
+        foreach (var (id, value) in values)
+        {
+            var spec = device.Controls.FirstOrDefault(c => c.Id == id);
+            if (spec is null)
+                return $"This GPU has no '{id}' setting.";
+            if (spec.WhyNot(value) is { } why)
+                return why;
+        }
+        return null;
     }
 
     private bool IsLocked(GpuDevice device) => device.Warning is not null && !_safety.WarningAccepted(Key(device));

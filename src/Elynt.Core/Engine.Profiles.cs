@@ -74,6 +74,8 @@ public sealed partial class Engine : IProfileEngine
         if (profile.RaiseTimerResolution)
             Try(system.Timer.Raise, "Couldn't raise the timer resolution", problems);
 
+        StartProfileTuning(profile, problems);
+
         var game = GameName(exePath);
         _log.LogInformation("Started the profile for {Game} for {User}: {Problems} problems", exePath, user, problems.Count);
         return problems.Count == 0
@@ -86,6 +88,7 @@ public sealed partial class Engine : IProfileEngine
     {
         var problems = new List<string>();
         Try(system.Timer.Release, "Couldn't release the timer resolution", problems);
+        StopProfileTuning(problems);
         problems.AddRange(UndoTemporaryChanges());
 
         var game = GameName(exePath);
@@ -145,6 +148,7 @@ public sealed partial class Engine : IProfileEngine
                 .OfType<TweakDefinition>()
                 .SelectMany(t => t.AntiCheat.Where(c => game.AntiCheats.Contains(c.AntiCheat))
                     .Select(c => $"{t.Name}: {AntiCheatWarning.Name(c.AntiCheat)} in {game.Name} ({c.Detail})."))
+                .Concat(TuningClashes(profile, game))
                 .ToList();
         }
         catch (Exception ex)
@@ -214,7 +218,7 @@ public sealed partial class Engine : IProfileEngine
                 return $"'{WinPath.FileName(app)}' is part of Windows, so a profile never closes it.";
         }
 
-        return null;
+        return WhyNotTuningInProfile(profile);
     }
 
     private static string? WhyNotInProfile(TweakDefinition tweak)

@@ -3,6 +3,8 @@ using Elynt.Core.Games;
 using Elynt.Core.Journal;
 using Elynt.Core.Profiles;
 using Elynt.Core.Safety;
+using Elynt.Core.Tuning;
+using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Tweaks;
 using Elynt.Windows;
 
@@ -21,6 +23,8 @@ internal sealed class ProfileHost(
     ProfileNotes notes,
     WindowsProcesses processes,
     WindowsTimerResolution timer,
+    GpuTuning gpuTuning,
+    CpuTuning cpuTuning,
     ILoggerFactory loggers) : IHostedService, IDisposable
 {
     private readonly ILogger _log = loggers.CreateLogger<ProfileHost>();
@@ -62,7 +66,8 @@ internal sealed class ProfileHost(
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        // A running profile is left journaled as temporary; the next start puts it back.
+        // A running profile is left journaled as temporary; the next start puts it back. Its GPU and CPU tuning go
+        // back when the tuning host stops (or, after a crash, at the next start).
         _events?.Dispose();
         _events = null;
         return Task.CompletedTask;
@@ -85,7 +90,9 @@ internal sealed class ProfileHost(
         logger: loggers.CreateLogger<Engine>(),
         gameStore: _gameStore,
         profiles: profiles,
-        profileNotes: notes);
+        profileNotes: notes,
+        gpuTuning: gpuTuning,
+        cpuTuning: cpuTuning);
 
     public void Dispose()
     {

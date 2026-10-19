@@ -38,6 +38,8 @@
 
 **Confirm-or-revert**: every GPU or CPU tuning change goes back on its own after a short window (15 s for GPUs, 60 s for CPUs) unless the user keeps it. Several unkept changes in a row go back to the last kept settings.
 
+**Tuning profile**: GPU or CPU tuning inside a per-game profile. It goes on when the game starts without confirm-or-revert (nobody is watching) and comes off with the rest of the profile, back to the kept tune or defaults. While it holds the hardware, the Overclocking page can't change it.
+
 **Vendor warning**: a GPU vendor's risk notice the user must accept before any tuning on that GPU unlocks (Intel's overclock waiver for IGCL). Accepted once per GPU and remembered; the service tells the driver again on every start.
 
 **Unclean shutdown**: the service didn't stop normally (crash, freeze, power cut) while hardware was tuned. The next start puts that hardware on defaults and doesn't re-apply the kept tune, so a bad tune can't loop.
