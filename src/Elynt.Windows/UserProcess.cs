@@ -16,7 +16,7 @@ internal static class UserProcess
 {
     public static int Run(WindowsIdentity identity, string exe, IReadOnlyList<string> args, TimeSpan timeout)
     {
-        var commandLine = string.Join(' ', new[] { exe }.Concat(args).Select(Quote));
+        var commandLine = WindowsArguments.CommandLine(exe, args);
         if (!Native.DuplicateTokenEx(identity.Token, Native.MaximumAllowed, IntPtr.Zero, Native.SecurityImpersonation, Native.TokenPrimary, out var primary))
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Couldn't take the signed-in user's token.");
         using (primary)
@@ -37,7 +37,8 @@ internal static class UserProcess
                     Native.TerminateProcess(process, 1);
                     throw new TimeoutException($"{Path.GetFileName(exe)} didn't finish within {timeout.TotalMinutes:0} minutes.");
                 }
-                Native.GetExitCodeProcess(process, out var exit);
+                if (!Native.GetExitCodeProcess(process, out var exit))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"Couldn't read how {Path.GetFileName(exe)} exited.");
                 return (int)exit;
             }
             finally
@@ -51,8 +52,6 @@ internal static class UserProcess
     public static int RunPowerShell(WindowsIdentity identity, string script, TimeSpan timeout) =>
         Run(identity, PowerShell.Path,
             ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", PowerShell.Encode(script)], timeout);
-
-    private static string Quote(string arg) => arg.Contains(' ') || arg.Contains('"') ? $"\"{arg.Replace("\"", "\\\"")}\"" : arg;
 
     private static class Native
     {
