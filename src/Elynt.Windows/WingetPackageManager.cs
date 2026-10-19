@@ -76,7 +76,7 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers -AllowClobber; " +
             "Import-Module Microsoft.WinGet.Client; " +
             "Repair-WinGetPackageManager -AllUsers -Latest -Force";
-        var powershell = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+        var powershell = PowerShell.Path;
         var exit = Run(powershell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], TimeSpan.FromMinutes(15)).Exit;
         if (exit != 0)
             throw new InvalidOperationException($"Installing App Installer failed (PowerShell exit code {exit}).");
@@ -138,7 +138,7 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
         () =>
         {
             var json = RunModule(
-                $"@(Find-WinGetPackage -Query {Literal(query)} -Source {Literal(source)} | Select-Object -First 100 | " +
+                $"@(Find-WinGetPackage -Query {PowerShell.Quote(query)} -Source {PowerShell.Quote(source)} | Select-Object -First 100 | " +
                 "ForEach-Object { [pscustomobject]@{ Id = $_.Id; Name = $_.Name; Version = $_.Version } })");
             return Parse(json)
                 .Select(e => new PackageInfo(Text(e, "Id") ?? "", Text(e, "Name") ?? "", Text(e, "Version") ?? ""))
@@ -201,13 +201,13 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
 
     /// <summary>
     /// Runs a pipeline of the WinGet PowerShell module and returns its result as JSON. Installs the module for all
-    /// users first if it is missing. Runs as the signed-in user when there is one (writing the JSON to a file in
-    /// the user's temp folder), otherwise as the service.
+    /// users first if it is missing. Runs as the signed-in user when there is one (sending the JSON back over a
+    /// private pipe), otherwise as the service.
     /// </summary>
     private string RunModule(string pipeline)
     {
         EnsureModule();
-        var powershell = PowerShellPath();
+        var powershell = PowerShell.Path;
         const string prelude =
             "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; " +
             "Import-Module Microsoft.WinGet.Client; ";
@@ -221,20 +221,17 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             return output;
         }
 
-        var file = Path.Combine(UserProfile(user), @"AppData\Local\Temp", $"elynt-winget-{Guid.NewGuid():N}.json");
-        try
-        {
-            var script = prelude +
-                $"[IO.File]::WriteAllText({Literal(file)}, (ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline}), [Text.UTF8Encoding]::new($false))";
-            var exit = RunAsUser(user, powershell, PowerShellArgs(script), ModuleTimeout);
-            if (exit != 0 || !File.Exists(file))
-                throw new InvalidOperationException($"The WinGet PowerShell module failed for the signed-in user (exit code {exit}).");
-            return File.ReadAllText(file, Encoding.UTF8);
-        }
-        finally
-        {
-            try { File.Delete(file); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        }
+        // The JSON comes back over a pipe only this user and SYSTEM can open, never through a file in the user's
+        // folders: as SYSTEM, reading and deleting a file there could be redirected by a link the user planted.
+        var (userExit, json) = UserProcess.RunReturning(
+            user,
+            powershell,
+            pipe => PowerShellArgs(prelude + PowerShell.SendToPipe(pipe, $"(ConvertTo-Json -Compress -Depth 3 -InputObject {pipeline})")),
+            ModuleTimeout);
+        _log.LogInformation("WinGet module (as user) exited {Exit}", userExit);
+        if (userExit != 0)
+            throw new InvalidOperationException($"The WinGet PowerShell module failed for the signed-in user (exit code {userExit}).");
+        return json;
     }
 
     private void EnsureModule()
@@ -246,19 +243,14 @@ public sealed class WingetPackageManager(WindowsIdentity? user, ILogger<WingetPa
             "try { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope AllUsers | Out-Null; " +
             "Install-Module -Name Microsoft.WinGet.Client -Repository PSGallery -Force -Scope AllUsers -AllowClobber } " +
             "catch { Write-Output $_.ToString(); exit 1 }";
-        var (exit, output) = Run(PowerShellPath(), PowerShellArgs(script), TimeSpan.FromMinutes(10));
+        var (exit, output) = Run(PowerShell.Path, PowerShellArgs(script), TimeSpan.FromMinutes(10));
         if (exit != 0)
             throw new InvalidOperationException($"Installing the WinGet PowerShell module failed (exit code {exit}): {output.Trim()}");
     }
 
     private static readonly TimeSpan ModuleTimeout = TimeSpan.FromMinutes(5);
 
-    private static string PowerShellPath() => Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
-
     private static string[] PowerShellArgs(string script) => ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script];
-
-    /// <summary>A PowerShell single-quoted string literal: nothing inside it is expanded or run.</summary>
-    private static string Literal(string value) => "'" + value.Replace("'", "''") + "'";
 
     private static List<JsonElement> Parse(string json)
     {

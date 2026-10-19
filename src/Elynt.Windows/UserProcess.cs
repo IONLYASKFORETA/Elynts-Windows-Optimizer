@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.IO.Pipes;
+using System.Security.AccessControl;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Principal;
@@ -45,6 +47,53 @@ internal static class UserProcess
             {
                 Native.DestroyEnvironmentBlock(environment);
             }
+        }
+    }
+
+    /// <summary>
+    /// Runs a program as the signed-in user and returns what it sends back over a private named pipe, made by the
+    /// service, that only that user and SYSTEM may open. Standard output can't be used: handles aren't inherited
+    /// across sessions, and the service runs in session 0. Nothing goes through a file the user could swap for a link.
+    /// </summary>
+    /// <param name="argsFor">The arguments, given the pipe's name to write the result to.</param>
+    public static (int Exit, string Output) RunReturning(
+        WindowsIdentity identity, string exe, Func<string, IReadOnlyList<string>> argsFor, TimeSpan timeout)
+    {
+        var name = $"elynt-result-{Guid.NewGuid():N}";
+        var security = new PipeSecurity();
+        security.AddAccessRule(new PipeAccessRule(
+            identity.User ?? throw new InvalidOperationException("Couldn't tell which user is signed in."),
+            PipeAccessRights.ReadWrite | PipeAccessRights.Synchronize, AccessControlType.Allow));
+        security.AddAccessRule(new PipeAccessRule(
+            new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
+        using var pipe = NamedPipeServerStreamAcl.Create(
+            name, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.FirstPipeInstance, 0, 0, security);
+        using var stop = new CancellationTokenSource();
+        var read = Task.Run(async () =>
+        {
+            await pipe.WaitForConnectionAsync(stop.Token);
+            using var reader = new StreamReader(pipe, new UTF8Encoding(false), leaveOpen: true);
+            return await reader.ReadToEndAsync(stop.Token);
+        });
+
+        try
+        {
+            var exit = Run(identity, exe, argsFor(name), timeout);
+            // The program wrote everything before it exited; it may also have failed before connecting.
+            string output;
+            try
+            {
+                output = read.Wait(TimeSpan.FromSeconds(10)) ? read.Result : "";
+            }
+            catch (AggregateException)
+            {
+                output = "";
+            }
+            return (exit, output);
+        }
+        finally
+        {
+            stop.Cancel();
         }
     }
 
@@ -118,6 +167,14 @@ internal static class PowerShell
 
     /// <summary>A PowerShell single-quoted string literal.</summary>
     public static string Quote(string text) => "'" + text.Replace("'", "''") + "'";
+
+    /// <summary>Script that writes the string <paramref name="expression"/> evaluates to into the named pipe, as UTF-8.</summary>
+    public static string SendToPipe(string pipeName, string expression) =>
+        $"$elyntResult = {expression}; " +
+        $"$elyntPipe = [IO.Pipes.NamedPipeClientStream]::new('.', {Quote(pipeName)}, [IO.Pipes.PipeDirection]::Out); " +
+        "$elyntPipe.Connect(30000); " +
+        "$elyntWriter = [IO.StreamWriter]::new($elyntPipe, [Text.UTF8Encoding]::new($false)); " +
+        "if ($null -ne $elyntResult) { $elyntWriter.Write([string]$elyntResult) }; $elyntWriter.Dispose()";
 
     /// <summary>Runs a script as the service and returns its output. Throws with PowerShell's own words when it fails.</summary>
     public static string Run(string script, TimeSpan? timeout = null) =>
