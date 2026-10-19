@@ -105,6 +105,19 @@ public sealed class PawnIoTests : IDisposable
     }
 
     [Fact]
+    public void A_validly_signed_setup_from_anyone_but_PawnIOs_author_is_deleted_and_never_run()
+    {
+        _signatures.Result = new(Trusted: true, Signer: "Some Other Publisher");
+
+        var result = NewEngine().InstallPawnIo(acceptFaceitWarning: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Some Other Publisher", result.Message);
+        Assert.Empty(_pawnIo.Installs);
+        Assert.Empty(Directory.GetFiles(_folder, "*.exe"));
+    }
+
+    [Fact]
     public void A_failing_setup_reports_pawnio_as_not_installed()
     {
         _pawnIo.InstallExitCode = 5;
