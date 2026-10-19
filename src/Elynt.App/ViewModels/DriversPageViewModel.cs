@@ -15,6 +15,15 @@ public sealed class DriversPageViewModel(DriverReport report, Func<EnginePipeCli
     public string? Problem { get; } = report.Problem ?? (report.Gpus.Count == 0 ? "No graphics card was found." : null);
 
     public bool HasProblem => Problem is not null;
+
+    /// <summary>Problem-driver warnings, old-driver cleaning and its backups. Loads itself.</summary>
+    public DriverCleaningViewModel Cleaning { get; } = Loaded(new DriverCleaningViewModel(client, askToReboot));
+
+    private static DriverCleaningViewModel Loaded(DriverCleaningViewModel cleaning)
+    {
+        _ = cleaning.LoadAsync();
+        return cleaning;
+    }
 }
 
 public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> client, Action<DriverInstallResult> askToReboot) : ObservableObject
@@ -75,7 +84,16 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 
     public bool HasVendorPage => VendorPage is not null;
 
-    private DriverRequest Request => new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall);
+    /// <summary>Back up and remove this vendor's old driver packages before installing (pnputil; restorable).</summary>
+    public bool RemoveOldDrivers
+    {
+        get => _removeOldDrivers;
+        set => Set(ref _removeOldDrivers, value);
+    }
+
+    private bool _removeOldDrivers;
+
+    private DriverRequest Request => new(gpu.DeviceId, UseStudio ? DriverBranch.Studio : DriverBranch.GameReady, CleanInstall, RemoveOldDrivers);
 
     public Task CheckAsync() => RunAsync("Looking up the latest driver…", async c =>
     {

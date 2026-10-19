@@ -34,6 +34,15 @@ internal sealed class EngineHost(
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
         new ProcessInstallerRunner());
+    private readonly DriverCleaningAdapters _driverCleaning = new(
+        new PnputilDriverStore(),
+        new WindowsKernelDrivers(),
+        ServicePaths.DriverBackups,
+        new WingetDduSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }),
+        ServicePaths.Ddu,
+        new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(10) }),
+        new WinTrustSignatureVerifier(),
+        new ProcessInstallerRunner());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
@@ -98,7 +107,7 @@ internal sealed class EngineHost(
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
                 new WindowsRepairSystem(sid),
                 _drivers,
-                _games) { Boot = _boot, Power = _power },
+                _games) { Boot = _boot, Power = _power, DriverCleaning = _driverCleaning },
             journal,
             sid,
             safetyNet,
