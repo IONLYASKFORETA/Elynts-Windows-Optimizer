@@ -53,6 +53,10 @@ public sealed record SystemAdapters(
 
     /// <summary>Sensor sources that need no extra driver (vendor SDKs, then Windows), best first.</summary>
     public IReadOnlyList<ISensorSource> Sensors { get; init; } = [];
+
+    /// <summary>Driver cleaning (pnputil, DDU) and problem-driver checks. Without it, cleaning is unavailable.</summary>
+    public DriverCleaningAdapters? DriverCleaning { get; init; }
+
     /// <summary>Preinstalled apps the Debloat &amp; Privacy section removes. Without it, none show as installed.</summary>
     public IRemovableApps Apps { get; init; } = new NoRemovableApps();
 

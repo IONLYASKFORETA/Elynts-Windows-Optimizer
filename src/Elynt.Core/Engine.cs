@@ -235,6 +235,18 @@ public interface IEngine
     /// <param name="progress">Told as each step (lookup, download, signature check, install) starts.</param>
     DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null);
 
+    /// <summary>Backups of cleaned drivers, installed drivers known to stop anti-cheats, and DDU's label.</summary>
+    DriverCleaningReport GetDriverCleaning();
+
+    /// <summary>
+    /// Removes a vendor's display drivers. pnputil exports every package first, so <see cref="RestoreDrivers"/> can
+    /// put them back; DDU (downloaded from Wagnardsoft only now) also exports first, and runs only when confirmed.
+    /// </summary>
+    DriverCleanResult CleanDrivers(DriverCleanRequest request);
+
+    /// <summary>Reinstalls the drivers a clean exported.</summary>
+    DriverCleanResult RestoreDrivers(string backupId);
+
     /// <summary>Installed games from every supported launcher, plus the ones the user added by hand.</summary>
     IReadOnlyList<InstalledGame> ListGames();
 
@@ -615,6 +627,14 @@ public sealed partial class Engine(
         DriverFlow.Install(request, progress);
 
     private DriverFlow DriverFlow => new(system, _log);
+
+    public DriverCleaningReport GetDriverCleaning() => DriverCleaner.Report();
+
+    public DriverCleanResult CleanDrivers(DriverCleanRequest request) => DriverCleaner.Clean(request);
+
+    public DriverCleanResult RestoreDrivers(string backupId) => DriverCleaner.Restore(backupId);
+
+    private DriverCleaner DriverCleaner => new(system.DriverCleaning, _log);
 
     public IReadOnlyList<InstalledGame> ListGames() => _games.List();
 

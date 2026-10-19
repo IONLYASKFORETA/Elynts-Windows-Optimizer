@@ -175,6 +175,15 @@ public sealed class EnginePipeClient : IAsyncDisposable
             e => { if (e is DriverInstallProgressEvent p) progress?.Report(p.Progress); })).DriverInstall
             ?? throw Missing("driver install result");
 
+    public async Task<DriverCleaningReport> GetDriverCleaningAsync(CancellationToken cancellation = default) =>
+        (await SendAsync(new GetDriverCleaningRequest(), cancellation)).DriverCleaning ?? throw Missing("driver cleaning report");
+
+    public async Task<DriverCleanResult> CleanDriversAsync(DriverCleanRequest request, CancellationToken cancellation = default) =>
+        (await SendAsync(new CleanDriversRequest(request), cancellation)).DriverClean ?? throw Missing("driver clean result");
+
+    public async Task<DriverCleanResult> RestoreDriversAsync(string backupId, CancellationToken cancellation = default) =>
+        (await SendAsync(new RestoreDriversRequest(backupId), cancellation)).DriverClean ?? throw Missing("driver restore result");
+
     public async Task<IReadOnlyList<InstalledGame>> ListGamesAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListGamesRequest(), cancellation)).Games ?? throw Missing("games");
 
