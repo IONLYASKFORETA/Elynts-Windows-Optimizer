@@ -340,24 +340,22 @@ public sealed partial class Engine(
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
     private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
 
-    private readonly StartupManager _startup = new(system, journal, user, safetyNet, clock ?? TimeProvider.System, logger);
-    private readonly RepairBench _repair = new(
-        repairs ?? RepairCatalogue.Default,
-        system,
-        repairLogs ?? new InMemoryRepairLogStore(),
-        user,
-        clock ?? TimeProvider.System,
-        logger ?? (ILogger)NullLogger<Engine>.Instance);
+    // Built on first use, so they share the Engine's own clock, log and change flow.
+    private StartupManager Startup => field ??= new(
+        system, journal, user, safetyNet, _clock, _log, (tweak, wording) => ApplyTweak(tweak, ApplyOptions.Default, wording: wording));
 
-    private ServiceDesk Services => new(system, journal, user);
+    private RepairBench Repair => field ??= new(
+        repairs ?? RepairCatalogue.Default, system, repairLogs ?? new InMemoryRepairLogStore(), user, _clock, _log);
+
+    private ServiceDesk Services => field ??= new(system, journal, user);
 
     public IReadOnlyList<ServiceView> ListServices() => Services.List();
 
     public ServiceResult SetServiceStart(string serviceName, ServiceStart start, ApplyOptions? options = null) =>
-        Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o) => ApplyTweak(tweak, o));
+        Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o, wording) => ApplyTweak(tweak, o, wording: wording));
 
     public ServiceResult UndoServiceChange(string serviceName) =>
-        Services.Undo(serviceName, Revert(ServiceChange.TweakIdFor(serviceName)));
+        Services.Undo(serviceName, (id, wording) => Revert(id, wording));
 
     /// <summary>A catalogue tweak, or the change behind a journaled service start type.</summary>
     private bool TryResolve(string tweakId, JournalEntry? entry, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TweakDefinition? tweak)
@@ -368,14 +366,8 @@ public sealed partial class Engine(
         return tweak is not null;
     }
 
-    private readonly CleanupBench _cleanup = new(
-        cleanup ?? CleanupCatalogue.Default,
-        system,
-        cleanupSchedules ?? new InMemoryCleanupScheduleStore(),
-        user,
-        clock ?? system.Clock,
-        logger ?? (ILogger)NullLogger<Engine>.Instance,
-        safetyNet);
+    private CleanupBench Cleanup => field ??= new(
+        cleanup ?? CleanupCatalogue.Default, system, cleanupSchedules ?? new InMemoryCleanupScheduleStore(), user, _clock, _log, safetyNet);
     private readonly GameLibrary _games = new(system.Games ?? NoGameSources.Instance, gameStore ?? new InMemoryGameStore(), user);
 
     public IReadOnlyList<AppView> ListApps() => _apps.ListApps();
@@ -424,8 +416,10 @@ public sealed partial class Engine(
 
     /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
     /// <param name="temporary">Made by a per-game profile, so undone when the game closes or after a crash or reboot.</param>
-    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false)
+    /// <param name="wording">How the result reads on the page that asked (a startup item, a service); a tweak's by default.</param>
+    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false, ChangeWording? wording = null)
     {
+        wording ??= ChangeWording.Tweak;
         if (Refusal(tweak, options) is { } refused)
             return refused;
 
@@ -439,9 +433,9 @@ public sealed partial class Engine(
                 {
                     journal.KeepPermanently(profileChange);
                     _log.LogInformation("Kept {Tweak} for {User} after the game closes", tweak.Id, user);
-                    return Done(tweak, "Turned on. A game's profile had it on already; it now stays on after the game closes.");
+                    return Done(tweak, $"{wording.Done} A game's profile had it on already; it now stays on after the game closes.");
                 }
-                return Done(tweak, "Already on. Nothing was changed.");
+                return Done(tweak, wording.AlreadyDone);
             }
 
             // The safety net goes down before anything changes: whole-store backups, then a restore point.
@@ -454,7 +448,7 @@ public sealed partial class Engine(
             {
                 return Failed(tweak, $"{ex.Message} The app backs up the whole store before its first change of this kind. Nothing was changed.");
             }
-            var turnedOn = note is null ? "Turned on." : $"Turned on. {note}";
+            var turnedOn = note is null ? wording.Done : $"{wording.Done} {note}";
 
             // Write-ahead: the exact prior state is on disk before anything changes.
             List<StepRecord> records;
@@ -480,7 +474,7 @@ public sealed partial class Engine(
                 _log.LogError(ex, "Applying {Tweak} failed; putting back the prior state", tweak.Id);
                 RevertSteps(records);
                 journal.Close(entry, EntryStatus.RolledBack, _clock.GetUtcNow());
-                return Failed(tweak, $"Couldn't turn this on: {ex.Message} Nothing was changed.");
+                return Failed(tweak, $"{wording.CouldNot}: {ex.Message} Nothing was changed.");
             }
 
             journal.Close(entry, EntryStatus.Applied, _clock.GetUtcNow());
@@ -492,7 +486,7 @@ public sealed partial class Engine(
         catch (Exception ex)
         {
             _log.LogError(ex, "Applying {Tweak} failed and could not be fully put back", tweak.Id);
-            return Failed(tweak, $"Couldn't turn this on: {ex.Message} The prior state is saved; switch it off to undo.");
+            return Failed(tweak, $"{wording.CouldNot}: {ex.Message} The prior state is saved; {wording.UndoHint}.");
         }
     }
 
@@ -518,16 +512,18 @@ public sealed partial class Engine(
         return null;
     }
 
-    public CommandResult Revert(string tweakId)
+    public CommandResult Revert(string tweakId) => Revert(tweakId, ChangeWording.Tweak);
+
+    private CommandResult Revert(string tweakId, ChangeWording wording)
     {
         var entry = journal.LatestUndoable(tweakId, user);
         if (!TryResolve(tweakId, entry, out var tweak))
-            return Unknown(tweakId);
+            return entry is null && wording != ChangeWording.Tweak ? new(false, wording.NothingToUndo, null) : Unknown(tweakId);
 
         if (entry is null)
-            return Failed(tweak, "Nothing to undo: this was already set before the app changed anything.");
+            return Failed(tweak, wording.NothingToUndo);
 
-        return Undo(tweak, entry);
+        return Undo(tweak, entry, wording);
     }
 
     public CommandResult UndoChange(Guid changeId)
@@ -570,8 +566,9 @@ public sealed partial class Engine(
             : new RestoreResult(false, $"Put back {results.Count - failed} of {results.Count} changes. {failed} couldn't be undone; see each one below.", results);
     }
 
-    private CommandResult Undo(TweakDefinition tweak, JournalEntry entry)
+    private CommandResult Undo(TweakDefinition tweak, JournalEntry entry, ChangeWording? wording = null)
     {
+        wording ??= ChangeWording.Tweak;
         try
         {
             var conflicts = entry.Steps.Select(step => step.FindConflict(system)).OfType<string>().ToList();
@@ -580,13 +577,13 @@ public sealed partial class Engine(
                 _log.LogWarning("Not reverting {Tweak} for {User}: {Conflicts}", tweak.Id, user, conflicts);
                 return Failed(tweak,
                     $"Didn't undo this. {string.Join(" ", conflicts)} Undoing now would overwrite that, so nothing was changed. " +
-                    "Switch the tweak on again to take a fresh copy of the current settings, or leave it as it is.");
+                    $"{wording.ChangeAgain} to take a fresh copy of the current settings, or leave it as it is.");
             }
 
             RevertSteps(entry.Steps);
             journal.CloseReverted(entry, _clock.GetUtcNow());
             _log.LogInformation("Reverted {Tweak} for {User}", tweak.Id, user);
-            return Done(tweak, "Turned off. The previous settings are back.");
+            return Done(tweak, wording.Undone);
         }
         catch (Exception ex)
         {
@@ -594,6 +591,8 @@ public sealed partial class Engine(
             return Failed(tweak, $"Couldn't undo this: {ex.Message}");
         }
     }
+
+    private DriverFlow DriverFlow => field ??= new(system, _log);
 
     public IReadOnlyList<ChangeView> ListHistory()
     {
@@ -620,10 +619,10 @@ public sealed partial class Engine(
     /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
     private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
 
-    public IReadOnlyList<RepairToolView> ListRepairTools() => _repair.List();
+    public IReadOnlyList<RepairToolView> ListRepairTools() => Repair.List();
 
     public Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
-        _repair.RunAsync(toolId, confirmed, progress, cancellation);
+        Repair.RunAsync(toolId, confirmed, progress, cancellation);
 
     public BiosReport GetBiosReport()
     {
@@ -641,21 +640,21 @@ public sealed partial class Engine(
     }
 
     public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
-        _cleanup.ScanAsync(progress, cancellation);
+        Cleanup.ScanAsync(progress, cancellation);
 
     public Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
-        _cleanup.CleanAsync(categoryIds, confirmDestructive, progress, cancellation);
+        Cleanup.CleanAsync(categoryIds, confirmDestructive, progress, cancellation);
 
-    public CleanupSchedule GetCleanupSchedule() => _cleanup.GetSchedule();
+    public CleanupSchedule GetCleanupSchedule() => Cleanup.GetSchedule();
 
-    public CleanupSchedule SetWeeklyCleanup(bool enabled) => _cleanup.SetWeekly(enabled);
+    public CleanupSchedule SetWeeklyCleanup(bool enabled) => Cleanup.SetWeekly(enabled);
 
     /// <summary>
     /// The service calls this regularly. When this user turned weekly cleaning on and a week has passed, cleans the
     /// safe categories only; otherwise does nothing and returns null.
     /// </summary>
     public Task<CleanupReport?> RunWeeklyCleanupIfDueAsync(CancellationToken cancellation = default) =>
-        _cleanup.RunWeeklyIfDueAsync(cancellation);
+        Cleanup.RunWeeklyIfDueAsync(cancellation);
     public UpdateRunStatus StartWindowsUpdate() =>
         windowsUpdate?.Start() ?? new UpdateRunStatus(UpdatePhase.Failed, "Windows Update isn't available from the service.");
 
@@ -668,7 +667,6 @@ public sealed partial class Engine(
     public DriverInstallResult InstallDriver(DriverRequest request, IProgress<DriverInstallProgress>? progress = null) =>
         DriverFlow.Install(request, progress);
 
-    private DriverFlow DriverFlow => new(system, _log);
 
     public DriverCleaningReport GetDriverCleaning() => DriverCleaner.Report();
 
@@ -676,7 +674,7 @@ public sealed partial class Engine(
 
     public DriverCleanResult RestoreDrivers(string backupId) => DriverCleaner.Restore(backupId);
 
-    private DriverCleaner DriverCleaner => new(system.DriverCleaning, _log);
+    private DriverCleaner DriverCleaner => field ??= new(system.DriverCleaning, _log);
 
     public IReadOnlyList<InstalledGame> ListGames() => _games.List();
 
@@ -709,7 +707,7 @@ public sealed partial class Engine(
 
     public SensorReport GetSensors() => PawnIo.Sensors();
 
-    private PawnIoManager PawnIo => new(system, _games.List, _log);
+    private PawnIoManager PawnIo => field ??= new(system, _games.List, _log);
 
     private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 

@@ -22,7 +22,8 @@ internal sealed class ServiceDesk(SystemAdapters system, ChangeJournal journal, 
     /// Checks who may make this change, then hands it to the Engine's apply, which enforces the hard rules again and
     /// journals the whole configuration first.
     /// </summary>
-    public ServiceResult Set(string name, ServiceStart start, ApplyOptions options, Func<TweakDefinition, ApplyOptions, CommandResult> apply)
+    public ServiceResult Set(
+        string name, ServiceStart start, ApplyOptions options, Func<TweakDefinition, ApplyOptions, ChangeWording, CommandResult> apply)
     {
         if (system.Services is null)
             return new(false, "Services can't be changed here. Nothing was changed.", null);
@@ -42,27 +43,26 @@ internal sealed class ServiceDesk(SystemAdapters system, ChangeJournal journal, 
         if (refusal is not null)
             return new(false, $"{refusal} Nothing was changed.", view);
 
-        var result = apply(ServiceChange.Define(service.Name, service.DisplayName, service.Kind, start), options);
-        var message = result.Message switch
-        {
-            var m when m.StartsWith("Turned on.", StringComparison.Ordinal) =>
-                $"{view.DisplayName} now starts {start}.{m["Turned on.".Length..]}",
-            var m when m.StartsWith("Already on.", StringComparison.Ordinal) => $"{view.DisplayName} already starts {start}. Nothing was changed.",
-            var m => m.Replace("Couldn't turn this on", "Couldn't change this service", StringComparison.Ordinal),
-        };
-        return new(result.Succeeded, message, Refresh(name));
+        var result = apply(ServiceChange.Define(service.Name, service.DisplayName, service.Kind, start), options, Wording(view.DisplayName, start));
+        return new(result.Succeeded, result.Message, Refresh(name));
     }
 
-    /// <summary>Restates the Engine's undo of a service change in the Services page's terms.</summary>
-    public ServiceResult Undo(string name, CommandResult result)
+    /// <summary>Undoes the app's last change to a service through the Engine's undo, in the Services page's words.</summary>
+    public ServiceResult Undo(string name, Func<string, ChangeWording, CommandResult> revert)
     {
-        var view = Refresh(name);
-        var message = result.Succeeded
-            ? $"{view?.DisplayName ?? name} has its previous configuration back."
-            : result.Message.Replace("There is no tweak called", "There is no service change called", StringComparison.Ordinal)
-                .Replace("Switch the tweak on again", "Change the service again", StringComparison.Ordinal);
-        return new(result.Succeeded, message, view);
+        var displayName = Refresh(name)?.DisplayName ?? name;
+        var result = revert(ServiceChange.TweakIdFor(name), Wording(displayName, start: null));
+        return new(result.Succeeded, result.Message, Refresh(name));
     }
+
+    private static ChangeWording Wording(string displayName, ServiceStart? start) => new(
+        Done: $"{displayName} now starts {start}.",
+        AlreadyDone: $"{displayName} already starts {start}. Nothing was changed.",
+        CouldNot: "Couldn't change this service",
+        UndoHint: "undo the service change to put it back",
+        Undone: $"{displayName} has its previous configuration back.",
+        NothingToUndo: $"Nothing to undo: the app hasn't changed {displayName}.",
+        ChangeAgain: "Change the service again");
 
     private ServiceView? Refresh(string name)
     {
