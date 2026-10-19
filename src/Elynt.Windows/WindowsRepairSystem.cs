@@ -122,13 +122,7 @@ public sealed class WindowsRepairSystem(string userSid) : IRepairSystem
         return full;
     }
 
-    private string UserProfile()
-    {
-        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        using var key = machine.OpenSubKey($@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{userSid}");
-        return key?.GetValue("ProfileImagePath") as string
-            ?? throw new InvalidOperationException("Couldn't find your user profile folder.");
-    }
+    private string UserProfile() => UserProfiles.Require(userSid);
 
     /// <summary>Windows programs by bare name from System32 only, never from PATH; winget from its Store package.</summary>
     private static string ResolveProgram(string program)
@@ -143,18 +137,8 @@ public sealed class WindowsRepairSystem(string userSid) : IRepairSystem
     }
 
     /// <summary>The service runs as SYSTEM, which has no winget alias on PATH, so use App Installer's own folder.</summary>
-    private static string FindWinget()
-    {
-        var apps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
-        var newest = Directory.Exists(apps)
-            ? Directory.EnumerateDirectories(apps, "Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe")
-                .Select(dir => (dir, version: Version.TryParse(Path.GetFileName(dir).Split('_')[1], out var v) ? v : new Version()))
-                .OrderByDescending(x => x.version)
-                .Select(x => Path.Combine(x.dir, "winget.exe"))
-                .FirstOrDefault(File.Exists)
-            : null;
-        return newest ?? throw new FileNotFoundException("winget (App Installer) isn't installed. Install it from the Apps section first.");
-    }
+    private static string FindWinget() =>
+        UserProfiles.SystemWinget() ?? throw new FileNotFoundException("winget (App Installer) isn't installed. Install it from the Apps section first.");
 
     /// <summary>Reads a stream character by character so progress lines ending in CR (DISM, SFC) arrive as they're printed.</summary>
     private static async Task PumpLinesAsync(StreamReader reader, Action<string> output)

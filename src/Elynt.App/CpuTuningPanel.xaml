@@ -10,7 +10,7 @@
     <StackPanel Margin="4,4,4,16">
         <TextBlock Text="CPU tuning" FontSize="16" FontWeight="SemiBold" />
         <TextBlock Text="{Binding CpuName}" Opacity="0.8" />
-        <TextBlock Text="Curve Optimizer only goes negative and power limits only go down. Every change goes back after 60 seconds unless you keep it, and a restart always brings back your BIOS settings."
+        <TextBlock Text="{Binding Explainer, Mode=OneTime}"
                    Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
         <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Margin="0,0,0,8" FontWeight="SemiBold"
                    Visibility="{Binding HasNotice, Converter={StaticResource Visible}}" />

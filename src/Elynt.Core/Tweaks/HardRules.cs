@@ -53,9 +53,21 @@ public static partial class HardRules
             $"{driver.DriverFile} is a known-vulnerable driver that anti-cheats and Windows block",
         FileTarget file when IsUserFolder(file.Path) => "user folders and game saves are never touched",
         PackageTarget package when IsEdge(package.PackageName) => "Edge and WebView2 are never removed",
+        ProcessTarget process when IsInWindowsFolder(process.ExePath) =>
+            $"{Path.GetFileName(process.ExePath.Replace('\\', '/'))} is part of Windows, so it is never closed",
         ScanExclusionTarget exclusion => ExclusionViolation(exclusion.Folder),
+        UpdatePauseTarget pause when pause.Days is < 1 or > UpdateControl.UpdatePauseStep.MaxDays =>
+            $"updates are paused at most {UpdateControl.UpdatePauseStep.MaxDays} days (Windows' own limit), never blocked",
         _ => null,
     };
+
+    /// <summary>The Windows folder (usually C:\Windows); C:\Windows where .NET doesn't know one (tests off Windows).</summary>
+    public static string WindowsFolder { get; } =
+        Environment.GetFolderPath(Environment.SpecialFolder.Windows) is { Length: > 0 } folder ? folder : @"C:\Windows";
+
+    /// <summary>Whether the path is inside the Windows folder.</summary>
+    public static bool IsInWindowsFolder(string path) =>
+        path.Replace('/', '\\').StartsWith(WindowsFolder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Defender exclusions are only for one game's own folder. A whole drive, Windows, the shared program folders,
@@ -101,6 +113,8 @@ public static partial class HardRules
             ServiceTarget service => service.ServiceName,
             RegistryTarget { Location.Root: RegistryRoot.LocalMachine } registry when
                 ServiceKey().Match(registry.Location.KeyPath) is { Success: true } key => key.Groups["name"].Value,
+            RegistryPatternTarget { Pattern.Root: RegistryRoot.LocalMachine } pattern when
+                ServiceKey().Match(pattern.Pattern.KeyPath) is { Success: true } key => key.Groups["name"].Value,
             _ => null,
         };
         if (name is null || services is null)
@@ -139,6 +153,9 @@ public static partial class HardRules
         var key = location.KeyPath.TrimEnd('\\');
 
         var service = ServiceKey().Match(key);
+        // A pattern's * stands for every service, protected ones included.
+        if (service.Success && service.Groups["name"].Value.Contains('*'))
+            return "a pattern over every service would change protected services (anti-cheat, Windows Update or boot-critical) too";
         if (service.Success && ProtectedServices.Contains(service.Groups["name"].Value))
             return $"{service.Groups["name"].Value} is a protected service (anti-cheat, Windows Update or boot-critical)";
 
@@ -155,6 +172,9 @@ public static partial class HardRules
         if (BlocksUpdates(key, location.ValueName, registry.Desired))
             return "Windows Update is never blocked or cut off";
 
+        if (PauseViolation(key, location.ValueName, registry.Desired) is { } pause)
+            return pause;
+
         return null;
     }
 
@@ -167,6 +187,28 @@ public static partial class HardRules
         WindowsUpdatePolicies + @"\AU\UseWUServer",
         WindowsUpdatePolicies + @"\DisableWindowsUpdateAccess",
         WindowsUpdatePolicies + @"\DoNotConnectToWindowsUpdateInternetLocations",
+    };
+
+    /// <summary>
+    /// The Settings app's pause values. A fixed end date can't be bounded from today, so quality-update pause dates
+    /// are written only through <see cref="UpdatePauseTarget"/>, at most 35 days ahead; raising Windows' own pause
+    /// limit is refused outright.
+    /// </summary>
+    private static string? PauseViolation(string key, string valueName, RegistryValue desired)
+    {
+        if (!key.Equals(UpdateControl.UpdatePauseStep.UxSettings, StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (valueName.Equals("FlightSettingsMaxPauseDays", StringComparison.OrdinalIgnoreCase) &&
+            !(desired is { Kind: RegistryValueKind.DWord, Data.Length: 4 } days && BitConverter.ToUInt32(desired.Data) <= UpdateControl.UpdatePauseStep.MaxDays))
+            return $"Windows' pause limit is never raised past {UpdateControl.UpdatePauseStep.MaxDays} days";
+        return QualityPauseValues.Contains(valueName)
+            ? $"quality updates are paused only through the app's pause control, at most {UpdateControl.UpdatePauseStep.MaxDays} days, never blocked"
+            : null;
+    }
+
+    private static readonly HashSet<string> QualityPauseValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime", "PauseUpdatesStartTime", "PauseUpdatesExpiryTime",
     };
 
     private static bool BlocksUpdates(string key, string valueName, RegistryValue desired)
@@ -203,7 +245,9 @@ public static partial class HardRules
     private static bool IsEdge(string package) =>
         package.Contains("MicrosoftEdge", StringComparison.OrdinalIgnoreCase) ||
         package.Contains("EdgeWebView", StringComparison.OrdinalIgnoreCase) ||
-        package.Equals("Microsoft.Edge", StringComparison.OrdinalIgnoreCase);
+        // winget ids: Microsoft.Edge, Microsoft.Edge.Beta/.Dev, Microsoft.EdgeWebView2Runtime; ARP ids name it with a space.
+        package.StartsWith("Microsoft.Edge", StringComparison.OrdinalIgnoreCase) ||
+        package.Contains("Microsoft Edge", StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(@"^SYSTEM\\(CurrentControlSet|ControlSet\d{3})\\Services\\(?<name>[^\\]+)", RegexOptions.IgnoreCase)]
     private static partial Regex ServiceKey();

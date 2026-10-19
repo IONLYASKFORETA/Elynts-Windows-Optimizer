@@ -5,8 +5,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Elynt.Core;
 
+/// <summary>
+/// The per-game profile run commands (start, stop, recover after a crash) are on the Engine command surface too, so
+/// tests and the service reach them through the same seam as every other command.
+/// </summary>
+public partial interface IEngine : IProfileEngine;
+
 /// <summary>Per-game profiles: building them, and the changes made while a game runs.</summary>
-public sealed partial class Engine : IProfileEngine
+public sealed partial class Engine
 {
     private readonly IProfileStore _profiles = profiles ?? new InMemoryProfileStore();
 
@@ -121,7 +127,8 @@ public sealed partial class Engine : IProfileEngine
         var problems = new List<string>();
         foreach (var entry in journal.OpenTemporary(user).Reverse())
         {
-            // A newer change to the same tweak (made by the user since) wins: undoing that is theirs to do.
+            // A newer change to the same tweak wins: undoing that is the user's to do. (A tweak the user turns on
+            // while the profile already has it on takes over the profile's change; see ApplyTweak.)
             if (!IsUndoable(entry))
                 continue;
             if (!TryResolve(entry.TweakId, entry, out var tweak))
@@ -214,7 +221,7 @@ public sealed partial class Engine : IProfileEngine
                 return $"'{app}' isn't a full path to a program.";
             if (WinPath.Same(app, profile.ExePath))
                 return "A profile can't close its own game.";
-            if (app.StartsWith(@"C:\Windows\", StringComparison.OrdinalIgnoreCase))
+            if (HardRules.Violation(new ProcessTarget(app)) is not null)
                 return $"'{WinPath.FileName(app)}' is part of Windows, so a profile never closes it.";
         }
 

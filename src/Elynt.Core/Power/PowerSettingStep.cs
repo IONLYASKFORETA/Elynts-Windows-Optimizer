@@ -28,6 +28,8 @@ public sealed record PowerSettingStep(Guid Subgroup, Guid Setting, string Settin
 {
     public override ChangeTarget Target => new PowerSettingTarget(Subgroup, Setting, Value);
 
+    public override Safety.BackupStore? Store => Safety.BackupStore.PowerPlans;
+
     public override string DescribeChange() =>
         $"Set {SettingName} to {Value} on the active power plan, plugged in and on battery " +
         $"(powercfg /setacvalueindex and /setdcvalueindex SCHEME_CURRENT {Subgroup} {Setting} {Value})";

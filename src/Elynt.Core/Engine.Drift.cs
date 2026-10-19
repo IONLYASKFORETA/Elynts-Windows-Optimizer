@@ -23,7 +23,10 @@ public partial interface IEngine
 
     DriftSettings GetDriftSettings();
 
-    /// <summary>Turns automatic re-apply on or off. Off by default; never for destructive or reboot-needing changes.</summary>
+    /// <summary>
+    /// Turns automatic re-apply on or off. Off by default; never for destructive, reboot-needing or must-read-warning
+    /// (ApplyWarning) changes, which always wait for the user.
+    /// </summary>
     DriftSettings SetAutoReapply(bool enabled);
 }
 
@@ -41,7 +44,9 @@ public sealed partial class Engine
 
     /// <summary>
     /// Detects every applied change. The first check, and the first after the Windows build changed, is a full
-    /// check: marks from other builds or app versions are dropped, so those changes are looked at afresh.
+    /// check: marks from other builds or app versions are dropped, and every change is re-checked against this build
+    /// and PC (applicability and whether its target still exists) before drift is looked for. A quick check only
+    /// reads whether each change is still in place, and re-checks fit just for the ones that aren't.
     /// </summary>
     public DriftReport CheckDrift()
     {
@@ -58,12 +63,20 @@ public sealed partial class Engine
             DriftItem? item;
             try
             {
-                if (WhyNotApplicable(tweak) is { } reason)
+                // Full: re-check every change still fits this PC and build. Quick: only look at whether each change
+                // is still in place, and check fit just for the ones that aren't, so a vanished target is never
+                // offered as drift.
+                if (kind == DriftCheckKind.Full && WhyNotApplicable(tweak) is { } reason)
                 {
                     unsupported.Add(MarkUnsupported(tweak, reason));
                     continue;
                 }
                 item = Drifted(tweak);
+                if (item is not null && kind == DriftCheckKind.Quick && WhyNotApplicable(tweak) is { } quickReason)
+                {
+                    unsupported.Add(MarkUnsupported(tweak, quickReason));
+                    continue;
+                }
             }
             catch (Exception ex)
             {
@@ -207,7 +220,8 @@ public sealed partial class Engine
 
         try
         {
-            entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records);
+            // A per-game profile's change stays temporary, so the game closing still undoes it.
+            entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, previous.Temporary);
         }
         catch (Exception ex)
         {
@@ -292,7 +306,10 @@ public sealed partial class Engine
         return parts.Count == 0 ? "Everything the app changed is still in place." : string.Join(" ", parts);
     }
 
-    /// <summary>Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks.</summary>
+    /// <summary>
+    /// Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks, and a
+    /// change that ends on its own (the update pause) isn't drift when it ends.
+    /// </summary>
     private IEnumerable<(TweakDefinition Tweak, JournalEntry Entry)> AppliedChanges()
     {
         foreach (var id in journal.UndoableTweakIds(user))
@@ -300,7 +317,7 @@ public sealed partial class Engine
             if (StartupManager.Owns(id))
                 continue;
             var entry = journal.LatestUndoable(id, user);
-            if (entry is not { Status: EntryStatus.Applied } || !TryResolve(id, entry, out var tweak) || IsMarked(id))
+            if (entry is not { Status: EntryStatus.Applied } || !TryResolve(id, entry, out var tweak) || IsMarked(id) || tweak.Expires)
                 continue;
             yield return (tweak, entry);
         }

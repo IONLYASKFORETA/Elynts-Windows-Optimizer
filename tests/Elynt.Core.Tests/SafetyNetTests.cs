@@ -82,6 +82,22 @@ public class SafetyNetTests
     }
 
     [Fact]
+    public void A_skipped_restore_point_is_still_reported_for_later_changes_that_day()
+    {
+        _restorePoints.Next = RestorePointResult.Skipped("System Protection is turned off for C:.");
+        var engine = NewEngine();
+        engine.Apply(Mouse.Id);
+        engine.Revert(Mouse.Id);
+        _clock.Advance(TimeSpan.FromHours(3));
+
+        var later = engine.Apply(Mouse.Id);
+
+        Assert.Single(_restorePoints.Attempts);
+        Assert.Contains("Windows didn't make a restore point", later.Message);
+        Assert.Contains("System Protection is turned off", later.Message);
+    }
+
+    [Fact]
     public void No_restore_point_when_nothing_is_going_to_change()
     {
         foreach (var step in Mouse.Steps.OfType<RegistryValueStep>())
@@ -122,6 +138,29 @@ public class SafetyNetTests
         engine.Apply(power.Id);
 
         Assert.Equal([BackupStore.Hosts, BackupStore.PowerPlans], _backups.Exports.Select(e => e.Store));
+    }
+
+    [Fact]
+    public void Boot_and_power_plan_tweaks_back_up_their_whole_store_first()
+    {
+        var boot = new FakeBootConfig();
+        boot.Set("useplatformclock", "Yes");
+        var power = new FakePowerPlans();
+        var engine = new Engine(Catalogue.Default,
+            new SystemAdapters(_registry, new FakeSystemInfo()) { Boot = boot, Power = power }, _journal, User, _safetyNet, _clock);
+
+        Assert.True(engine.Apply(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+        Assert.True(engine.Apply(GamingTweaks.HighPerformancePlan.Id).Succeeded);
+
+        Assert.Equal([BackupStore.BootConfiguration, BackupStore.PowerPlans], _backups.Exports.Select(e => e.Store));
+    }
+
+    [Fact]
+    public void A_power_setting_backs_up_the_power_plans()
+    {
+        Assert.Equal(BackupStore.PowerPlans, new Power.PowerSettingStep(Guid.NewGuid(), Guid.NewGuid(), "x", 1).Store);
+        Assert.Equal(BackupStore.PowerPlans, new Power.PowerPlanStep(Guid.NewGuid(), "x").Store);
+        Assert.Equal(BackupStore.BootConfiguration, new Boot.BootSettingStep("x", null).Store);
     }
 
     [Fact]

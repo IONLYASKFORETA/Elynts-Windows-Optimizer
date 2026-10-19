@@ -37,8 +37,18 @@ public interface IPawnIoCpu
 /// <summary>Where PawnIO's installer and modules come from.</summary>
 /// <param name="SetupUrl">PawnIO's own signed setup, from its GitHub releases.</param>
 /// <param name="Modules">PawnIO's official signed modules, by file name. The driver checks their signatures itself.</param>
-public sealed record PawnIoRelease(Uri SetupUrl, IReadOnlyDictionary<string, Uri> Modules)
+/// <param name="Signer">
+/// Who the setup must be Authenticode-signed by. It runs as SYSTEM, so a valid signature from anyone else is refused.
+/// </param>
+public sealed record PawnIoRelease(Uri SetupUrl, IReadOnlyDictionary<string, Uri> Modules, string Signer = PawnIoRelease.AuthorSigner)
 {
+    /// <summary>
+    /// PawnIO's author, who signs the official setup. NOT checked against a real download (no network from the build
+    /// machine): if the certificate names someone else (an organisation or a signing service), install fails closed
+    /// with the signer's name in the message; update this then.
+    /// </summary>
+    public const string AuthorSigner = "namazso";
+
     /// <summary>
     /// The latest PawnIO.Setup and PawnIO.Modules releases on GitHub. Asset names not yet checked against a real
     /// release (no network from the build machine).

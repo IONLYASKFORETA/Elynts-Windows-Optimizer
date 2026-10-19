@@ -21,6 +21,12 @@ public sealed record TuningState
 
     /// <summary>Hardware keys whose vendor warning (such as Intel's overclock waiver) the user has accepted.</summary>
     public IReadOnlyList<string> AcceptedWarnings { get; init; } = [];
+
+    /// <summary>
+    /// Hardware that was tuned when Windows last crashed: game profiles leave it alone until the user keeps a tune on
+    /// it again, so a profile's crash tune can't come back at the next launch.
+    /// </summary>
+    public IReadOnlyList<string> ProfilesBlocked { get; init; } = [];
 }
 
 public interface ITuningStore
@@ -59,14 +65,7 @@ public sealed class JsonFileTuningStore(string path) : ITuningStore
 
     public void Save(TuningState state)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        var temp = path + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            stream.Write(System.Text.Encoding.UTF8.GetBytes(TuningJson.Serialize(state)));
-            stream.Flush(flushToDisk: true);
-        }
-        File.Move(temp, path, overwrite: true);
+        AtomicFile.Write(path, TuningJson.Serialize(state));
     }
 }
 
@@ -175,6 +174,34 @@ public sealed class TuningSafety(ITuningStore store)
         lock (_gate)
         {
             return State.AcceptedWarnings.Contains(key);
+        }
+    }
+
+    /// <summary>Game profiles stop tuning this hardware (after a crash) until <see cref="AllowProfiles"/>.</summary>
+    public void BlockProfiles(string key)
+    {
+        lock (_gate)
+        {
+            if (!State.ProfilesBlocked.Contains(key))
+                Save(State with { ProfilesBlocked = [.. State.ProfilesBlocked, key] });
+        }
+    }
+
+    /// <summary>The user kept a tune on this hardware again, so game profiles may tune it.</summary>
+    public void AllowProfiles(string key)
+    {
+        lock (_gate)
+        {
+            if (State.ProfilesBlocked.Contains(key))
+                Save(State with { ProfilesBlocked = State.ProfilesBlocked.Where(k => k != key).ToList() });
+        }
+    }
+
+    public bool ProfilesAllowed(string key)
+    {
+        lock (_gate)
+        {
+            return !State.ProfilesBlocked.Contains(key) && !State.ProfilesBlocked.Contains(EverythingKey);
         }
     }
 

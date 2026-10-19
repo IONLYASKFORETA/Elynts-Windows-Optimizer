@@ -42,11 +42,7 @@ public sealed class JsonFileProfileStore(string folder) : IProfileStore
 
     public void Save(string user, IReadOnlyList<GameProfile> profiles)
     {
-        Directory.CreateDirectory(folder);
-        var path = PathFor(user);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, ProfileJson.Serialize(profiles));
-        File.Move(temp, path, overwrite: true);
+        AtomicFile.Write(PathFor(user), ProfileJson.Serialize(profiles));
     }
 
     // A SID is safe as a file name; anything else is stripped to letters, digits and dashes.

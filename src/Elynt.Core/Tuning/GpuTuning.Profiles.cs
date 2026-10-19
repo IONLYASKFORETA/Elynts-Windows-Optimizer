@@ -43,6 +43,9 @@ public sealed partial class GpuTuning
             var key = Key(device);
             if (WhyNotInProfile(device, values) is { } why)
                 return Result(false, why + " Nothing was changed.", adapter, device);
+            if (!_safety.ProfilesAllowed(key))
+                return Result(false, $"Windows didn't shut down cleanly while {device.Name} was tuned, so game profiles leave it " +
+                                     "alone until you keep a tune on the Overclocking page again. Nothing was changed.", adapter, device);
 
             // A change still waiting to be kept goes back first, so the way back after the game is the kept state.
             _probation.RevertNow(key);

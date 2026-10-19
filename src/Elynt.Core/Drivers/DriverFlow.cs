@@ -20,11 +20,11 @@ public sealed record DriverAdapters(
 /// <summary>
 /// Detects GPUs and the chipset driver, looks up their latest drivers, and downloads, verifies and installs them.
 /// </summary>
-internal sealed class DriverFlow(SystemAdapters system, ILogger log)
+internal sealed partial class DriverFlow(SystemAdapters system, DriverCleaner cleaner, ILogger log)
 {
     private readonly DriverAdapters? _adapters = system.Drivers;
 
-    private DriverCleaner Cleaner => new(system.DriverCleaning, log);
+    private DriverCleaner Cleaner => cleaner;
 
     public DriverReport Report()
     {
@@ -94,6 +94,9 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
         var profile = source.Installer;
         if (offer.DownloadUrl.Scheme != Uri.UriSchemeHttps)
             return Rejected($"The lookup gave a download that isn't HTTPS ({offer.DownloadUrl}), so it wasn't downloaded.");
+        // The version comes from the vendor's web page or feed and goes into the download's file name.
+        if (!PlainVersion().IsMatch(offer.Version))
+            return Rejected($"The lookup gave a version the app doesn't recognise ({offer.Version}), so nothing was downloaded.");
 
         var adapters = _adapters!;
         Directory.CreateDirectory(adapters.DownloadFolder);
@@ -319,4 +322,8 @@ internal sealed class DriverFlow(SystemAdapters system, ILogger log)
             : !string.Equals(offered, installed, StringComparison.OrdinalIgnoreCase);
 
     private static string Describe(DriverBranch branch) => branch == DriverBranch.Studio ? "Studio" : "Game Ready";
+
+    /// <summary>Every vendor's driver versions are dotted numbers (617.42, 26.8.1, 32.0.101.9150).</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\d{1,6}(\.\d{1,6}){0,4}\z")]
+    private static partial System.Text.RegularExpressions.Regex PlainVersion();
 }

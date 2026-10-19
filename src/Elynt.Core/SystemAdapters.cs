@@ -73,6 +73,12 @@ public sealed record SystemAdapters(
 
     /// <summary>Microsoft Defender's scan exclusions. Exclusion tweaks fail without it.</summary>
     public Security.IScanExclusions? ScanExclusions { get; init; }
+
+    /// <summary>
+    /// The PC's clock, for steps whose value depends on today (the update pause's end date). The Engine uses it too
+    /// unless it is given its own.
+    /// </summary>
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
 }
 
 public interface ISystemInfo

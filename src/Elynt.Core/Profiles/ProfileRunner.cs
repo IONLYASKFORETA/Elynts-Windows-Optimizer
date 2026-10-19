@@ -45,12 +45,17 @@ public sealed class ProfileRunner : IDisposable
     private readonly ProfileNotes _notes;
     private readonly TimeProvider _clock;
     private readonly ILogger _log;
+    private readonly CommandLane _lane;
     private readonly Lock _gate = new();
     private Running? _running;
 
-    public ProfileRunner(IProcessEvents events, Func<string, IProfileEngine> engineFor, ProfileNotes notes, TimeProvider? clock = null, ILogger? logger = null)
+    /// <param name="lane">The lane pipe commands take turns in, so a profile never interleaves with one.</param>
+    public ProfileRunner(
+        IProcessEvents events, Func<string, IProfileEngine> engineFor, ProfileNotes notes, TimeProvider? clock = null, ILogger? logger = null,
+        CommandLane? lane = null)
     {
         _events = events;
+        _lane = lane ?? new CommandLane();
         _engineFor = engineFor;
         _notes = notes;
         _clock = clock ?? TimeProvider.System;
@@ -83,7 +88,7 @@ public sealed class ProfileRunner : IDisposable
                     continue;
                 try
                 {
-                    var result = _engineFor(user).RecoverTemporaryChanges();
+                    var result = _lane.Run(_engineFor(user).RecoverTemporaryChanges);
                     if (!result.Succeeded)
                         _notes.Post(new(user, ProfileNoteKind.Problem, "Per-game profile", result.Message));
                 }
@@ -122,7 +127,7 @@ public sealed class ProfileRunner : IDisposable
                     return;
 
                 _running = new Running(process.User, process.ExePath, engine) { ProcessIds = { process.ProcessId } };
-                var result = engine.StartProfile(process.ExePath, process.ProcessId);
+                var result = _lane.Run(() => engine.StartProfile(process.ExePath, process.ProcessId));
                 _notes.Post(new(process.User, result.Succeeded ? ProfileNoteKind.Applied : ProfileNoteKind.Problem, "Profile applied", result.Message));
             }
             catch (Exception ex)
@@ -154,7 +159,7 @@ public sealed class ProfileRunner : IDisposable
             _running = null;
             try
             {
-                var result = running.Engine.StopProfile(running.ExePath);
+                var result = _lane.Run(() => running.Engine.StopProfile(running.ExePath));
                 _notes.Post(new(running.User, result.Succeeded ? ProfileNoteKind.Reverted : ProfileNoteKind.Problem, "Profile undone", result.Message));
             }
             catch (Exception ex)

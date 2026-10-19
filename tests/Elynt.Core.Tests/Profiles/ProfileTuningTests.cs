@@ -32,7 +32,12 @@ public sealed class ProfileTuningTests : IDisposable
     private GpuTuning _gpuService = null!;
     private CpuTuning _cpuService = null!;
 
-    public ProfileTuningTests() => StartServices();
+    public ProfileTuningTests()
+    {
+        // The CoolCpu profile's Curve Optimizer (-10) is within a tune that passed the stress test.
+        _cpuProfiles.Save(new CpuProfile(StressPassedFor: new CpuTune(CurveOptimizer: -10)));
+        StartServices();
+    }
 
     public void Dispose()
     {
@@ -220,6 +225,99 @@ public sealed class ProfileTuningTests : IDisposable
         Assert.Contains("profile", cpu.Message);
         Assert.Equal(1100, _gpu.Value(GpuControls.Voltage));
         Assert.Equal(-10, _cpu.CurveOptimizer);
+    }
+
+    [Fact]
+    public void A_crash_mid_game_keeps_the_profiles_GPU_tune_off_until_a_tune_is_kept_again()
+    {
+        var engine = EngineWithProfile(new GameProfile(Game) { GpuTuning = [Undervolt] });
+        engine.StartProfile(Game, 4242);
+        Crash();
+
+        var next = NewEngine().StartProfile(Game, 4242);
+        Assert.False(next.Succeeded);
+        Assert.Contains("didn't shut down cleanly", next.Message);
+        Assert.True(_gpu.IsAtDefaults(Gpu));
+        NewEngine().StopProfile(Game);
+
+        // A clean restart doesn't lift it: only keeping a tune on the Overclocking page does.
+        CleanRestart();
+        Assert.False(NewEngine().StartProfile(Game, 4242).Succeeded);
+        NewEngine().StopProfile(Game);
+        Assert.True(NewEngine().SetGpuTuning(Gpu, new Dictionary<string, int> { [GpuControls.PowerLimit] = 5 }).Succeeded);
+        Assert.True(NewEngine().ConfirmGpuTuning(Gpu).Succeeded);
+
+        Assert.True(NewEngine().StartProfile(Game, 4242).Succeeded);
+        Assert.Equal(1100, _gpu.Value(GpuControls.Voltage));
+    }
+
+    [Fact]
+    public void A_CPU_profile_tune_with_Curve_Optimizer_needs_a_passed_stress_test()
+    {
+        _cpuProfiles.Save(new CpuProfile());
+        StartServices();
+        var engine = EngineWithProfile(new GameProfile(Game) { CpuTuning = CoolCpu });
+
+        var started = engine.StartProfile(Game, 4242);
+
+        Assert.False(started.Succeeded);
+        Assert.Contains("stress test", started.Message);
+        Assert.False(_cpu.Touched);
+    }
+
+    [Fact]
+    public void A_CPU_profile_tune_is_held_to_what_passed_the_stress_test()
+    {
+        _cpuProfiles.Save(new CpuProfile(StressPassedFor: new CpuTune(CurveOptimizer: -5)));
+        StartServices();
+        var engine = EngineWithProfile(new GameProfile(Game) { CpuTuning = CoolCpu });
+
+        var started = engine.StartProfile(Game, 4242);
+
+        Assert.True(started.Succeeded, started.Message);
+        Assert.Equal(-5, _cpu.CurveOptimizer);
+        Assert.Equal(120, _cpu.Ppt);
+    }
+
+    [Fact]
+    public void A_crash_mid_game_steps_the_CPU_profile_tune_back_and_a_second_turns_it_off()
+    {
+        var engine = EngineWithProfile(new GameProfile(Game) { CpuTuning = CoolCpu });
+        engine.StartProfile(Game, 4242);
+
+        Crash();
+        Assert.False(NewEngine().StartProfile(Game, 4242).Succeeded);
+        NewEngine().StopProfile(Game);
+        Assert.Equal(new CpuTune(CurveOptimizer: -5), _cpuProfiles.Load().StressPassedFor);
+
+        CleanRestart();
+        Assert.True(NewEngine().StartProfile(Game, 4242).Succeeded);
+        Assert.Equal(-5, _cpu.CurveOptimizer);
+
+        Crash();
+        CleanRestart();
+        var third = NewEngine().StartProfile(Game, 4242);
+        Assert.False(third.Succeeded);
+        Assert.Contains("stress test", third.Message);
+        Assert.True(_cpu.AtBios);
+    }
+
+    /// <summary>The PC crashed mid-game: the services never stopped.</summary>
+    private void Crash()
+    {
+        _gpuService.Dispose();
+        _cpuService.Dispose();
+        _cpu.PowerCycle();
+        StartServices();
+    }
+
+    private void CleanRestart()
+    {
+        _cpuService.Shutdown();
+        _gpuService.Shutdown();
+        _gpuService.Dispose();
+        _cpuService.Dispose();
+        StartServices();
     }
 
     // ---- Anti-cheat warnings while editing ----

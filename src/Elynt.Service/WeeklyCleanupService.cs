@@ -31,7 +31,7 @@ internal sealed class WeeklyCleanupService(
             {
                 try
                 {
-                    var engine = new Engine(
+                    IEngine engine = new Engine(
                         catalogue,
                         new SystemAdapters(new WindowsRegistry(sid), new WindowsSystemInfo(), Cleanup: new WindowsCleanupSystem(sid)),
                         journal,

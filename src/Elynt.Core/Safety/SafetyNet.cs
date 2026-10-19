@@ -63,6 +63,7 @@ public sealed class SafetyNet(
     private readonly Dictionary<BackupStore, string> _backedUp = [];
     private readonly Lock _gate = new();
     private DateTimeOffset? _lastRestorePointAttempt;
+    private RestorePointResult? _lastRestorePoint;
 
     /// <summary>Backups taken so far, and where each was saved.</summary>
     public IReadOnlyDictionary<BackupStore, string> Backups
@@ -79,11 +80,18 @@ public sealed class SafetyNet(
     /// point) or null. Throws <see cref="BackupFailedException"/> when a needed backup couldn't be made: then nothing
     /// may be changed.
     /// </summary>
-    public string? BeforeChange(TweakDefinition tweak)
+    public string? BeforeChange(TweakDefinition tweak) =>
+        BeforeChange(tweak.Name, tweak.Steps.Select(step => step.Store).OfType<BackupStore>());
+
+    /// <summary>
+    /// The same, for a change that isn't a tweak (destructive cleaning): <paramref name="what"/> names it in the restore
+    /// point, and <paramref name="stores"/> are backed up first.
+    /// </summary>
+    public string? BeforeChange(string what, IEnumerable<BackupStore> stores)
     {
         lock (_gate)
         {
-            foreach (var store in tweak.Steps.Select(step => step.Store).OfType<BackupStore>().Distinct())
+            foreach (var store in stores.Distinct())
             {
                 if (_backedUp.ContainsKey(store))
                     continue;
@@ -100,29 +108,34 @@ public sealed class SafetyNet(
             }
 
             var now = _clock.GetUtcNow();
+            // Within the day, a later change (by anyone) is told what happened to the one attempt.
             if (_lastRestorePointAttempt is { } last && now - last < RestorePointInterval)
-                return null;
+                return _lastRestorePoint is { WasCreated: false } skipped ? SkippedNote(skipped) : null;
             _lastRestorePointAttempt = now;
 
             RestorePointResult result;
             try
             {
-                result = restorePoints.TryCreate($"Elynt Optimizer: before {tweak.Name}");
+                result = restorePoints.TryCreate($"Elynt Optimizer: before {what}");
             }
             catch (Exception ex)
             {
                 result = RestorePointResult.Skipped(ex.Message);
             }
 
+            _lastRestorePoint = result;
             if (result.WasCreated)
             {
-                _log.LogInformation("Made a restore point before {Tweak}", tweak.Id);
+                _log.LogInformation("Made a restore point before {Change}", what);
                 return null;
             }
-            _log.LogWarning("Windows skipped the restore point before {Tweak}: {Reason}", tweak.Id, result.Reason);
-            return $"Windows didn't make a restore point: {result.Reason} Your change is still recorded and can be undone from Undo history.";
+            _log.LogWarning("Windows skipped the restore point before {Change}: {Reason}", what, result.Reason);
+            return SkippedNote(result);
         }
     }
+
+    private static string SkippedNote(RestorePointResult skipped) =>
+        $"Windows didn't make a restore point: {skipped.Reason} Your change is still recorded and can be undone from Undo history.";
 
     public static string Describe(BackupStore store) => store switch
     {

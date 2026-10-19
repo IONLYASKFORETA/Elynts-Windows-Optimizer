@@ -113,8 +113,8 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Equal("UpdateApps Valve.Steam", _engine.LastCall);
         var all = await _client.UpdateAllAppsAsync(progress, TestContext.Current.CancellationToken);
         Assert.Equal("UpdateAllApps", _engine.LastCall);
-        var uninstall = await _client.UninstallAppsAsync(["Valve.Steam"], progress, TestContext.Current.CancellationToken);
-        Assert.Equal("UninstallApps Valve.Steam", _engine.LastCall);
+        var uninstall = await _client.UninstallAppsAsync(["Valve.Steam"], confirmed: true, progress, TestContext.Current.CancellationToken);
+        Assert.Equal("UninstallApps Valve.Steam True", _engine.LastCall);
 
         AssertSameJson(StubEngine.InstallSteps.Concat(StubEngine.InstallSteps).Concat(StubEngine.InstallSteps).ToList(), seen);
         AssertSameJson(StubEngine.Report, update);
@@ -625,10 +625,14 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public void Every_engine_command_has_a_client_method()
     {
-        var commands = typeof(IEngine).GetMethods().Select(m => m.Name.EndsWith("Async") ? m.Name : m.Name + "Async");
+        // Commands only the service's own hosts call (weekly cleaning; the profile run commands come from
+        // IProfileEngine): a user must not be able to trigger them over the pipe.
+        string[] serviceOnly = [nameof(IEngine.RunWeeklyCleanupIfDueAsync)];
+        var commands = typeof(IEngine).GetMethods().Select(m => m.Name.EndsWith("Async") ? m.Name : m.Name + "Async").Except(serviceOnly);
         var clientMethods = typeof(EnginePipeClient).GetMethods().Select(m => m.Name);
 
         Assert.Empty(commands.Except(clientMethods));
+        Assert.DoesNotContain(clientMethods, m => serviceOnly.Contains(m) || m is "StartProfileAsync" or "StopProfileAsync" or "RecoverTemporaryChangesAsync");
     }
 
     private sealed class SyncProgress(Action<InstallProgress> report) : IProgress<InstallProgress>
@@ -746,9 +750,9 @@ public sealed class PipeContractTests : IAsyncLifetime
             return Stream(progress);
         }
 
-        public InstallReport UninstallApps(IReadOnlyList<string> appIds, IProgress<InstallProgress>? progress = null)
+        public InstallReport UninstallApps(IReadOnlyList<string> appIds, bool confirmed, IProgress<InstallProgress>? progress = null)
         {
-            LastCall = $"UninstallApps {string.Join(",", appIds)}";
+            LastCall = $"UninstallApps {string.Join(",", appIds)} {confirmed}";
             return Stream(progress);
         }
 
@@ -866,6 +870,18 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         public IReadOnlyList<ProfileNote> TakeProfileNotes() =>
             [new ProfileNote("S-1-5-21-test", ProfileNoteKind.Skipped, "Profile skipped", "cs2's profile was skipped.")];
+
+        // Service-side commands with no pipe request: on IEngine so the service reaches them through the seam.
+        public GameProfile? ProfileFor(string exePath) => null;
+
+        public ProfileRunResult StartProfile(string exePath, int processId) => new(true, "Started.", []);
+
+        public ProfileRunResult StopProfile(string exePath) => new(true, "Stopped.", []);
+
+        public ProfileRunResult RecoverTemporaryChanges() => new(true, "Nothing left behind.", []);
+
+        public Task<CleanupReport?> RunWeeklyCleanupIfDueAsync(CancellationToken cancellation = default) =>
+            Task.FromResult<CleanupReport?>(null);
 
         private static readonly GpuTuningView Gpu = new(
             "amd:0", "AMD Radeon RX 7800 XT", GpuVendor.Amd,

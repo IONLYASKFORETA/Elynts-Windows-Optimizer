@@ -64,6 +64,12 @@ public sealed record TweakDefinition(
     /// </summary>
     public bool ProfileEligible { get; init; }
 
+    /// <summary>
+    /// Ends on its own after a while (the 35-day update pause). Drift never reports or re-applies it once it ran out,
+    /// so a bounded change can't be renewed forever.
+    /// </summary>
+    public bool Expires { get; init; }
+
     /// <summary>A per-game choice listed before a game is picked (see <see cref="PerGameTweak"/>). It can't be applied itself.</summary>
     public bool PerGame { get; init; }
 }

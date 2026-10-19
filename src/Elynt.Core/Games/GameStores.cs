@@ -39,11 +39,7 @@ public sealed class JsonFileGameStore(string folder) : IGameStore
 
     public void Save(string user, IReadOnlyList<string> exePaths)
     {
-        Directory.CreateDirectory(folder);
-        var path = PathFor(user);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(exePaths));
-        File.Move(temp, path, overwrite: true);
+        AtomicFile.Write(PathFor(user), JsonSerializer.Serialize(exePaths));
     }
 
     // A SID is safe as a file name; anything else is stripped to letters, digits and dashes.

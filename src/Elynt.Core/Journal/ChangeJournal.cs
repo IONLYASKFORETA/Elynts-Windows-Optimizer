@@ -61,7 +61,7 @@ public sealed class JournalEntry
     /// Made by a per-game profile: undone when the game closes, and at the next service start if it is still in
     /// place after a crash or reboot.
     /// </summary>
-    public bool Temporary { get; init; }
+    public bool Temporary { get; set; }
 }
 
 /// <summary>
@@ -110,15 +110,12 @@ public sealed class ChangeJournal
         return entry;
     }
 
-    public void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at)
-    {
-        lock (_gate)
+    public void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at) =>
+        Change([entry], e =>
         {
-            entry.Status = status;
-            entry.ClosedAt = status == EntryStatus.Applied ? null : at;
-            _store.Save(_entries);
-        }
-    }
+            e.Status = status;
+            e.ClosedAt = status == EntryStatus.Applied ? null : at;
+        });
 
     /// <summary>
     /// Marks the newest open change to this tweak as reverted and any older open ones as superseded, so a second
@@ -128,13 +125,13 @@ public sealed class ChangeJournal
     {
         lock (_gate)
         {
-            foreach (var entry in _entries.Where(e =>
-                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied))
+            var open = _entries.Where(e =>
+                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied).ToList();
+            Change(open, entry =>
             {
                 entry.Status = entry == newest ? EntryStatus.Reverted : EntryStatus.Superseded;
                 entry.ClosedAt = at;
-            }
-            _store.Save(_entries);
+            });
         }
     }
 
@@ -144,13 +141,41 @@ public sealed class ChangeJournal
     /// </summary>
     public void Supersede(JournalEntry older, DateTimeOffset at)
     {
+        Change([older], e =>
+        {
+            e.Status = EntryStatus.Superseded;
+            e.ClosedAt = at;
+        });
+    }
+
+    /// <summary>
+    /// Changes entries and saves the journal. When the save fails the entries go back to how they were, so memory
+    /// never claims what the disk doesn't hold.
+    /// </summary>
+    private void Change(IReadOnlyList<JournalEntry> entries, Action<JournalEntry> change)
+    {
         lock (_gate)
         {
-            older.Status = EntryStatus.Superseded;
-            older.ClosedAt = at;
-            _store.Save(_entries);
+            var before = entries.Select(e => (e.Status, e.ClosedAt, e.Temporary)).ToList();
+            foreach (var entry in entries)
+                change(entry);
+            try
+            {
+                _store.Save(_entries);
+            }
+            catch
+            {
+                for (var i = 0; i < entries.Count; i++)
+                    (entries[i].Status, entries[i].ClosedAt, entries[i].Temporary) = before[i];
+                throw;
+            }
         }
     }
+
+    /// <summary>
+    /// A temporary change the user chose to keep: it is no longer undone when the game closes or the service starts.
+    /// </summary>
+    public void KeepPermanently(JournalEntry entry) => Change([entry], e => e.Temporary = false);
 
     /// <summary>When this tweak was last applied or undone for this user, or null if it never was.</summary>
     public DateTimeOffset? LastChangedAt(string tweakId, string user)

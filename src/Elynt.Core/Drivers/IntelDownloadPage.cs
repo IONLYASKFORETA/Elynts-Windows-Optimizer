@@ -30,6 +30,10 @@ internal static partial class IntelDownloadPage
             ? match.Value
             : throw new InvalidDataException("Intel's download page no longer shows a version the app recognises.");
 
+    /// <summary>Whether the page names a hash of this kind at all.</summary>
+    public static bool HasHash(string page, string algorithm) =>
+        Regex.IsMatch(page, $@"\b{algorithm}\s*:", RegexOptions.IgnoreCase);
+
     /// <summary>The one hash of this kind on the page (SHA512 or SHA256), in hex. Throws when there isn't exactly one.</summary>
     public static string Hash(string page, string algorithm, int hexLength)
     {

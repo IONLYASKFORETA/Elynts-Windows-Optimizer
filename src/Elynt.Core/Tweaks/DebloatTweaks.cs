@@ -328,8 +328,8 @@ public static class DebloatTweaks
         Name: "Turn off Game DVR background recording",
         WhatItDoes:
             "Turns off \"Record what happened\", the background recording that keeps the last few minutes of play. " +
-            "Game Bar and the Xbox apps stay installed and working, so you can still record on demand, and X3D core " +
-            "parking (which needs Game Bar) keeps working.",
+            "Game Bar and the Xbox apps stay installed and working, and you can still record on demand (Win+Alt+R). " +
+            "Game Bar staying on also matters on dual-CCD Ryzen X3D CPUs, whose core parking relies on it.",
         Evidence:
             "Background recording continuously encodes video while you play. Microsoft's own troubleshooting fixes a " +
             "performance problem by turning it off. The benefit depends on your hardware, and no benchmark shows " +
@@ -343,8 +343,9 @@ public static class DebloatTweaks
         Undo: PutsBack,
         Steps:
         [
-            CurrentUser(@"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0),
-            CurrentUser(@"System\GameConfigStore", "GameDVR_Enabled", 0),
+            // The Settings switch "Record what happened" (Settings > Gaming > Captures). AppCaptureEnabled and
+            // GameDVR_Enabled would turn off all capture, on-demand recording too, so they are left alone.
+            CurrentUser(@"Software\Microsoft\Windows\CurrentVersion\GameDVR", "HistoricalCaptureEnabled", 0),
         ]);
 
     public static IReadOnlyList<TweakDefinition> All { get; } =

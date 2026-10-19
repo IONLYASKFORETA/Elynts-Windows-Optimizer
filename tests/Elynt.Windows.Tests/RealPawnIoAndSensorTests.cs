@@ -64,7 +64,8 @@ public sealed class RealPawnIoAndSensorTests
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Needs Windows.");
 
-        var readings = new NvmlSensors().Read();
+        using var nvml = new NvmlLibrary();
+        var readings = new NvmlSensors(nvml).Read();
 
         Assert.All(readings, r => Assert.StartsWith("nvidia", r.Id));
     }

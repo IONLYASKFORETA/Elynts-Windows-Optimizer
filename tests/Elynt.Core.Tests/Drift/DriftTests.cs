@@ -132,6 +132,44 @@ public class DriftTests
     }
 
     [Fact]
+    public void A_quick_check_only_looks_at_whether_changes_are_in_place_and_a_full_check_also_rechecks_they_fit_the_pc()
+    {
+        var tweak = LabelTests.TestTweak("test.nvidia-only") with { Applicability = new(RequiresAll: HardwareTraits.NvidiaGpu) };
+        Engine Fixed() => new(new Catalogue([tweak]), new SystemAdapters(_registry, _system), new ChangeJournal(_journal), User, driftStore: _drift);
+        Assert.True(Fixed().Apply(tweak.Id).Succeeded);
+        Assert.Equal(DriftCheckKind.Full, Fixed().CheckDrift().Kind);
+
+        // The GPU was swapped; the setting itself is untouched.
+        _system.Hardware = HardwareTraits.AmdCpu;
+        var quick = Fixed().CheckDrift();
+        Assert.Equal(DriftCheckKind.Quick, quick.Kind);
+        Assert.Empty(quick.Drifted);
+        Assert.Empty(quick.NewlyUnsupported);
+
+        _system.OsBuild = "26200.1";
+        var full = Fixed().CheckDrift();
+        Assert.Equal(DriftCheckKind.Full, full.Kind);
+        Assert.Equal(tweak.Id, Assert.Single(full.NewlyUnsupported).TweakId);
+    }
+
+    [Fact]
+    public void A_quick_check_still_marks_a_drifted_change_whose_target_is_gone_rather_than_offering_it()
+    {
+        _features.Add("Recall", enabled: true);
+        Assert.True(NewEngine().Apply("privacy.remove-recall").Succeeded);
+        NewEngine().CheckDrift();
+
+        var features = new FakeOptionalFeatures();
+        var engine = new Engine(Catalogue.Default, new SystemAdapters(_registry, _system) { Apps = _apps, Features = features },
+            new ChangeJournal(_journal), User, driftStore: _drift);
+
+        var quick = engine.CheckDrift();
+        Assert.Equal(DriftCheckKind.Quick, quick.Kind);
+        Assert.Empty(quick.Drifted);
+        Assert.Equal("privacy.remove-recall", Assert.Single(quick.NewlyUnsupported).TweakId);
+    }
+
+    [Fact]
     public void A_change_whose_target_a_new_build_removed_is_marked_unsupported_once_and_then_skipped_quietly()
     {
         _features.Add("Recall", enabled: true);

@@ -205,6 +205,9 @@ internal sealed class PawnIoManager(SystemAdapters system, Func<IReadOnlyList<In
             var signature = _adapters!.Signatures.Check(path);
             if (!signature.Trusted)
                 return "PawnIO's setup isn't validly signed, so it wasn't run.";
+            var expected = _adapters.Release.Signer;
+            if (!string.Equals(signature.Signer?.Trim(), expected, StringComparison.OrdinalIgnoreCase))
+                return $"PawnIO's setup is signed by \"{signature.Signer}\", not {expected}, so it wasn't run.";
             log.LogInformation("PawnIO's setup is signed by {Signer}", signature.Signer);
             return null;
         }

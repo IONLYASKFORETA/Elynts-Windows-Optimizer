@@ -15,17 +15,27 @@ public class CleanupTests
     private readonly InMemoryCleanupScheduleStore _schedules = new();
     private readonly FakeClock _clock = new(new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero));
 
-    private Engine NewEngine() => new(
+    private Engine NewEngine(Safety.SafetyNet? safetyNet = null) => new(
         Catalogue.Default,
         new SystemAdapters(_registry, new FakeSystemInfo(), Cleanup: _pc),
         new ChangeJournal(new InMemoryJournalStore()),
         User,
+        safetyNet,
         clock: _clock,
         cleanupSchedules: _schedules);
 
     private CleanupCategoryView Category(CleanupScan scan, string id) => scan.Categories.Single(c => c.Id == id);
 
     private Task<CleanupScan> ScanAsync() => NewEngine().ScanCleanupAsync(cancellation: TestContext.Current.CancellationToken);
+
+    /// <summary>An engine that has scanned, as the Cleanup page does before Clean. The scan's measuring isn't kept as an action.</summary>
+    private async Task<Engine> ScannedEngineAsync(Engine? engine = null)
+    {
+        engine ??= NewEngine();
+        await engine.ScanCleanupAsync(cancellation: TestContext.Current.CancellationToken);
+        _pc.Actions.Clear();
+        return engine;
+    }
 
     [Fact]
     public async Task A_scan_reports_the_size_of_every_category_and_deletes_nothing()
@@ -83,12 +93,12 @@ public class CleanupTests
         Assert.False(chrome.Ticked);
         Assert.Contains("Chrome is open", chrome.SkippedReason);
 
-        var report = await NewEngine().CleanAsync([CleanupCategoryIds.ChromeCache], false, cancellation: TestContext.Current.CancellationToken);
+        var report = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.ChromeCache], false, cancellation: TestContext.Current.CancellationToken);
         Assert.False(Assert.Single(report.Categories).Cleaned);
         Assert.True(_pc.FileExists($@"{Local}\Google\Chrome\User Data\Default\Cache\Cache_Data\f_000001"));
 
         _pc.Running.Clear();
-        report = await NewEngine().CleanAsync([CleanupCategoryIds.ChromeCache], false, cancellation: TestContext.Current.CancellationToken);
+        report = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.ChromeCache], false, cancellation: TestContext.Current.CancellationToken);
         Assert.True(report.Succeeded, report.Message);
         Assert.Equal(10_000, report.BytesFreed);
         Assert.False(_pc.FileExists($@"{Local}\Google\Chrome\User Data\Profile 1\Cache\Cache_Data\f_000002"));
@@ -109,7 +119,7 @@ public class CleanupTests
         _pc.AddFile($@"{FakeCleanupSystem.Profile}\NTUSER.DAT", 1_000);
 
         var scan = await ScanAsync();
-        await NewEngine().CleanAsync(scan.Categories.Select(c => c.Id).ToList(), confirmDestructive: true,
+        await (await ScannedEngineAsync()).CleanAsync(scan.Categories.Select(c => c.Id).ToList(), confirmDestructive: true,
             cancellation: TestContext.Current.CancellationToken);
 
         Assert.All(scan.Categories, c => Assert.DoesNotContain(c.Locations, l => l.Contains(folder, StringComparison.OrdinalIgnoreCase)));
@@ -153,7 +163,7 @@ public class CleanupTests
         _pc.Resolve(CleanupRoot.UserLocalAppData, "Temp", folder);
 
         var temp = Category(await ScanAsync(), CleanupCategoryIds.TempFiles);
-        var report = await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles], false, cancellation: TestContext.Current.CancellationToken);
+        var report = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.TempFiles], false, cancellation: TestContext.Current.CancellationToken);
 
         Assert.Empty(temp.Locations);
         Assert.Equal(0, temp.SizeBytes);
@@ -172,7 +182,7 @@ public class CleanupTests
         _pc.AddFile($@"{Local}\NVIDIA\DXCache\shader.bin", 16_000);
         var progress = new List<CleanupProgress>();
 
-        var report = await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles, CleanupCategoryIds.Thumbnails], false, new Collect(progress),
+        var report = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.TempFiles, CleanupCategoryIds.Thumbnails], false, new Collect(progress),
             TestContext.Current.CancellationToken);
 
         Assert.True(report.Succeeded, report.Message);
@@ -209,7 +219,7 @@ public class CleanupTests
         SeedDestructiveExtras();
         _pc.AddFile(@"C:\Windows\Temp\a.tmp", 1_000);
 
-        var refused = await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles, id], confirmDestructive: false,
+        var refused = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.TempFiles, id], confirmDestructive: false,
             cancellation: TestContext.Current.CancellationToken);
 
         Assert.False(refused.Succeeded);
@@ -219,7 +229,7 @@ public class CleanupTests
         Assert.Empty(_pc.Actions);
         Assert.True(_pc.FileExists(@"C:\Windows\Temp\a.tmp"));
 
-        var confirmed = await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles, id], confirmDestructive: true,
+        var confirmed = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.TempFiles, id], confirmDestructive: true,
             cancellation: TestContext.Current.CancellationToken);
         Assert.True(confirmed.Succeeded, confirmed.Message);
         Assert.False(_pc.FileExists(@"C:\Windows\Temp\a.tmp"));
@@ -240,7 +250,7 @@ public class CleanupTests
         Assert.Contains(drivers.Locations, l => l.StartsWith("oem10.inf"));
         Assert.Contains(drivers.Locations, l => l.StartsWith("oem11.inf"));
 
-        var report = await NewEngine().CleanAsync(
+        var report = await (await ScannedEngineAsync()).CleanAsync(
             [CleanupCategoryIds.WindowsOld, CleanupCategoryIds.ComponentStore, CleanupCategoryIds.OldDrivers, CleanupCategoryIds.RecycleBin],
             confirmDestructive: true, cancellation: TestContext.Current.CancellationToken);
 
@@ -259,7 +269,7 @@ public class CleanupTests
         _pc.RunExitCode = unchecked((int)0x800f0806);
         _pc.AddFile(@"C:\Windows\Temp\a.tmp", 1_000);
 
-        var report = await NewEngine().CleanAsync([CleanupCategoryIds.ComponentStore, CleanupCategoryIds.TempFiles], true,
+        var report = await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.ComponentStore, CleanupCategoryIds.TempFiles], true,
             cancellation: TestContext.Current.CancellationToken);
 
         Assert.False(report.Succeeded);
@@ -273,9 +283,9 @@ public class CleanupTests
     {
         _pc.AddFile(@"C:\Windows\Temp\a.tmp", 1_000);
 
-        Assert.False((await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles, "cleanup.documents"], true,
+        Assert.False((await (await ScannedEngineAsync()).CleanAsync([CleanupCategoryIds.TempFiles, "cleanup.documents"], true,
             cancellation: TestContext.Current.CancellationToken)).Succeeded);
-        Assert.False((await NewEngine().CleanAsync([], true, cancellation: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.False((await (await ScannedEngineAsync()).CleanAsync([], true, cancellation: TestContext.Current.CancellationToken)).Succeeded);
         Assert.Empty(_pc.Actions);
     }
 
@@ -379,7 +389,7 @@ public class CleanupTests
     public async Task Cleanup_leaves_Storage_Sense_and_the_registry_alone()
     {
         SeedDestructiveExtras();
-        var engine = NewEngine();
+        var engine = await ScannedEngineAsync();
 
         await engine.CleanAsync(CleanupCatalogue.Default.Categories.Select(c => c.Id).ToList(), true, cancellation: TestContext.Current.CancellationToken);
         engine.SetWeeklyCleanup(true);
@@ -388,6 +398,85 @@ public class CleanupTests
         Assert.True(_registry.IsEmpty);
         Assert.DoesNotContain(Catalogue.Default.Tweaks.SelectMany(t => t.Steps).OfType<Registry.RegistryValueStep>(),
             step => step.Location.KeyPath.Contains("StorageSense", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Cleaning_without_a_scan_first_is_refused_and_nothing_is_deleted()
+    {
+        _pc.AddFile(@"C:\Windows\Temp\a.tmp", 1_000);
+
+        var report = await NewEngine().CleanAsync([CleanupCategoryIds.TempFiles], false, cancellation: TestContext.Current.CancellationToken);
+
+        Assert.False(report.Succeeded);
+        Assert.Contains("Scan first", report.Message);
+        Assert.True(_pc.FileExists(@"C:\Windows\Temp\a.tmp"));
+        Assert.DoesNotContain(_pc.Actions, a => a.StartsWith("clear"));
+    }
+
+    [Fact]
+    public async Task Destructive_cleaning_attempts_a_restore_point_and_backs_up_the_drivers_first()
+    {
+        SeedDestructiveExtras();
+        var restorePoints = new RecordingRestorePoints();
+        var backups = new RecordingStoreBackups();
+        var engine = await ScannedEngineAsync(NewEngine(new Safety.SafetyNet(restorePoints, backups, _clock)));
+
+        var report = await engine.CleanAsync([CleanupCategoryIds.OldDrivers, CleanupCategoryIds.WindowsOld], true,
+            cancellation: TestContext.Current.CancellationToken);
+
+        Assert.True(report.Succeeded, report.Message);
+        Assert.Single(restorePoints.Attempts);
+        Assert.Equal([Safety.BackupStore.Drivers], backups.Exports);
+    }
+
+    [Fact]
+    public async Task Old_drivers_are_kept_when_the_drivers_cannot_be_backed_up()
+    {
+        SeedDestructiveExtras();
+        var backups = new RecordingStoreBackups { Fail = true };
+        var engine = await ScannedEngineAsync(NewEngine(new Safety.SafetyNet(new RecordingRestorePoints(), backups, _clock)));
+
+        var report = await engine.CleanAsync([CleanupCategoryIds.OldDrivers], true, cancellation: TestContext.Current.CancellationToken);
+
+        Assert.False(report.Succeeded);
+        Assert.Contains("Nothing was deleted", report.Message);
+        Assert.Equal(5, _pc.DriverPackages.Count);
+    }
+
+    [Fact]
+    public async Task Safe_cleaning_needs_no_restore_point()
+    {
+        _pc.AddFile(@"C:\Windows\Temp\a.tmp", 1_000);
+        var restorePoints = new RecordingRestorePoints();
+        var engine = await ScannedEngineAsync(NewEngine(new Safety.SafetyNet(restorePoints, new RecordingStoreBackups(), _clock)));
+
+        Assert.True((await engine.CleanAsync([CleanupCategoryIds.TempFiles], false, cancellation: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.Empty(restorePoints.Attempts);
+    }
+
+    private sealed class RecordingRestorePoints : Safety.IRestorePoints
+    {
+        public List<string> Attempts { get; } = [];
+
+        public Safety.RestorePointResult TryCreate(string description)
+        {
+            Attempts.Add(description);
+            return Safety.RestorePointResult.Created();
+        }
+    }
+
+    private sealed class RecordingStoreBackups : Safety.IStoreBackups
+    {
+        public List<Safety.BackupStore> Exports { get; } = [];
+        public bool Fail { get; set; }
+
+        public string Export(Safety.BackupStore store)
+        {
+            if (Fail)
+                throw new IOException("pnputil /export-driver failed.");
+            Exports.Add(store);
+            return store.ToString();
+        }
     }
 
     private void SeedDestructiveExtras()

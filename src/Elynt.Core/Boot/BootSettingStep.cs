@@ -20,6 +20,8 @@ public sealed record BootSettingStep(string Element, string? Value) : TweakStep
 {
     public override ChangeTarget Target => new BootSettingTarget(Element, Value);
 
+    public override Safety.BackupStore? Store => Safety.BackupStore.BootConfiguration;
+
     public override string DescribeChange() => Value is null
         ? $"Remove the boot setting {Element} (bcdedit /deletevalue {{current}} {Element})"
         : $"Set the boot setting {Element} to {Value} (bcdedit /set {{current}} {Element} {Value})";

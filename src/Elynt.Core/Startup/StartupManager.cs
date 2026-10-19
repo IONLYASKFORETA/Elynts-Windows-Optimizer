@@ -2,7 +2,6 @@ using Elynt.Core.Journal;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elynt.Core.Startup;
 
@@ -11,18 +10,21 @@ namespace Elynt.Core.Startup;
 /// off or on through the same switch Task Manager uses (journaled, so it shows in Undo history); deleting one
 /// (destructive); and spotting items added since the last look.
 /// </summary>
+/// <param name="apply">
+/// The Engine's own apply: hard rules, safety net, write-ahead journal and roll-back, for a switch described as a
+/// one-step tweak.
+/// </param>
 internal sealed class StartupManager(
     SystemAdapters system,
     ChangeJournal journal,
     string user,
     SafetyNet? safetyNet,
     TimeProvider clock,
-    ILogger? logger)
+    ILogger _log,
+    Func<TweakDefinition, ChangeWording, CommandResult> apply)
 {
     /// <summary>Journal entries for startup switches use this prefix before the item id instead of a tweak id.</summary>
     public const string JournalPrefix = "startup:";
-
-    private readonly ILogger _log = logger ?? NullLogger.Instance;
 
     public static bool Owns(string journalId) => journalId.StartsWith(JournalPrefix, StringComparison.Ordinal);
 
@@ -146,33 +148,19 @@ internal sealed class StartupManager(
         return $"Startup item: {name}";
     }
 
+    /// <summary>Makes the switch through the Engine's apply, worded for the Startup page.</summary>
     private StartupCommandResult Change(StartupItem item, TweakStep step, string message)
     {
-        string? note;
-        try
+        var result = apply(AsTweak(item, step), ChangeWording.Tweak with
         {
-            note = safetyNet?.BeforeChange(AsTweak(item, step));
-        }
-        catch (BackupFailedException ex)
-        {
-            return Failed(item, $"{ex.Message} Nothing was changed.");
-        }
-
-        var record = step.Capture(system);
-        var entry = journal.Open(JournalId(item), user, system.System.OsBuild, clock.GetUtcNow(), [record]);
-        try
-        {
-            step.Apply(system);
-        }
-        catch
-        {
-            record.Revert(system);
-            journal.Close(entry, EntryStatus.RolledBack, clock.GetUtcNow());
-            throw;
-        }
-        journal.Close(entry, EntryStatus.Applied, clock.GetUtcNow());
-        _log.LogInformation("Startup item {Item} switched for {User}", item.Id, user);
-        return Done(item, note is null ? message : $"{message} {note}");
+            Done = message,
+            AlreadyDone = "Already set. Nothing was changed.",
+            CouldNot = "Couldn't change this",
+            UndoHint = "undo it from Undo history",
+        });
+        if (result.Succeeded)
+            _log.LogInformation("Startup item {Item} switched for {User}", item.Id, user);
+        return result.Succeeded ? Done(item, result.Message) : Failed(item, result.Message);
     }
 
     private List<string> Conflicts(JournalEntry entry) =>

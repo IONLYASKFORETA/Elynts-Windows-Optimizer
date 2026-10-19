@@ -67,3 +67,26 @@ value that something else changed since, and says which one. Before changes the 
 Restore point (at most once a day; Windows skips more anyway) and tells you when Windows skipped it.
 
 Logs roll daily and keep 14 days.
+
+## Drift after Windows updates
+
+At each service start the app quickly checks that every change it made is still in place; the first check, and the
+first after the Windows build changes, is a full check that also re-checks every change still fits this build and PC.
+Changes Windows undid are listed for re-apply (all, or pick). Automatic re-apply is off by default, and even when on
+it never re-applies destructive changes, changes that need a restart, or changes with a must-read warning (a tweak
+with an apply warning): those always wait for you. The update pause is not drift when it ends.
+
+## Security model and accepted risks
+
+- **Who can drive the service.** The service runs as SYSTEM and listens on a named pipe that any interactively
+  signed-in user may open (`InteractiveSid`, `src/Elynt.Service/EngineHost.cs`); network logons are denied. That is
+  deliberate: the app window runs without admin rights, and the app is meant for a single-user gaming PC. It means
+  any interactive user on the PC, admin or not, can ask the service for SYSTEM-level actions: tweaks, driver
+  installs and cleaning (pnputil), PawnIO, CPU (SMU/MSR) and GPU tuning. Hard rules (never remove Edge, never block
+  quality or security updates, destructive actions need confirmation) are enforced in the service, not the window,
+  so they hold whoever connects. On a PC shared with people you don't trust with admin rights, don't install it.
+- **Unsigned update channel.** Beta and stable builds come from the public releases repo (Velopack, [docs/releasing.md](docs/releasing.md)) over HTTPS and are not
+  code-signed (signing costs money). Trust rests on GitHub's account security and HTTPS; anyone who can publish to the
+  releases repo can ship an update. This is an accepted risk for a private app shared with friends.
+- **Downloads the service runs as SYSTEM** (GPU and chipset drivers, DDU, PawnIO) are checked first: vendor hash
+  where the vendor publishes one, and an Authenticode signature from the expected signer.

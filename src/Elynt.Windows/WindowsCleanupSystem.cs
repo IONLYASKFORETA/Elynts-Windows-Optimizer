@@ -191,13 +191,7 @@ public sealed partial class WindowsCleanupSystem(string userSid, Func<CleanupRoo
         };
     }
 
-    private string UserProfile()
-    {
-        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        using var key = machine.OpenSubKey($@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\{userSid}");
-        return key?.GetValue("ProfileImagePath") as string
-            ?? throw new InvalidOperationException("Couldn't find your user profile folder.");
-    }
+    private string UserProfile() => UserProfiles.Require(userSid);
 
     /// <summary>Every .inf a device (present or not) was installed from, from the device class keys.</summary>
     private static HashSet<string> InfsInUse()

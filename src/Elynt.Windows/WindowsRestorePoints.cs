@@ -1,4 +1,3 @@
-using System.Text;
 using Elynt.Core.Safety;
 
 namespace Elynt.Windows;
@@ -29,13 +28,7 @@ public sealed class WindowsRestorePoints : IRestorePoints
 
     public RestorePointResult TryCreate(string description)
     {
-        var quoted = "'" + description.Replace("'", "''") + "'";
-        var command = $"$description = {quoted}\n{Script}";
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
-        var output = SystemCommand.Run(
-            Path.Combine("WindowsPowerShell", "v1.0", "powershell.exe"),
-            ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
-            TimeSpan.FromMinutes(3)).Trim();
+        var output = PowerShell.Run($"$description = {PowerShell.Quote(description)}\n{Script}", TimeSpan.FromMinutes(3), stopOnError: false).Trim();
 
         if (output.EndsWith("CREATED", StringComparison.Ordinal))
             return RestorePointResult.Created();

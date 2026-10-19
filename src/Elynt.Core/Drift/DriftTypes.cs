@@ -10,8 +10,8 @@ public enum DriftKind
 }
 
 /// <summary>
-/// How thorough a drift check was. Quick checks detect every applied change; a full check, run when the Windows build
-/// changed, also re-checks whether each change still fits this build.
+/// How thorough a drift check was. Quick checks detect whether every applied change is still in place; a full check,
+/// run first and whenever the Windows build changed, also re-checks whether every change still fits this build and PC.
 /// </summary>
 public enum DriftCheckKind
 {

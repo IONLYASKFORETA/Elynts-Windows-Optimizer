@@ -70,6 +70,7 @@ public sealed class IntelGpuTuningTests : IDisposable
 
         _gpu.Force(GpuControls.ClockOffset, 0); // like a driver that doesn't keep settings across a reboot
         CleanRestart();
+        _service.OnLogon();
 
         Assert.Equal(100, _gpu.Value(GpuControls.ClockOffset));
         var gpu = NewEngine().GetGpuTuning().Gpus.Single();

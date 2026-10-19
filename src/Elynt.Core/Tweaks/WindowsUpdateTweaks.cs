@@ -4,7 +4,7 @@ namespace Elynt.Core.Tweaks;
 
 /// <summary>
 /// The Windows Update section. Every control is a plain journaled registry tweak, so undo puts back exactly what
-/// was there. Quality updates are only ever paused by the user's own choice or deferred at most 30 days, and the
+/// was there. Quality updates are only ever paused for at most 35 days or deferred at most 30 days, and the
 /// update service itself is never touched (see <see cref="HardRules"/>).
 /// </summary>
 public static class WindowsUpdateTweaks
@@ -17,16 +17,14 @@ public static class WindowsUpdateTweaks
     /// <summary>
     /// Microsoft's Policy CSP lists Windows Update for Business (target version, deferral, driver exclusion) and
     /// Delivery Optimization's download mode for these editions only; Home is not listed. Checked against the docs,
-    /// not on a real Home PC.
+    /// not on a real Home PC. Driver exclusion and Delivery Optimization also write a setting Home honours, so they are
+    /// offered everywhere.
     /// </summary>
     private static readonly Applicability BusinessEditions =
         new(Editions: [WindowsEdition.Pro, WindowsEdition.Education, WindowsEdition.Enterprise]);
 
     private static readonly Source Restarts = new(
         "Microsoft: Manage device restarts after updates", "https://learn.microsoft.com/en-us/windows/deployment/update/waas-restart");
-
-    private const string PauseStart = "2026-01-01T00:00:00Z";
-    private const string PauseEnd = "2077-01-01T00:00:00Z";
 
     private static readonly Source UpdatePolicies = new(
         "Microsoft: Policy CSP - Update", "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-update");
@@ -41,33 +39,34 @@ public static class WindowsUpdateTweaks
         new(AntiCheat.Ricochet, AntiCheatSeverity.Restricted, "Some TPM attestation failures are fixed by a Windows update"),
     ];
 
-    public static TweakDefinition PauseIndefinitely { get; } = new(
+    public static TweakDefinition Pause { get; } = new(
         Id: "update.pause",
         Section: Sections.WindowsUpdate,
-        Name: "Pause updates until you resume them",
+        Name: "Pause updates for 5 weeks",
         WhatItDoes:
-            "Pauses all Windows updates, feature and quality, until you switch this off, instead of Windows' own 5-week " +
-            "limit. Security fixes stop arriving while paused, so use \"Check and install now\" from time to time; it " +
-            "still works while paused. Settings shows updates as paused until 2077.",
+            "Pauses feature and quality updates for 35 days from today, the longest Windows itself allows. Updates " +
+            "resume on their own after that, and Windows installs the waiting ones before it lets you pause again. " +
+            "Security fixes wait while paused, so use \"Check and install now\" if one matters; it still works while paused.",
         Evidence:
-            "Uses the same pause values the Settings app writes, with a far-off end date. Pausing is for keeping a " +
-            "working setup stable during a tournament or a busy week, not for speed.",
+            "Uses the same pause values the Settings app writes when you pick \"Pause for 5 weeks\". Pausing is for " +
+            "keeping a working setup stable during a tournament or a busy week, not for speed.",
         Sources: [UpdatePolicies],
         Tier: EvidenceTier.Situational,
         Undo: "Puts back the previous pause values. If updates weren't paused before, they resume straight away.",
         Steps:
         [
-            Ux("FlightSettingsMaxPauseDays", RegistryValue.DWord(18627)),
-            Ux("PauseUpdatesStartTime", RegistryValue.String(PauseStart)),
-            Ux("PauseUpdatesExpiryTime", RegistryValue.String(PauseEnd)),
-            Ux("PauseFeatureUpdatesStartTime", RegistryValue.String(PauseStart)),
-            Ux("PauseFeatureUpdatesEndTime", RegistryValue.String(PauseEnd)),
-            Ux("PauseQualityUpdatesStartTime", RegistryValue.String(PauseStart)),
-            Ux("PauseQualityUpdatesEndTime", RegistryValue.String(PauseEnd)),
+            PauseValue("PauseUpdatesStartTime", isEnd: false),
+            PauseValue("PauseUpdatesExpiryTime", isEnd: true),
+            PauseValue("PauseFeatureUpdatesStartTime", isEnd: false),
+            PauseValue("PauseFeatureUpdatesEndTime", isEnd: true),
+            PauseValue("PauseQualityUpdatesStartTime", isEnd: false),
+            PauseValue("PauseQualityUpdatesEndTime", isEnd: true),
         ])
     {
         Risks = RiskFlags.SecurityRisk,
         AntiCheat = OutdatedWindowsConflicts,
+        // Windows ends the pause itself; putting it back would turn a bounded pause into an endless one.
+        Expires = true,
     };
 
     /// <summary>Windows 11 version names by build. Only versions still serviced for Home and Pro are offered.</summary>
@@ -88,15 +87,21 @@ public static class WindowsUpdateTweaks
             "drivers you installed (from the Drivers section or the vendor) with older ones. New devices you plug in " +
             "may need their driver installed by hand.",
         Evidence:
-            "Microsoft's ExcludeWUDriversInQualityUpdate policy. Windows Update replacing a freshly installed GPU driver " +
-            "is a long-standing complaint from NVIDIA and AMD users.",
+            "Microsoft's ExcludeWUDriversInQualityUpdate policy (Pro and up), plus the Device Installation Settings " +
+            "switch \"Automatically download manufacturers' apps and custom icons\" set to No, which every edition " +
+            "honours. Windows Update replacing a freshly installed GPU driver is a long-standing complaint from NVIDIA " +
+            "and AMD users.",
         Sources: [UpdatePolicies],
         Tier: EvidenceTier.Proven,
-        Undo: "Puts back the previous policy value, or removes it if there was none, so Windows Update offers drivers again.",
-        Steps: [Policy("ExcludeWUDriversInQualityUpdate", 1)])
-    {
-        Applicability = BusinessEditions,
-    };
+        Undo: "Puts back the previous values, or removes them if there were none, so Windows Update offers drivers again.",
+        Steps:
+        [
+            Policy("ExcludeWUDriversInQualityUpdate", 1),
+            // System Properties > Hardware > Device Installation Settings: "No". Honoured on Home, where the policy isn't.
+            new RegistryValueStep(
+                new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig"),
+                RegistryValue.DWord(0)),
+        ]);
 
     public static TweakDefinition ActiveHours { get; } = new(
         Id: "update.active-hours",
@@ -146,7 +151,8 @@ public static class WindowsUpdateTweaks
             "Turns off Delivery Optimization peering: Windows downloads updates only from Microsoft and never uploads " +
             "them to other PCs on your network or the internet, so updates don't use your upload while you play.",
         Evidence:
-            "Microsoft's Delivery Optimization download mode 0, \"HTTP only, no peering\".",
+            "Microsoft's Delivery Optimization download mode 0, \"HTTP only, no peering\": the policy on Pro and up, " +
+            "and Delivery Optimization's own setting, which Home honours too.",
         Sources:
         [
             new("Microsoft: Policy CSP - DeliveryOptimization",
@@ -159,14 +165,15 @@ public static class WindowsUpdateTweaks
             new RegistryValueStep(
                 new(RegistryRoot.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization", "DODownloadMode"),
                 RegistryValue.DWord(0)),
-        ])
-    {
-        Applicability = BusinessEditions,
-    };
+            // Delivery Optimization's own (non-policy) setting, read on every edition.
+            new RegistryValueStep(
+                new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\DeliveryOptimization\Config", "DODownloadMode"),
+                RegistryValue.DWord(0)),
+        ]);
 
     public static IReadOnlyList<TweakDefinition> All { get; } =
     [
-        PauseIndefinitely, Pin24H2, Pin25H2, DeferQuality7, DeferQuality30, ExcludeDrivers, ActiveHours, NoAutoRestart,
+        Pause, Pin24H2, Pin25H2, DeferQuality7, DeferQuality30, ExcludeDrivers, ActiveHours, NoAutoRestart,
         DeliveryOptimizationSharingOff,
     ];
 
@@ -218,6 +225,9 @@ public static class WindowsUpdateTweaks
         Applicability = BusinessEditions,
         AntiCheat = OutdatedWindowsConflicts,
     };
+
+    private static UpdateControl.UpdatePauseStep PauseValue(string name, bool isEnd) =>
+        new(name, isEnd, UpdateControl.UpdatePauseStep.MaxDays);
 
     private static RegistryValueStep Ux(string name, RegistryValue value) =>
         new(new(RegistryRoot.LocalMachine, UxSettings, name), value);

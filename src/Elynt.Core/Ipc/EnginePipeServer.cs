@@ -13,13 +13,15 @@ namespace Elynt.Core.Ipc;
 /// </summary>
 /// <param name="createPipe">Creates the next listening pipe instance. The service passes one restricted to the interactive user.</param>
 /// <param name="engineFor">Builds the engine for a connected client, typically for that client's user. Called once per connection, after its first request.</param>
+/// <param name="commandLane">The main lane, shared with the service's own work (per-game profiles) so they take turns too.</param>
 public sealed class EnginePipeServer(
     Func<NamedPipeServerStream> createPipe,
     Func<NamedPipeServerStream, IEngine> engineFor,
-    ILogger<EnginePipeServer>? logger = null)
+    ILogger<EnginePipeServer>? logger = null,
+    CommandLane? commandLane = null)
 {
     private readonly ILogger _log = logger ?? NullLogger<EnginePipeServer>.Instance;
-    private readonly SemaphoreSlim _commandLane = new(1, 1);
+    private readonly SemaphoreSlim _commandLane = (commandLane ?? new CommandLane()).Semaphore;
     private readonly SemaphoreSlim _repairLane = new(1, 1);
 
     public async Task RunAsync(CancellationToken cancellation)

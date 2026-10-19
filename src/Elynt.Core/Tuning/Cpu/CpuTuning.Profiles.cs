@@ -47,6 +47,27 @@ public sealed partial class CpuTuning
             if (WhyNotInProfile(inspection, tune, options) is { } refusal)
                 return Result(false, refusal + " Nothing was changed.");
 
+            // The same stress gate and crash rule as the kept tune: nobody is watching while a game starts.
+            var profile = Profile;
+            if (profile.Disabled)
+                return Result(false, "Your CPU tune was turned off after two crashes or hardware errors, so game profiles don't " +
+                                     "tune the CPU until a tune passes the stress test again. Nothing was changed.");
+            if (_skipReapply)
+                return Result(false, "Windows crashed or logged hardware errors while the CPU was tuned, so game profiles don't " +
+                                     "tune it until the next restart. Nothing was changed.");
+            string? held = null;
+            if (tune.CurveOptimizer is { } curve)
+            {
+                if (profile.StressPassedFor?.CurveOptimizer is not { } passed)
+                    return Result(false, "Curve Optimizer in a game's profile needs a kept tune with Curve Optimizer that passed " +
+                                         "the stress test first. Nothing was changed.");
+                if (curve < passed)
+                {
+                    tune = tune with { CurveOptimizer = passed };
+                    held = $" Curve Optimizer was held at {passed}, the most that passed the stress test.";
+                }
+            }
+
             // A change still waiting to be kept goes back first, so the way back after the game is the kept state.
             _probation.RevertNow(Key);
             if (!_profileHolds)
@@ -80,7 +101,7 @@ public sealed partial class CpuTuning
             _notice = null;
             Profile = Profile with { LastAppliedAt = _clock.GetUtcNow() };
             _log.LogInformation("A game profile tuned the CPU to {Tune}", tune);
-            return Result(true, "Tuned for the game.");
+            return Result(true, "Tuned for the game." + held);
         }
     }
 

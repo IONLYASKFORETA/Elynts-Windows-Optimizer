@@ -62,15 +62,17 @@ public sealed class CpuTuningTests : IDisposable
     }
 
     [Fact]
-    public void Zen_2_gets_power_limits_but_no_Curve_Optimizer()
+    public void Ryzen_3000_is_off_the_reviewed_list_so_it_cannot_be_tuned_and_gets_no_SMU_message()
     {
         _cpu = FakeCpu.Matisse3700X();
+        var engine = NewEngine();
 
-        var cpu = NewEngine().GetCpuTuning(advanced: true);
+        var cpu = engine.GetCpuTuning(advanced: true);
+        var set = engine.SetCpuTuning(new CpuTune(PptWatts: 70), CpuTuningOptions.Default);
 
-        Assert.True(cpu.Available);
-        Assert.DoesNotContain(cpu.Controls, c => c.Id == CpuControls.CurveOptimizer);
-        Assert.Equal(88, Control(cpu, CpuControls.Ppt).Max);
+        Assert.False(cpu.Available);
+        Assert.False(set.Succeeded);
+        Assert.Empty(_cpu.SmuMessages);
     }
 
     [Fact]
@@ -284,19 +286,6 @@ public sealed class CpuTuningTests : IDisposable
         var allowed = engine.SetCpuTuning(new CpuTune(CurveOptimizer: -10), new CpuTuningOptions(Unofficial: true));
         Assert.True(allowed.Succeeded, allowed.Message);
         Assert.Equal(-10, _cpu.CurveOptimizer);
-    }
-
-    [Fact]
-    public void Zen_2_refuses_Curve_Optimizer_but_lowers_limits()
-    {
-        _cpu = FakeCpu.Matisse3700X();
-        var engine = NewEngine();
-
-        Assert.False(engine.SetCpuTuning(new CpuTune(CurveOptimizer: -5), new CpuTuningOptions(Advanced: true, Unofficial: true)).Succeeded);
-        Assert.Empty(_cpu.SmuMessages);
-
-        Assert.True(engine.SetCpuTuning(new CpuTune(PptWatts: 70), CpuTuningOptions.Default).Succeeded);
-        Assert.Equal(70.0, _cpu.Ppt);
     }
 
     [Fact]
@@ -655,6 +644,31 @@ public sealed class CpuTuningTests : IDisposable
         Assert.Equal(1, cpu.Strikes);
         Assert.Equal(-7, cpu.Kept!.CurveOptimizer);
         Assert.Contains("WHEA", cpu.Notice);
+    }
+
+    [Fact]
+    public void A_WHEA_error_before_sleep_is_a_strike_and_the_tune_is_not_re_applied_on_resume()
+    {
+        StressTestedAutoApply(new CpuTune(CurveOptimizer: -12));
+        SignInAndWait();
+        _clock.Advance(TimeSpan.FromHours(1));
+        _cpu.WheaErrors.Add(_clock.GetUtcNow());
+        _cpu.PowerCycle();
+
+        _service!.OnResume();
+        _clock.Advance(CpuTuning.ReapplyDelay);
+
+        Assert.True(_cpu.AtBios);
+        var cpu = NewEngine().GetCpuTuning(false);
+        Assert.Equal(1, cpu.Strikes);
+        Assert.Equal(-7, cpu.Kept!.CurveOptimizer);
+        Assert.Contains("WHEA", cpu.Notice);
+
+        // The same errors don't count again at the next restart.
+        Reboot();
+        SignInAndWait();
+        Assert.Equal(1, NewEngine().GetCpuTuning(false).Strikes);
+        Assert.Equal(-7, _cpu.CurveOptimizer);
     }
 
     [Fact]

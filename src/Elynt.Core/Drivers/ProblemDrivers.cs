@@ -1,3 +1,6 @@
+using Elynt.Core.Games;
+using Elynt.Core.Tweaks;
+
 namespace Elynt.Core.Drivers;
 
 /// <summary>
@@ -7,7 +10,10 @@ namespace Elynt.Core.Drivers;
 /// </summary>
 public static class ProblemDrivers
 {
-    private const string Games = "Valorant and League of Legends (Riot Vanguard) and FACEIT (CS2)";
+    /// <summary>Used when no installed game with Vanguard or FACEIT was found (or the game list couldn't be read).</summary>
+    private const string GenericGames = "Valorant and League of Legends (Riot Vanguard) and FACEIT (CS2)";
+
+    private static readonly AntiCheat[] Affected = [AntiCheat.Vanguard, AntiCheat.FaceIt];
 
     /// <param name="FixedIn">The first version that no longer causes trouble, when the sources name one.</param>
     private sealed record Known(string File, string Name, Version? FixedIn = null);
@@ -24,9 +30,13 @@ public static class ProblemDrivers
         new("mtkwl6ex", "MediaTek RZ616 Wi-Fi driver", new Version(3, 5)),
     ];
 
-    /// <summary>The installed drivers on the list, each with a warning naming the games it stops.</summary>
-    public static IReadOnlyList<ProblemDriver> Find(IEnumerable<KernelDriver> installed)
+    /// <summary>
+    /// The installed drivers on the list, each with a warning naming the games it stops: the user's own games with
+    /// Riot Vanguard or FACEIT (game detection) when there are any, otherwise the well-known ones.
+    /// </summary>
+    public static IReadOnlyList<ProblemDriver> Find(IEnumerable<KernelDriver> installed, IReadOnlyList<InstalledGame>? games = null)
     {
+        var gamesText = GamesText(games ?? []);
         var problems = new List<ProblemDriver>();
         foreach (var driver in installed)
         {
@@ -39,14 +49,24 @@ public static class ProblemDrivers
                 if (Version.TryParse(driver.FileVersion, out var version) && version >= fixedIn)
                     continue;
                 problems.Add(new ProblemDriver(known.Name, known.File + ".sys", driver.FileVersion,
-                    $"Versions before {fixedIn} of this driver stop {Games} from launching. Update it to {fixedIn} or later from your PC or Wi-Fi card maker."));
+                    $"Versions before {fixedIn} of this driver stop {gamesText} from launching. Update it to {fixedIn} or later from your PC or Wi-Fi card maker."));
                 continue;
             }
 
             problems.Add(new ProblemDriver(known.Name, known.File + ".sys", driver.FileVersion,
-                $"Some versions of this driver stop {Games} from launching. If those games won't start, update it from the maker, or switch the drive to Microsoft's built-in driver."));
+                $"Some versions of this driver stop {gamesText} from launching. If those games won't start, update it from the maker, or switch the drive to Microsoft's built-in driver."));
         }
 
         return problems;
+    }
+
+    private static string GamesText(IReadOnlyList<InstalledGame> games)
+    {
+        var parts = Affected
+            .Select(antiCheat => (antiCheat, names: games.Where(g => g.AntiCheats.Contains(antiCheat)).Select(g => g.Name).Distinct().ToList()))
+            .Where(p => p.names.Count > 0)
+            .Select(p => $"{string.Join(", ", p.names)} ({AntiCheatWarning.Name(p.antiCheat)})")
+            .ToList();
+        return parts.Count == 0 ? GenericGames : string.Join(" and ", parts);
     }
 }
