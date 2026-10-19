@@ -599,6 +599,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         var saved = await _client.SaveProfileAsync(StubEngine.Profile, cancellation);
         Assert.Equal($"SaveProfile {StubEngine.Profile.ExePath}", _engine.LastCall);
         AssertSameJson(_engine.SaveProfile(StubEngine.Profile), saved);
+        Assert.Equal(StubEngine.Profile, saved.Profile);
+
+        var checkedProfile = await _client.CheckProfileAsync(StubEngine.Profile, cancellation);
+        Assert.Equal(@"CheckProfile C:\Steam\cs2.exe -20 1100", _engine.LastCall);
+        AssertSameJson(_engine.CheckProfile(StubEngine.Profile), checkedProfile);
 
         var deleted = await _client.DeleteProfileAsync(@"C:\Steam\cs2.exe", cancellation);
         Assert.Equal(@"DeleteProfile C:\Steam\cs2.exe", _engine.LastCall);
@@ -835,9 +840,17 @@ public sealed class PipeContractTests : IAsyncLifetime
             AppsToClose = [@"C:\Users\Aden\AppData\Local\Discord\Discord.exe"],
             Priority = GamePriority.High,
             RaiseTimerResolution = true,
+            GpuTuning = [new("amd:0", new Dictionary<string, int> { [GpuControls.Voltage] = 1100, [GpuControls.MaxClock] = 2600 })],
+            CpuTuning = new(new CpuTune(CurveOptimizer: -20, PptWatts: 120), Advanced: true),
         };
 
         public IReadOnlyList<GameProfile> ListProfiles() => [Profile];
+
+        public ProfileResult CheckProfile(GameProfile profile)
+        {
+            LastCall = $"CheckProfile {profile.ExePath} {profile.CpuTuning?.Tune.CurveOptimizer} {profile.GpuTuning.Single().Values[GpuControls.Voltage]}";
+            return new ProfileResult(true, "This profile can be saved.", profile, ["CPU tuning: FACEIT blocks PawnIO (test)."]);
+        }
 
         public ProfileResult SaveProfile(GameProfile profile)
         {

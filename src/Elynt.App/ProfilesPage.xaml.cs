@@ -15,6 +15,22 @@ public partial class ProfilesPage : UserControl
 
     private void RemoveApp(object sender, RoutedEventArgs e) => Model?.RemoveApp();
 
+    private async void UseCurrentGpu(object sender, RoutedEventArgs e)
+    {
+        if (Model is { } model)
+            await model.UseCurrentGpuAsync();
+    }
+
+    private async void UseCurrentCpu(object sender, RoutedEventArgs e)
+    {
+        if (Model is { } model)
+            await model.UseCurrentCpuAsync();
+    }
+
+    private void ClearGpu(object sender, RoutedEventArgs e) => Model?.ClearGpu();
+
+    private void ClearCpu(object sender, RoutedEventArgs e) => Model?.ClearCpu();
+
     private async void Save(object sender, RoutedEventArgs e)
     {
         if (Model is { } model)

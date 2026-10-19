@@ -11,7 +11,7 @@ namespace Elynt.Core.Tuning.Cpu;
 /// sign-in and resume, never at boot) only once it has passed the stress test, and crashes or WHEA errors step it
 /// back until two strikes turn it off.
 /// </summary>
-public sealed class CpuTuning : IDisposable
+public sealed partial class CpuTuning : IDisposable
 {
     public static readonly TimeSpan ConfirmWindow = TimeSpan.FromSeconds(60);
 
@@ -107,6 +107,8 @@ public sealed class CpuTuning : IDisposable
                 return Result(false, "Nothing to change.", options.Advanced);
             if (_stressRunning)
                 return Result(false, "The stress test is running. Wait for it to finish.", options.Advanced);
+            if (_profileHolds)
+                return Result(false, "A game's profile is tuning the CPU while the game runs. Change it after the game closes. Nothing was changed.", options.Advanced);
             if (WhyNot(inspection, tune, options) is { } refusal)
             {
                 _log.LogWarning("Refused CPU tune {Tune}: {Refusal}", tune, refusal);
@@ -163,6 +165,9 @@ public sealed class CpuTuning : IDisposable
         {
             _probation.Cancel(Key);
             CancelReapply();
+            // The BIOS settings win over a running game's profile too; nothing is put back after the game.
+            _profileHolds = false;
+            _beforeProfile = null;
             try
             {
                 if (_active is not null)
@@ -194,7 +199,7 @@ public sealed class CpuTuning : IDisposable
         {
             if (_stressRunning)
                 return Result(false, "The stress test is already running.");
-            if (Profile.Kept is not { } kept || _active != kept || _probation.Deadline(Key) is not null)
+            if (Profile.Kept is not { } kept || _active != kept || _probation.Deadline(Key) is not null || _profileHolds)
                 return Result(false, "Keep a tune first. The stress test checks the kept tune while it is on the CPU.");
             tested = kept;
             started = _clock.GetUtcNow();
@@ -286,17 +291,21 @@ public sealed class CpuTuning : IDisposable
         {
             _probation.Cancel(Key);
             _active = null;
+            // Sleep wiped the profile's tune too: after the game the kept tune comes back on its own schedule.
+            _profileHolds = false;
+            _beforeProfile = null;
         }
         ScheduleReapply("resume");
     }
 
-    /// <summary>A clean stop: an unkept change goes back. Call before <see cref="GpuTuning.Shutdown"/> ends the session.</summary>
+    /// <summary>A clean stop: an unkept change and a running game's profile go back. Call before <see cref="GpuTuning.Shutdown"/> ends the session.</summary>
     public void Shutdown()
     {
         lock (_gate)
         {
             CancelReapply();
             _probation.RevertAll();
+            EndProfile();
         }
     }
 
@@ -413,7 +422,7 @@ public sealed class CpuTuning : IDisposable
         {
             CancelReapply();
             var profile = Profile;
-            if (!ShouldReapply(profile) || _probation.Deadline(Key) is not null || _stressRunning)
+            if (!ShouldReapply(profile) || _probation.Deadline(Key) is not null || _stressRunning || _profileHolds)
                 return;
             var kept = profile.Kept!;
             try
