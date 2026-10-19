@@ -125,6 +125,29 @@ public class SafetyNetTests
     }
 
     [Fact]
+    public void Boot_and_power_plan_tweaks_back_up_their_whole_store_first()
+    {
+        var boot = new FakeBootConfig();
+        boot.Set("useplatformclock", "Yes");
+        var power = new FakePowerPlans();
+        var engine = new Engine(Catalogue.Default,
+            new SystemAdapters(_registry, new FakeSystemInfo()) { Boot = boot, Power = power }, _journal, User, _safetyNet, _clock);
+
+        Assert.True(engine.Apply(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+        Assert.True(engine.Apply(GamingTweaks.HighPerformancePlan.Id).Succeeded);
+
+        Assert.Equal([BackupStore.BootConfiguration, BackupStore.PowerPlans], _backups.Exports.Select(e => e.Store));
+    }
+
+    [Fact]
+    public void A_power_setting_backs_up_the_power_plans()
+    {
+        Assert.Equal(BackupStore.PowerPlans, new Power.PowerSettingStep(Guid.NewGuid(), Guid.NewGuid(), "x", 1).Store);
+        Assert.Equal(BackupStore.PowerPlans, new Power.PowerPlanStep(Guid.NewGuid(), "x").Store);
+        Assert.Equal(BackupStore.BootConfiguration, new Boot.BootSettingStep("x", null).Store);
+    }
+
+    [Fact]
     public void Nothing_is_changed_when_a_needed_backup_cannot_be_made()
     {
         var boot = TweakTouching("test.boot", 0, BackupStore.BootConfiguration);

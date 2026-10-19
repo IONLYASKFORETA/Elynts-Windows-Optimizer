@@ -47,6 +47,8 @@ public sealed record PowerPlanStep(Guid Plan, string PlanName, Guid? CreateFrom 
 {
     public override ChangeTarget Target => new PowerPlanTarget(Plan);
 
+    public override Safety.BackupStore? Store => Safety.BackupStore.PowerPlans;
+
     public override string DescribeChange() => CreateFrom is { } source
         ? $"Create the {PlanName} plan as {Plan} (powercfg /duplicatescheme {source} {Plan}) if it isn't there, then make it active (powercfg /setactive {Plan})"
         : $"Make {PlanName} the active power plan (powercfg /setactive {Plan})";
