@@ -57,6 +57,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ConfirmGpuTuningRequest), "confirmGpuTuning")]
 [JsonDerivedType(typeof(RevertGpuTuningRequest), "revertGpuTuning")]
 [JsonDerivedType(typeof(ResetGpuTuningRequest), "resetGpuTuning")]
+[JsonDerivedType(typeof(AcceptGpuWarningRequest), "acceptGpuWarning")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -139,6 +140,8 @@ public sealed record ConfirmGpuTuningRequest(string DeviceId) : EngineRequest;
 public sealed record RevertGpuTuningRequest(string DeviceId) : EngineRequest;
 
 public sealed record ResetGpuTuningRequest(string DeviceId) : EngineRequest;
+
+public sealed record AcceptGpuWarningRequest(string DeviceId) : EngineRequest;
 
 /// <summary>
 /// Something a running command reports before its reply. Every command that streams progress uses this one
@@ -268,6 +271,7 @@ public static class EngineProtocol
         ConfirmGpuTuningRequest confirm => new(Tuning: engine.ConfirmGpuTuning(confirm.DeviceId)),
         RevertGpuTuningRequest revert => new(Tuning: engine.RevertGpuTuning(revert.DeviceId)),
         ResetGpuTuningRequest reset => new(Tuning: engine.ResetGpuTuning(reset.DeviceId)),
+        AcceptGpuWarningRequest accept => new(Tuning: engine.AcceptGpuWarning(accept.DeviceId)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

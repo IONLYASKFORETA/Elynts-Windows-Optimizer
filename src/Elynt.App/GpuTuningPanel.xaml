@@ -24,7 +24,20 @@
                             <TextBlock Text="On default settings" Opacity="0.7"
                                        Visibility="{Binding AtDefaults, Converter={StaticResource Visible}}" />
 
-                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,8,0,0">
+                            <!-- Intel requires its warning to be shown and accepted before tuning unlocks. -->
+                            <Border Padding="10" Margin="0,8,0,0" CornerRadius="4" BorderThickness="1"
+                                    BorderBrush="DarkOrange"
+                                    Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
+                                <StackPanel>
+                                    <TextBlock Text="Read this before tuning" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Margin="0,4,0,8" />
+                                    <Button Content="I understand the risks, unlock tuning" Command="{Binding AcceptWarning}"
+                                            Padding="12,4" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,8,0,0"
+                                          IsEnabled="{Binding IsUnlocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:TuningSliderViewModel}">
                                         <Grid Margin="0,4">

@@ -108,10 +108,11 @@ public sealed class GpuTuningItemViewModel : ObservableObject
         _page = page;
         _view = view;
         Controls = view.Controls.Select(c => new TuningSliderViewModel(c)).ToList();
-        Apply = new Command(() => _page.RunAsync(this, client => client.SetGpuTuningAsync(DeviceId, ChangedValues())), () => !IsBusy && ChangedValues().Count > 0);
+        Apply = new Command(() => _page.RunAsync(this, client => client.SetGpuTuningAsync(DeviceId, ChangedValues())), () => !IsBusy && !IsLocked && ChangedValues().Count > 0);
+        AcceptWarning = new Command(() => _page.RunAsync(this, client => client.AcceptGpuWarningAsync(DeviceId)), () => !IsBusy && IsLocked);
         Keep = new Command(() => _page.RunAsync(this, client => client.ConfirmGpuTuningAsync(DeviceId)), () => !IsBusy && IsWaiting);
         GoBack = new Command(() => _page.RunAsync(this, client => client.RevertGpuTuningAsync(DeviceId)), () => !IsBusy && IsWaiting);
-        Reset = new Command(() => _page.RunAsync(this, client => client.ResetGpuTuningAsync(DeviceId)), () => !IsBusy);
+        Reset = new Command(() => _page.RunAsync(this, client => client.ResetGpuTuningAsync(DeviceId)), () => !IsBusy && !IsLocked);
         AutoOverclock = new Command(() => _page.RunAsync(this, client => client.AutoTuneGpuAsync(DeviceId, AutoTuneKind.OverclockGpu)), () => !IsBusy && view.AutoTunes.Contains(AutoTuneKind.OverclockGpu));
         AutoUndervolt = new Command(() => _page.RunAsync(this, client => client.AutoTuneGpuAsync(DeviceId, AutoTuneKind.UndervoltGpu)), () => !IsBusy && view.AutoTunes.Contains(AutoTuneKind.UndervoltGpu));
         foreach (var slider in Controls)
@@ -129,6 +130,14 @@ public sealed class GpuTuningItemViewModel : ObservableObject
     public string? Notice => _view.Notice;
 
     public bool IsWaiting => _view.RevertsAt is not null;
+
+    /// <summary>The vendor's warning (Intel's overclock waiver) to read and accept before anything can change.</summary>
+    public string? Warning => _view.Warning;
+
+    /// <summary>The warning hasn't been accepted, so the sliders and buttons stay locked.</summary>
+    public bool IsLocked => _view.Locked;
+
+    public bool IsUnlocked => !_view.Locked;
 
     /// <summary>"Keep these settings? Going back in 12 s".</summary>
     public string Countdown
@@ -154,6 +163,7 @@ public sealed class GpuTuningItemViewModel : ObservableObject
     }
 
     public ICommand Apply { get; }
+    public ICommand AcceptWarning { get; }
     public ICommand Keep { get; }
     public ICommand GoBack { get; }
     public ICommand Reset { get; }
@@ -171,6 +181,9 @@ public sealed class GpuTuningItemViewModel : ObservableObject
         OnPropertyChanged(nameof(AtDefaults));
         OnPropertyChanged(nameof(Notice));
         OnPropertyChanged(nameof(IsWaiting));
+        OnPropertyChanged(nameof(Warning));
+        OnPropertyChanged(nameof(IsLocked));
+        OnPropertyChanged(nameof(IsUnlocked));
         Tick(DateTimeOffset.UtcNow);
         CommandManager.InvalidateRequerySuggested();
     }
