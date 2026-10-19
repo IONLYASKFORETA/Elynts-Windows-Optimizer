@@ -217,6 +217,12 @@ public partial interface IEngine
     CleanupSchedule SetWeeklyCleanup(bool enabled);
 
     /// <summary>
+    /// The service calls this regularly. When this user turned weekly cleaning on and a week has passed, scans and
+    /// cleans the safe categories only; otherwise does nothing and returns null.
+    /// </summary>
+    Task<CleanupReport?> RunWeeklyCleanupIfDueAsync(CancellationToken cancellation = default);
+
+    /// <summary>
     /// "Check and install now": starts searching for and installing quality updates in the background, even while
     /// updates are paused, or shows the run already in progress.
     /// </summary>

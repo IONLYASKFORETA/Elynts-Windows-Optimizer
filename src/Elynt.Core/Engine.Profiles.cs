@@ -5,8 +5,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Elynt.Core;
 
+/// <summary>
+/// The per-game profile run commands (start, stop, recover after a crash) are on the Engine command surface too, so
+/// tests and the service reach them through the same seam as every other command.
+/// </summary>
+public partial interface IEngine : IProfileEngine;
+
 /// <summary>Per-game profiles: building them, and the changes made while a game runs.</summary>
-public sealed partial class Engine : IProfileEngine
+public sealed partial class Engine
 {
     private readonly IProfileStore _profiles = profiles ?? new InMemoryProfileStore();
 
