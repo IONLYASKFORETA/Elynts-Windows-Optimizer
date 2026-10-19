@@ -53,11 +53,21 @@ public static partial class HardRules
             $"{driver.DriverFile} is a known-vulnerable driver that anti-cheats and Windows block",
         FileTarget file when IsUserFolder(file.Path) => "user folders and game saves are never touched",
         PackageTarget package when IsEdge(package.PackageName) => "Edge and WebView2 are never removed",
+        ProcessTarget process when IsInWindowsFolder(process.ExePath) =>
+            $"{Path.GetFileName(process.ExePath.Replace('\\', '/'))} is part of Windows, so it is never closed",
         ScanExclusionTarget exclusion => ExclusionViolation(exclusion.Folder),
         UpdatePauseTarget pause when pause.Days is < 1 or > UpdateControl.UpdatePauseStep.MaxDays =>
             $"updates are paused at most {UpdateControl.UpdatePauseStep.MaxDays} days (Windows' own limit), never blocked",
         _ => null,
     };
+
+    /// <summary>The Windows folder (usually C:\Windows); C:\Windows where .NET doesn't know one (tests off Windows).</summary>
+    public static string WindowsFolder { get; } =
+        Environment.GetFolderPath(Environment.SpecialFolder.Windows) is { Length: > 0 } folder ? folder : @"C:\Windows";
+
+    /// <summary>Whether the path is inside the Windows folder.</summary>
+    public static bool IsInWindowsFolder(string path) =>
+        path.Replace('/', '\\').StartsWith(WindowsFolder.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Defender exclusions are only for one game's own folder. A whole drive, Windows, the shared program folders,

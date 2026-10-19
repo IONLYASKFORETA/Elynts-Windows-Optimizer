@@ -221,7 +221,7 @@ public sealed partial class Engine
                 return $"'{app}' isn't a full path to a program.";
             if (WinPath.Same(app, profile.ExePath))
                 return "A profile can't close its own game.";
-            if (app.StartsWith(@"C:\Windows\", StringComparison.OrdinalIgnoreCase))
+            if (HardRules.Violation(new ProcessTarget(app)) is not null)
                 return $"'{WinPath.FileName(app)}' is part of Windows, so a profile never closes it.";
         }
 

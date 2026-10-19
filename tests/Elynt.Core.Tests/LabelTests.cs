@@ -110,6 +110,8 @@ public class LabelTests
         { "OneDrive", new FileTarget(@"C:\Users\aden\OneDrive - Home\file.txt") },
         { "Edge", new PackageTarget("Microsoft.MicrosoftEdge.Stable") },
         { "WebView2", new PackageTarget("Microsoft.EdgeWebView2Runtime") },
+        { "closing Explorer", new ProcessTarget(@"C:\Windows\explorer.exe") },
+        { "closing a System32 program", new ProcessTarget(@"c:\windows\System32\dwm.exe") },
     };
 
     [Theory]
@@ -135,6 +137,8 @@ public class LabelTests
         { "a 30 day quality deferral", Reg(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "DeferQualityUpdatesPeriodInDays", 30) },
         { "an ordinary app", new PackageTarget("Clipchamp.Clipchamp") },
         { "a signed vendor driver", new DriverTarget("PawnIO.sys") },
+        { "closing an ordinary program", new ProcessTarget(@"C:\Program Files\Discord\Discord.exe") },
+        { "closing a program in a folder named like Windows", new ProcessTarget(@"C:\WindowsApps-tools\tool.exe") },
     };
 
     [Theory]
