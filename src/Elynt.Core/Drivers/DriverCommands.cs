@@ -1,9 +1,14 @@
 namespace Elynt.Core.Drivers;
 
-/// <summary>Which GPU's driver to check or install, and how.</summary>
-/// <param name="DeviceId">The GPU's PnP hardware ID, from <see cref="InstalledGpu.DeviceId"/>.</param>
-/// <param name="CleanInstall">Reset the vendor's driver settings as part of the install.</param>
-public sealed record DriverRequest(string DeviceId, DriverBranch Branch = DriverBranch.GameReady, bool CleanInstall = false);
+/// <summary>Which driver to check or install, and how.</summary>
+/// <param name="DeviceId">The GPU's PnP hardware ID, from <see cref="InstalledGpu.DeviceId"/>, or <see cref="Chipset"/>.</param>
+/// <param name="CleanInstall">Reset the vendor's driver settings as part of the install, when its installer can.</param>
+/// <param name="Lean">NVIDIA GPUs only: strip the package to the display driver (and the laptop power components) first.</param>
+public sealed record DriverRequest(string DeviceId, DriverBranch Branch = DriverBranch.GameReady, bool CleanInstall = false, bool Lean = false)
+{
+    /// <summary>The device ID that asks for the chipset driver of the CPU's maker instead of a GPU's.</summary>
+    public const string Chipset = "CHIPSET";
+}
 
 /// <summary>The result of looking up a GPU's latest driver.</summary>
 /// <param name="Found">The lookup returned a driver. When false, <see cref="VendorPage"/> is where to get one by hand.</param>

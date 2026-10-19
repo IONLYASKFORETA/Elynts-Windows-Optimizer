@@ -40,7 +40,9 @@ public sealed class WindowsDriverInventory : IDriverInventory
                 if (!device.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase))
                     continue;
                 var description = adapter?.GetValue("DriverDesc") as string ?? device;
-                found.Add(new DisplayAdapter(description, device, version));
+                // AMD's driver records its Adrenalin version here; Windows' version can't be turned into it.
+                var vendorVersion = adapter?.GetValue("RadeonSoftwareVersion") as string;
+                found.Add(new DisplayAdapter(description, device, version, vendorVersion));
             }
         }
 
@@ -48,5 +50,43 @@ public sealed class WindowsDriverInventory : IDriverInventory
             .GroupBy(a => a.DeviceId, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();
+    }
+
+    private static readonly string[] UninstallKeys =
+    [
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ];
+
+    /// <summary>
+    /// The DisplayVersion of the "AMD Chipset Software" or "Intel(R) Chipset Device Software" Uninstall entry, or null
+    /// when the package isn't installed.
+    /// </summary>
+    public string? ChipsetVersion(GpuVendor vendor)
+    {
+        var product = vendor switch
+        {
+            GpuVendor.Amd => "AMD Chipset Software",
+            GpuVendor.Intel => "Intel(R) Chipset Device Software",
+            _ => null,
+        };
+        if (product is null)
+            return null;
+
+        foreach (var path in UninstallKeys)
+        {
+            using var uninstall = Registry.LocalMachine.OpenSubKey(path);
+            foreach (var name in uninstall?.GetSubKeyNames() ?? [])
+            {
+                using var entry = uninstall!.OpenSubKey(name);
+                if (entry?.GetValue("DisplayName") is string displayName &&
+                    displayName.StartsWith(product, StringComparison.OrdinalIgnoreCase) &&
+                    entry.GetValue("DisplayVersion") is string version &&
+                    !string.IsNullOrWhiteSpace(version))
+                    return version.Trim();
+            }
+        }
+
+        return null;
     }
 }

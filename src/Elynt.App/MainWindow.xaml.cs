@@ -18,7 +18,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame);
+        _model = new MainViewModel(ConfirmDestructive, AskToReboot, PickGame, ConfirmWarning);
         _model.AppsManager = new AppsManagerViewModel(_model, ConfirmNotReviewed, ConfirmUninstall);
         _model.ServicesPage = new ServicesPageViewModel(() => _model.Client, ConfirmDriverChange);
         _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
@@ -179,6 +179,16 @@ public partial class MainWindow : Window
             this,
             $"{tweak.Name}\n\nThis can't be undone. {tweak.DestructiveWarning}\n\nDo it anyway?",
             "This can't be undone",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No) == MessageBoxResult.Yes;
+
+    /// <summary>The warning a tweak needs read before it is applied (OneDrive, the Store). "No" is the default button.</summary>
+    private bool ConfirmWarning(TweakView tweak) =>
+        MessageBox.Show(
+            this,
+            $"{tweak.Name}\n\n{tweak.ApplyWarning}\n\nGo ahead?",
+            "Before you go on",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
             MessageBoxResult.No) == MessageBoxResult.Yes;

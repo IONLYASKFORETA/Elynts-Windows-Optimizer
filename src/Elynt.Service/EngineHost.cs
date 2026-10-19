@@ -34,18 +34,30 @@ internal sealed class EngineHost(
     private readonly WindowsScheduledTasks _tasks = new();
     private readonly WindowsFileSignatures _signatures = new();
     private readonly JsonFileKnownStartupItems _knownStartupItems = new(ServicePaths.KnownStartupItems);
+    private readonly WindowsDevices _pnpDevices = new();
+
+    /// <summary>Shared by every vendor's latest-driver lookup.</summary>
+    private static readonly HttpClient LookupClient = new() { Timeout = TimeSpan.FromSeconds(20) };
 
     private readonly DriverAdapters _drivers = new(
         new WindowsDriverInventory(),
-        [new NvidiaDriverSource(new HttpClient { Timeout = TimeSpan.FromSeconds(20) })],
+        [
+            new NvidiaDriverSource(LookupClient),
+            new AmdGpuDriverSource(LookupClient),
+            new AmdChipsetDriverSource(LookupClient),
+            new IntelGpuDriverSource(LookupClient),
+            new IntelChipsetDriverSource(LookupClient),
+        ],
         ServicePaths.Downloads,
         new HttpDownloader(new HttpClient { Timeout = TimeSpan.FromMinutes(30) }),
         new WinTrustSignatureVerifier(),
-        new ProcessInstallerRunner());
+        new ProcessInstallerRunner(),
+        new SevenZipExtractor());
     private readonly WindowsGameSources _games = new();
     private readonly IGameStore _gameStore = new JsonFileGameStore(ServicePaths.Games);
     private readonly WindowsBootConfig _boot = new();
     private readonly WindowsPowerPlans _power = new();
+    private readonly WindowsScanExclusions _scanExclusions = new();
     private bool _firstPipe = true;
 
     // One "check and install now" for the whole PC, so any app window can follow its progress.
@@ -111,10 +123,14 @@ internal sealed class EngineHost(
             {
                 Boot = _boot,
                 Power = _power,
+                ScanExclusions = _scanExclusions,
                 Services = _services,
                 Devices = _devices,
+                PnpDevices = _pnpDevices,
                 Startup = new StartupAdapters(
                     new WindowsStartupSources(sid), _tasks, _signatures, new WindowsStartupImpactLog(sid), _knownStartupItems),
+                Apps = new WindowsRemovableApps(identity!, loggers.CreateLogger<WindowsRemovableApps>()),
+                Features = new WindowsOptionalFeatures(),
             },
             journal,
             sid,
