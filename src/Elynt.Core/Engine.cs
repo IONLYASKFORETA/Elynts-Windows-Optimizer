@@ -253,6 +253,9 @@ public interface IEngine
     TuningResult RevertGpuTuning(string deviceId);
 
     TuningResult ResetGpuTuning(string deviceId);
+
+    /// <summary>The user accepted the GPU vendor's warning (Intel's overclock waiver), which unlocks its tuning.</summary>
+    TuningResult AcceptGpuWarning(string deviceId);
 }
 
 /// <summary>What happened to one change during restore everything.</summary>
@@ -609,6 +612,8 @@ public sealed partial class Engine(
     public TuningResult RevertGpuTuning(string deviceId) => gpuTuning?.Revert(deviceId) ?? NoGpuTuning;
 
     public TuningResult ResetGpuTuning(string deviceId) => gpuTuning?.ResetToDefaults(deviceId) ?? NoGpuTuning;
+
+    public TuningResult AcceptGpuWarning(string deviceId) => gpuTuning?.AcceptWarning(deviceId) ?? NoGpuTuning;
 
     private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 

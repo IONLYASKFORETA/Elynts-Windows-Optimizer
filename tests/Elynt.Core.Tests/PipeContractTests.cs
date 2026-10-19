@@ -491,6 +491,8 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Equal("RevertGpuTuning amd:0", _engine.LastCall);
         await _client.ResetGpuTuningAsync("amd:0", ct);
         Assert.Equal("ResetGpuTuning amd:0", _engine.LastCall);
+        AssertSameJson(_engine.AcceptGpuWarning("intel:0"), await _client.AcceptGpuWarningAsync("intel:0", ct));
+        Assert.Equal("AcceptGpuWarning intel:0", _engine.LastCall);
     }
 
     [Fact]
@@ -703,7 +705,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             RevertsAt: new DateTimeOffset(2026, 10, 16, 12, 0, 15, TimeSpan.Zero),
             Notice: "Waiting.");
 
-        public GpuTuningReport GetGpuTuning() => new([Gpu], "A page note.");
+        public GpuTuningReport GetGpuTuning() => new([Gpu, IntelGpu], "A page note.");
 
         public TuningResult SetGpuTuning(string deviceId, IReadOnlyDictionary<string, int> values)
         {
@@ -734,6 +736,22 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastCall = $"ResetGpuTuning {deviceId}";
             return new TuningResult(true, "Reset.", Gpu with { AtDefaults = true, RevertsAt = null });
         }
+
+        public TuningResult AcceptGpuWarning(string deviceId)
+        {
+            LastCall = $"AcceptGpuWarning {deviceId}";
+            return new TuningResult(true, "Unlocked.", IntelGpu with { Locked = false });
+        }
+
+        private static readonly GpuTuningView IntelGpu = new(
+            "intel:0", "Intel Arc A770", GpuVendor.Intel,
+            [new TuningControl(GpuControls.ClockOffset, "GPU clock offset", "MHz", 0, 250, 1, 0, 0)],
+            [],
+            AtDefaults: true,
+            RevertsAt: null,
+            Notice: null,
+            Warning: "Overclocking may damage your GPU.",
+            Locked: true);
 
         public CommandResult Revert(string tweakId)
         {

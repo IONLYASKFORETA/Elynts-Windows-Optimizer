@@ -44,8 +44,9 @@ try
     builder.Services.AddSingleton<ICleanupScheduleStore>(new JsonFileCleanupScheduleStore(ServicePaths.CleanupSchedule));
     builder.Services.AddSingleton(new TuningSafety(new JsonFileTuningStore(ServicePaths.Tuning)));
     builder.Services.AddSingleton<AdlxGpuTuning>();
+    builder.Services.AddSingleton<IgclGpuTuning>();
     builder.Services.AddSingleton(sp => new GpuTuning(
-        [sp.GetRequiredService<AdlxGpuTuning>()],
+        [sp.GetRequiredService<AdlxGpuTuning>(), sp.GetRequiredService<IgclGpuTuning>()],
         sp.GetRequiredService<TuningSafety>(),
         logger: sp.GetRequiredService<ILogger<GpuTuning>>()));
     // Before the pipe: hardware is recovered before any command arrives, and closed after the pipe stops.

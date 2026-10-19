@@ -200,6 +200,9 @@ public sealed class EnginePipeClient : IAsyncDisposable
     public Task<TuningResult> ResetGpuTuningAsync(string deviceId, CancellationToken cancellation = default) =>
         TuneAsync(new ResetGpuTuningRequest(deviceId), cancellation);
 
+    public Task<TuningResult> AcceptGpuWarningAsync(string deviceId, CancellationToken cancellation = default) =>
+        TuneAsync(new AcceptGpuWarningRequest(deviceId), cancellation);
+
     public async ValueTask DisposeAsync()
     {
         _reader.Dispose();
