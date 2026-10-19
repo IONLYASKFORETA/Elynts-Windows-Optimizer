@@ -13,6 +13,11 @@
                 <PropertyGroupDescription PropertyName="Group" />
             </CollectionViewSource.GroupDescriptions>
         </CollectionViewSource>
+        <CollectionViewSource x:Key="TweaksByGroup" Source="{Binding Tweaks}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
     </Window.Resources>
 
     <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
@@ -318,8 +323,50 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </DockPanel>
-                <ListBox ItemsSource="{Binding Tweaks}" SelectedItem="{Binding SelectedTweak}"
+                <ListBox ItemsSource="{Binding Source={StaticResource TweaksByGroup}}" SelectedItem="{Binding SelectedTweak}"
                          HorizontalContentAlignment="Stretch" BorderThickness="0">
+                    <!-- The main tweaks are listed plainly; the possible-placebo group is folded away underneath. -->
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.ContainerStyle>
+                                <Style TargetType="GroupItem">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="GroupItem">
+                                                <ItemsPresenter />
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Name}" Value="Possible placebo">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="GroupItem">
+                                                        <Border BorderThickness="0,1,0,0" BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                                                                Margin="0,12,0,0" Padding="0,8,0,0">
+                                                            <Expander IsExpanded="False">
+                                                                <Expander.Header>
+                                                                    <StackPanel>
+                                                                        <TextBlock FontSize="14" FontWeight="SemiBold">
+                                                                            <Run Text="Possible placebo" />
+                                                                            <Run Text="{Binding ItemCount, Mode=OneWay, StringFormat=({0})}" />
+                                                                        </TextBlock>
+                                                                        <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                                                                   Text="Popular tweaks with no reliable evidence they help games. Each one says why." />
+                                                                    </StackPanel>
+                                                                </Expander.Header>
+                                                                <ItemsPresenter Margin="0,4,0,0" />
+                                                            </Expander>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </GroupStyle.ContainerStyle>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
                             <Grid Margin="4,6">
@@ -348,7 +395,7 @@
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
                            Opacity="0.7" Margin="8" TextWrapping="Wrap" />
 
-                <!-- Drivers page: each GPU's installed driver, the latest from the vendor, and a silent install. -->
+                <!-- Drivers page: each GPU's and the chipset's installed driver, the latest from the vendor, and a silent install. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding IsDriversPage, Converter={StaticResource Visible}}">
                     <StackPanel DataContext="{Binding Drivers}" Margin="4">
@@ -364,7 +411,11 @@
                                                   IsEnabled="{Binding IsIdle}"
                                                   Visibility="{Binding HasBranches, Converter={StaticResource Visible}}" />
                                         <CheckBox Content="Clean install (resets the driver's own settings)" IsChecked="{Binding CleanInstall}"
-                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0" />
+                                                  IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
+                                                  Visibility="{Binding HasCleanInstall, Converter={StaticResource Visible}}" />
+                                        <CheckBox Content="Lean install (display driver only: no NVIDIA App, telemetry or extras; laptops keep their power components; needs 7-Zip)"
+                                                  IsChecked="{Binding LeanInstall}" IsEnabled="{Binding IsIdle}" Margin="0,4,0,0"
+                                                  Visibility="{Binding CanInstallLean, Converter={StaticResource Visible}}" />
                                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                             <Button Content="Check for a newer driver" Click="CheckDriver" Padding="12,4"
                                                     IsEnabled="{Binding IsIdle}" />
@@ -620,6 +671,10 @@
                     <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkRed"
                                Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
                         <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                               Visibility="{Binding HasApplyWarning, Converter={StaticResource Visible}}">
+                        <Run Text="Before you turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding View.ApplyWarning, Mode=OneWay}" />
                     </TextBlock>
                     <StackPanel Margin="0,8,0,0" Visibility="{Binding HasWarnings, Converter={StaticResource Visible}}">
                         <TextBlock Text="For your hardware" FontWeight="SemiBold" />

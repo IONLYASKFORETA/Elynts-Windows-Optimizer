@@ -13,10 +13,10 @@ public class DebloatSettingsTests
         new(Catalogue.Default, new SystemAdapters(_registry, _system), new ChangeJournal(new InMemoryJournalStore()), "S-1-5-21-test");
 
     private IReadOnlyList<TweakView> Section() =>
-        NewEngine().ListTweaks().Where(t => t.Section == Sections.DebloatAndPrivacy).ToList();
+        NewEngine().ListTweaks().Where(t => DebloatTweaks.All.Any(d => d.Id == t.Id)).ToList();
 
     [Fact]
-    public void Debloat_and_privacy_lists_every_setting_the_spec_asks_for()
+    public void Debloat_and_privacy_lists_every_setting_the_spec_asks_for_besides_app_removal()
     {
         Assert.Equal(
             [

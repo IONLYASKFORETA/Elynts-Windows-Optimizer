@@ -43,3 +43,5 @@
 **Unclean shutdown**: the service didn't stop normally (crash, freeze, power cut) while hardware was tuned. The next start puts that hardware on defaults and doesn't re-apply the kept tune, so a bad tune can't loop.
 
 **Release channel**: beta (every build, Aden first) or stable (a beta promoted by hand, for friends). The app updates itself from the channel it follows.
+
+**Lean install**: an NVIDIA driver install stripped, on the user's PC, to the display driver and what it requires (plus NVPCF and PPC on laptops), with the installer's consent entries and telemetry URLs removed. Optional; the full package is the default.
