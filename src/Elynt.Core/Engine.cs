@@ -329,7 +329,8 @@ public sealed partial class Engine(
     ICleanupScheduleStore? cleanupSchedules = null,
     Drift.IDriftStore? driftStore = null,
     Profiles.IProfileStore? profiles = null,
-    Profiles.ProfileNotes? profileNotes = null) : IEngine
+    Profiles.ProfileNotes? profileNotes = null,
+    Tuning.Cpu.CpuTuning? cpuTuning = null) : IEngine
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;

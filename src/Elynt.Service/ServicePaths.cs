@@ -20,6 +20,9 @@ internal static class ServicePaths
     /// <summary>Crash-safe GPU and CPU tuning state: what is tuned, what was confirmed, and whether the last stop was clean.</summary>
     public static string Tuning { get; } = Path.Combine(Root, "tuning", "tuning.json");
 
+    /// <summary>The kept CPU tune, its stress-test pass, auto-apply and crash strikes.</summary>
+    public static string CpuProfile { get; } = Path.Combine(Root, "tuning", "cpu.json");
+
     public static string Logs { get; } = Path.Combine(Root, "logs");
 
     /// <summary>The startup items each user has already been told about, so only new ones raise a tray note.</summary>

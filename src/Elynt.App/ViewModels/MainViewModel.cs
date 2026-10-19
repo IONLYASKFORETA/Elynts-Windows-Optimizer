@@ -53,6 +53,7 @@ public sealed class MainViewModel(
     private DriversPageViewModel? _drivers;
     private GpuTuningPageViewModel? _gpu;
     private SensorsPageViewModel? _sensors;
+    private CpuTuningPageViewModel? _cpu;
 
     /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
     public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
@@ -272,7 +273,21 @@ public sealed class MainViewModel(
 
     public bool IsSensorsPage => Sensors is not null && SelectedPage == Sections.Overclocking;
 
-    public bool IsOverclockingPage => IsBiosPage || IsGpuPage || IsSensorsPage;
+    /// <summary>CPU tuning through PawnIO, shown on the Overclocking page. Null until the service sends it.</summary>
+    public CpuTuningPageViewModel? Cpu
+    {
+        get => _cpu;
+        private set
+        {
+            _cpu?.Stop();
+            if (Set(ref _cpu, value))
+                OnPropertyChanged(nameof(IsCpuPage));
+        }
+    }
+
+    public bool IsCpuPage => Cpu is not null && SelectedPage == Sections.Overclocking;
+
+    public bool IsOverclockingPage => IsBiosPage || IsGpuPage || IsSensorsPage || IsCpuPage;
 
     public string Status
     {
@@ -370,6 +385,7 @@ public sealed class MainViewModel(
             Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
             Sensors = await LoadSensorsAsync(_client);
+            Cpu = await LoadCpuAsync(_client);
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -449,6 +465,19 @@ public sealed class MainViewModel(
         }
     }
 
+    private static async Task<CpuTuningPageViewModel?> LoadCpuAsync(EnginePipeClient client)
+    {
+        try
+        {
+            return new CpuTuningPageViewModel(client, await client.GetCpuTuningAsync(advanced: false));
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Warning(ex, "The service couldn't read CPU tuning");
+            return null;
+        }
+    }
+
     private async Task<SensorsPageViewModel?> LoadSensorsAsync(EnginePipeClient client)
     {
         try
@@ -471,6 +500,7 @@ public sealed class MainViewModel(
         IsConnected = false;
         Gpu = null;
         Sensors = null;
+        Cpu = null;
         var client = _client;
         _client = null;
         if (client is not null)
@@ -641,6 +671,7 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(IsGamesPage));
         OnPropertyChanged(nameof(IsGpuPage));
         OnPropertyChanged(nameof(IsSensorsPage));
+        OnPropertyChanged(nameof(IsCpuPage));
         if (Sensors is not null)
             Sensors.Active = IsSensorsPage;
         OnPropertyChanged(nameof(IsOverclockingPage));

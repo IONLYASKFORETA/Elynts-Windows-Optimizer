@@ -103,7 +103,7 @@ public sealed class PawnIoCpu(string modulesFolder) : IPawnIoCpu
     }
 
     /// <summary>One loaded PawnIO module. Disposing it closes the driver handle.</summary>
-    private sealed unsafe class Module : IDisposable
+    internal sealed unsafe class Module : IDisposable
     {
         private static readonly string Library = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PawnIO", "PawnIOLib.dll");
