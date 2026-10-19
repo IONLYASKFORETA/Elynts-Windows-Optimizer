@@ -41,7 +41,9 @@ public sealed partial class Engine
 
     /// <summary>
     /// Detects every applied change. The first check, and the first after the Windows build changed, is a full
-    /// check: marks from other builds or app versions are dropped, so those changes are looked at afresh.
+    /// check: marks from other builds or app versions are dropped, and every change is re-checked against this build
+    /// and PC (applicability and whether its target still exists) before drift is looked for. A quick check only
+    /// reads whether each change is still in place, and re-checks fit just for the ones that aren't.
     /// </summary>
     public DriftReport CheckDrift()
     {
@@ -58,12 +60,20 @@ public sealed partial class Engine
             DriftItem? item;
             try
             {
-                if (WhyNotApplicable(tweak) is { } reason)
+                // Full: re-check every change still fits this PC and build. Quick: only look at whether each change
+                // is still in place, and check fit just for the ones that aren't, so a vanished target is never
+                // offered as drift.
+                if (kind == DriftCheckKind.Full && WhyNotApplicable(tweak) is { } reason)
                 {
                     unsupported.Add(MarkUnsupported(tweak, reason));
                     continue;
                 }
                 item = Drifted(tweak);
+                if (item is not null && kind == DriftCheckKind.Quick && WhyNotApplicable(tweak) is { } quickReason)
+                {
+                    unsupported.Add(MarkUnsupported(tweak, quickReason));
+                    continue;
+                }
             }
             catch (Exception ex)
             {
