@@ -149,6 +149,41 @@ public class EngineTests
         public void Save(IReadOnlyList<JournalEntry> entries) => throw new IOException("Disk full.");
     }
 
+    /// <summary>Saves until the disk fills up.</summary>
+    private sealed class FillingJournalStore : IJournalStore
+    {
+        private readonly InMemoryJournalStore _inner = new();
+        public bool Full { get; set; }
+        public IReadOnlyList<JournalEntry> Load() => _inner.Load();
+
+        public void Save(IReadOnlyList<JournalEntry> entries)
+        {
+            if (Full)
+                throw new IOException("Disk full.");
+            _inner.Save(entries);
+        }
+    }
+
+    [Fact]
+    public void A_journal_that_cannot_save_an_undo_keeps_the_change_open_in_memory_as_on_disk()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var store = new FillingJournalStore();
+        var journal = new ChangeJournal(store);
+        var engine = new Engine(Catalogue.Default, Adapters(), journal, "S-1-5-21-test");
+        Assert.True(engine.Apply(tweak.Id).Succeeded);
+
+        store.Full = true;
+        Assert.False(engine.Revert(tweak.Id).Succeeded);
+
+        var onDisk = Assert.Single(new ChangeJournal(store).EntriesFor("S-1-5-21-test"));
+        var inMemory = Assert.Single(journal.EntriesFor("S-1-5-21-test"));
+        Assert.Equal(onDisk.Status, inMemory.Status);
+        Assert.Equal(EntryStatus.Applied, inMemory.Status);
+        Assert.Null(inMemory.ClosedAt);
+    }
+
     [Fact]
     public void Undo_only_reverts_the_users_own_changes()
     {
