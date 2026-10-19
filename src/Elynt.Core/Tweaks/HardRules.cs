@@ -54,6 +54,8 @@ public static partial class HardRules
         FileTarget file when IsUserFolder(file.Path) => "user folders and game saves are never touched",
         PackageTarget package when IsEdge(package.PackageName) => "Edge and WebView2 are never removed",
         ScanExclusionTarget exclusion => ExclusionViolation(exclusion.Folder),
+        UpdatePauseTarget pause when pause.Days is < 1 or > UpdateControl.UpdatePauseStep.MaxDays =>
+            $"updates are paused at most {UpdateControl.UpdatePauseStep.MaxDays} days (Windows' own limit), never blocked",
         _ => null,
     };
 
@@ -155,6 +157,9 @@ public static partial class HardRules
         if (BlocksUpdates(key, location.ValueName, registry.Desired))
             return "Windows Update is never blocked or cut off";
 
+        if (PauseViolation(key, location.ValueName, registry.Desired) is { } pause)
+            return pause;
+
         return null;
     }
 
@@ -167,6 +172,28 @@ public static partial class HardRules
         WindowsUpdatePolicies + @"\AU\UseWUServer",
         WindowsUpdatePolicies + @"\DisableWindowsUpdateAccess",
         WindowsUpdatePolicies + @"\DoNotConnectToWindowsUpdateInternetLocations",
+    };
+
+    /// <summary>
+    /// The Settings app's pause values. A fixed end date can't be bounded from today, so quality-update pause dates
+    /// are written only through <see cref="UpdatePauseTarget"/>, at most 35 days ahead; raising Windows' own pause
+    /// limit is refused outright.
+    /// </summary>
+    private static string? PauseViolation(string key, string valueName, RegistryValue desired)
+    {
+        if (!key.Equals(UpdateControl.UpdatePauseStep.UxSettings, StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (valueName.Equals("FlightSettingsMaxPauseDays", StringComparison.OrdinalIgnoreCase) &&
+            !(desired is { Kind: RegistryValueKind.DWord, Data.Length: 4 } days && BitConverter.ToUInt32(desired.Data) <= UpdateControl.UpdatePauseStep.MaxDays))
+            return $"Windows' pause limit is never raised past {UpdateControl.UpdatePauseStep.MaxDays} days";
+        return QualityPauseValues.Contains(valueName)
+            ? $"quality updates are paused only through the app's pause control, at most {UpdateControl.UpdatePauseStep.MaxDays} days, never blocked"
+            : null;
+    }
+
+    private static readonly HashSet<string> QualityPauseValues = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PauseQualityUpdatesStartTime", "PauseQualityUpdatesEndTime", "PauseUpdatesStartTime", "PauseUpdatesExpiryTime",
     };
 
     private static bool BlocksUpdates(string key, string valueName, RegistryValue desired)

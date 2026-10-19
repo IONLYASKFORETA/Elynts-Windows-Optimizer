@@ -56,5 +56,11 @@ public sealed record ProcessTarget(string ExePath) : ChangeTarget;
 /// <summary>Turns a Windows optional feature on or off (its files stay on disk).</summary>
 public sealed record OptionalFeatureTarget(string Feature, bool Enabled) : ChangeTarget;
 
+/// <summary>
+/// Sets one of the Settings app's Windows Update pause values, dated from today: updates resume on their own after
+/// <paramref name="Days"/> days.
+/// </summary>
+public sealed record UpdatePauseTarget(string ValueName, int Days) : ChangeTarget;
+
 /// <summary>Stops Microsoft Defender scanning one folder.</summary>
 public sealed record ScanExclusionTarget(string Folder) : ChangeTarget;

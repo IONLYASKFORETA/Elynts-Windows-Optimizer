@@ -335,7 +335,7 @@ public sealed partial class Engine(
     Profiles.ProfileNotes? profileNotes = null,
     Tuning.Cpu.CpuTuning? cpuTuning = null) : IEngine
 {
-    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private readonly TimeProvider _clock = clock ?? system.Clock;
     private readonly ILogger _log = logger ?? NullLogger<Engine>.Instance;
     private readonly AppInstaller _apps = new(apps ?? AppCatalogue.Default, system.Packages);
     private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);

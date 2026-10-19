@@ -12,26 +12,49 @@ public class UpdateControlTests
     private readonly FakeRegistry _registry = new();
     private readonly FakeSystemInfo _system = new() { OsBuild = "26100.4652", Edition = WindowsEdition.Pro };
     private readonly ChangeJournal _journal = new(new InMemoryJournalStore());
+    private readonly FakeClock _clock = new(new DateTimeOffset(2026, 10, 19, 15, 30, 0, TimeSpan.Zero));
 
-    private Engine NewEngine() => new(Catalogue.Default, new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test");
+    private Engine NewEngine() => new(
+        Catalogue.Default, new SystemAdapters(_registry, _system) { Clock = _clock }, _journal, "S-1-5-21-test", clock: _clock);
 
     private static RegistryLocation Machine(string key, string name) => new(RegistryRoot.LocalMachine, key, name);
 
     [Fact]
-    public void Pausing_updates_indefinitely_is_journaled_and_undone_exactly()
+    public void Pausing_updates_pauses_for_at_most_35_days_from_today_and_is_undone_exactly()
     {
         var engine = NewEngine();
-        var expiry = Machine(UxSettings, "PauseUpdatesExpiryTime");
+        var qualityEnd = Machine(UxSettings, "PauseQualityUpdatesEndTime");
 
         var applied = engine.Apply("update.pause");
 
         Assert.True(applied.Succeeded, applied.Message);
-        Assert.Equal(RegistryValue.String("2077-01-01T00:00:00Z"), _registry.GetValue(expiry));
+        Assert.Equal(RegistryValue.String("2026-10-19T00:00:00Z"), _registry.GetValue(Machine(UxSettings, "PauseQualityUpdatesStartTime")));
+        Assert.Equal(RegistryValue.String("2026-11-23T00:00:00Z"), _registry.GetValue(qualityEnd));
+        Assert.Equal(RegistryValue.String("2026-11-23T00:00:00Z"), _registry.GetValue(Machine(UxSettings, "PauseUpdatesExpiryTime")));
+        Assert.Null(_registry.GetValue(Machine(UxSettings, "FlightSettingsMaxPauseDays")));
+        Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == "update.pause").State);
         Assert.Contains(engine.ListHistory(), c => c.TweakId == "update.pause" && c.State == ChangeState.Applied);
 
         Assert.True(engine.Revert("update.pause").Succeeded);
-        Assert.Null(_registry.GetValue(expiry));
+        Assert.Null(_registry.GetValue(qualityEnd));
         Assert.False(_registry.KeyExists(RegistryRoot.LocalMachine, UxSettings));
+    }
+
+    [Fact]
+    public void A_pause_that_ran_out_reads_as_off_and_is_never_re_applied_as_drift()
+    {
+        var engine = NewEngine();
+        engine.SetAutoReapply(true);
+        Assert.True(engine.Apply("update.pause").Succeeded);
+
+        _clock.Advance(TimeSpan.FromDays(36));
+        var drift = engine.CheckDrift();
+
+        Assert.Equal(TweakState.Off, engine.ListTweaks().Single(t => t.Id == "update.pause").State);
+        Assert.DoesNotContain(drift.Drifted, d => d.TweakId == "update.pause");
+        Assert.DoesNotContain(drift.Reapplied, d => d.TweakId == "update.pause");
+        Assert.Equal(RegistryValue.String("2026-11-23T00:00:00Z"), _registry.GetValue(Machine(UxSettings, "PauseQualityUpdatesEndTime")));
+        Assert.Empty(engine.ReapplyDrift(["update.pause"]).Changes);
     }
 
     [Theory]
@@ -154,7 +177,33 @@ public class UpdateControlTests
         { "quality updates deferred 31 days", Policies, "DeferQualityUpdatesPeriodInDays", 31 },
         { "update service disabled", @"SYSTEM\CurrentControlSet\Services\wuauserv", "Start", 4 },
         { "update orchestrator disabled", @"SYSTEM\CurrentControlSet\Services\UsoSvc", "Start", 4 },
+        { "pause limit raised past Windows' 35 days", UxSettings, "FlightSettingsMaxPauseDays", 18627 },
     };
+
+    /// <summary>Fixed pause end dates in the Settings app's own key: a far-off date blocks quality updates.</summary>
+    [Theory]
+    [InlineData("PauseQualityUpdatesEndTime")]
+    [InlineData("PauseUpdatesExpiryTime")]
+    public void A_fixed_quality_update_pause_date_is_refused_even_in_Advanced(string name)
+    {
+        var tweak = new TweakDefinition(
+            "test.pause-forever", Sections.WindowsUpdate, "Pause forever", "Test only.", "None.", [], EvidenceTier.Proven, "Puts it back.",
+            [new RegistryValueStep(Machine(UxSettings, name), RegistryValue.String("2077-01-01T00:00:00Z"))]);
+        var engine = new Engine(new Catalogue([tweak]), new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test");
+
+        var result = engine.Apply(tweak.Id, new ApplyOptions(ConfirmDestructive: true, Advanced: true));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("is never allowed", result.Message);
+        Assert.Null(_registry.GetValue(Machine(UxSettings, name)));
+    }
+
+    [Fact]
+    public void A_pause_longer_than_35_days_is_refused()
+    {
+        Assert.NotNull(HardRules.Violation(new UpdatePauseTarget("PauseQualityUpdatesEndTime", 36)));
+        Assert.Null(HardRules.Violation(new UpdatePauseTarget("PauseQualityUpdatesEndTime", 35)));
+    }
 
     [Theory]
     [MemberData(nameof(UpdateBlockingValues))]

@@ -292,7 +292,10 @@ public sealed partial class Engine
         return parts.Count == 0 ? "Everything the app changed is still in place." : string.Join(" ", parts);
     }
 
-    /// <summary>Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks.</summary>
+    /// <summary>
+    /// Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks, and a
+    /// change that ends on its own (the update pause) isn't drift when it ends.
+    /// </summary>
     private IEnumerable<(TweakDefinition Tweak, JournalEntry Entry)> AppliedChanges()
     {
         foreach (var id in journal.UndoableTweakIds(user))
@@ -300,7 +303,7 @@ public sealed partial class Engine
             if (StartupManager.Owns(id))
                 continue;
             var entry = journal.LatestUndoable(id, user);
-            if (entry is not { Status: EntryStatus.Applied } || !TryResolve(id, entry, out var tweak) || IsMarked(id))
+            if (entry is not { Status: EntryStatus.Applied } || !TryResolve(id, entry, out var tweak) || IsMarked(id) || tweak.Expires)
                 continue;
             yield return (tweak, entry);
         }
