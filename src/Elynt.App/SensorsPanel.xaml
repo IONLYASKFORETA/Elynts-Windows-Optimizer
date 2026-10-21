@@ -1,0 +1,53 @@
+<UserControl x:Class="Elynt.App.SensorsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sensors="clr-namespace:Elynt.Core.Sensors;assembly=Elynt.Core">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+
+    <!-- Sensors: live readouts, plus the optional PawnIO driver. PawnIO is only installed when the user turns it on. -->
+    <StackPanel Margin="4,4,4,16">
+        <TextBlock Text="Sensors" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding Note}" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8"
+                   Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
+
+        <ItemsControl ItemsSource="{Binding Sensors}" Margin="0,0,0,8">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type sensors:SensorView}">
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Name}" />
+                        <TextBlock Grid.Column="1" FontWeight="SemiBold">
+                            <Run Text="{Binding Value, Mode=OneWay, StringFormat=0.#}" /> <Run Text="{Binding Unit, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Grid.Column="2" Text="{Binding Source}" Opacity="0.6" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border Padding="12" Margin="0,4" CornerRadius="6" BorderThickness="1"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                Visibility="{Binding Available, Converter={StaticResource Visible}}">
+            <StackPanel>
+                <TextBlock Text="PawnIO driver (optional)" FontSize="14" FontWeight="SemiBold" />
+                <TextBlock Text="A signed low-level driver that lets the app read the CPU's own sensors and PBO state. It is only installed if you turn it on, and you can uninstall it any time."
+                           TextWrapping="Wrap" Opacity="0.7" Margin="0,2,0,6" />
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                <TextBlock Text="{Binding FaceitWarning}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <WrapPanel>
+                    <Button Content="Turn on PawnIO" Click="TurnOn" Padding="12,4" Margin="0,0,8,4"
+                            IsEnabled="{Binding CanInstall}" />
+                    <Button Content="Uninstall driver" Click="Uninstall" Padding="12,4" Margin="0,0,8,4"
+                            IsEnabled="{Binding CanUninstall}" />
+                </WrapPanel>
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

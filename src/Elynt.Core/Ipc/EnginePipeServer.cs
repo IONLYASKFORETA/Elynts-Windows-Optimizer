@@ -1,21 +1,28 @@
 using System.IO.Pipes;
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elynt.Core.Ipc;
 
 /// <summary>
-/// Serves <see cref="IEngine"/> commands over a named pipe. Commands from all clients run one at a time.
+/// Serves <see cref="IEngine"/> commands over a named pipe, from all clients, in two lanes. Repairs run for
+/// minutes, so they take turns in their own lane and never hold up tweak commands. Every other command takes turns
+/// in the main lane. An app install queue takes both lanes, so nothing else runs while apps install and no repair's
+/// winget runs alongside it.
 /// </summary>
 /// <param name="createPipe">Creates the next listening pipe instance. The service passes one restricted to the interactive user.</param>
 /// <param name="engineFor">Builds the engine for a connected client, typically for that client's user. Called once per connection, after its first request.</param>
+/// <param name="commandLane">The main lane, shared with the service's own work (per-game profiles) so they take turns too.</param>
 public sealed class EnginePipeServer(
     Func<NamedPipeServerStream> createPipe,
     Func<NamedPipeServerStream, IEngine> engineFor,
-    ILogger<EnginePipeServer>? logger = null)
+    ILogger<EnginePipeServer>? logger = null,
+    CommandLane? commandLane = null)
 {
     private readonly ILogger _log = logger ?? NullLogger<EnginePipeServer>.Instance;
-    private readonly SemaphoreSlim _oneCommandAtATime = new(1, 1);
+    private readonly SemaphoreSlim _commandLane = (commandLane ?? new CommandLane()).Semaphore;
+    private readonly SemaphoreSlim _repairLane = new(1, 1);
 
     public async Task RunAsync(CancellationToken cancellation)
     {
@@ -58,7 +65,7 @@ public sealed class EnginePipeServer(
             while (await reader.ReadLineAsync(cancellation) is { } line)
             {
                 engine ??= engineFor(pipe);
-                var response = await HandleAsync(engine, line, cancellation);
+                var response = await HandleAsync(engine, line, writer, cancellation);
                 await writer.WriteLineAsync(EngineProtocol.Serialize(response).AsMemory(), cancellation);
             }
         }
@@ -75,14 +82,66 @@ public sealed class EnginePipeServer(
         }
     }
 
-    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, CancellationToken cancellation)
+    /// <summary>
+    /// Runs one command. Events it raises (progress) are written to the client as they happen, before the response.
+    /// A command keeps running to the end even if the client goes away, so commands in a lane never overlap.
+    /// </summary>
+    private async Task<EngineResponse> HandleAsync(IEngine engine, string line, StreamWriter writer, CancellationToken cancellation)
     {
-        await _oneCommandAtATime.WaitAsync(cancellation);
+        EngineRequest request;
         try
         {
-            var request = EngineProtocol.Deserialize<EngineRequest>(line);
+            request = EngineProtocol.Deserialize<EngineRequest>(line);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Couldn't read a command");
+            return new EngineResponse(Error: ex.Message);
+        }
+
+        SemaphoreSlim[] lanes =
+            EngineProtocol.IsLongRunning(request) ? [_repairLane] :
+            EngineProtocol.IsExclusive(request) ? [_repairLane, _commandLane] :
+            [_commandLane];
+        var entered = 0;
+        try
+        {
+            foreach (var lane in lanes)
+            {
+                await lane.WaitAsync(cancellation);
+                entered++;
+            }
             _log.LogInformation("Command {Request}", request);
-            return EngineProtocol.Dispatch(engine, request);
+
+            var events = Channel.CreateUnbounded<EngineEvent>(new UnboundedChannelOptions { SingleReader = true });
+            var work = Task.Run(async () =>
+            {
+                try
+                {
+                    return await EngineProtocol.DispatchAsync(engine, request, e => events.Writer.TryWrite(e), cancellation);
+                }
+                finally
+                {
+                    events.Writer.TryComplete();
+                }
+            }, CancellationToken.None);
+
+            var clientListening = true;
+            await foreach (var e in events.Reader.ReadAllAsync(CancellationToken.None))
+            {
+                if (!clientListening)
+                    continue;
+                try
+                {
+                    await writer.WriteLineAsync(EngineProtocol.Serialize(new EngineResponse(Event: e)).AsMemory(), cancellation);
+                }
+                catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+                {
+                    _log.LogInformation(ex, "The client stopped listening to progress; the command carries on");
+                    clientListening = false;
+                }
+            }
+            return await work;
         }
         catch (Exception ex)
         {
@@ -91,7 +150,8 @@ public sealed class EnginePipeServer(
         }
         finally
         {
-            _oneCommandAtATime.Release();
+            for (var i = entered - 1; i >= 0; i--)
+                lanes[i].Release();
         }
     }
 }

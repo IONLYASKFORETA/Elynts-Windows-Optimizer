@@ -6,8 +6,27 @@ namespace Elynt.Core.Journal;
 /// <summary>The exact prior state of one step, captured before the change, that knows how to put it back.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(RegistryValueRecord), "registryValue")]
+[JsonDerivedType(typeof(Services.ServiceConfigRecord), "serviceConfig")]
+[JsonDerivedType(typeof(Startup.ScheduledTaskRecord), "scheduledTask")]
+[JsonDerivedType(typeof(RegistryListItemRecord), "registryListItem")]
+[JsonDerivedType(typeof(RegistryEachKeyRecord), "registryEachKey")]
+[JsonDerivedType(typeof(Boot.BootSettingRecord), "bootSetting")]
+[JsonDerivedType(typeof(Power.PowerPlanRecord), "powerPlan")]
+[JsonDerivedType(typeof(Tweaks.AppRemovalRecord), "appRemoval")]
+[JsonDerivedType(typeof(Tweaks.AppDeprovisionRecord), "appDeprovision")]
+[JsonDerivedType(typeof(Tweaks.OptionalFeatureRecord), "optionalFeature")]
+[JsonDerivedType(typeof(Profiles.ClosedAppRecord), "closedApp")]
+[JsonDerivedType(typeof(Power.PowerSettingRecord), "powerSetting")]
+[JsonDerivedType(typeof(Devices.DeviceEnabledRecord), "deviceEnabled")]
+[JsonDerivedType(typeof(Security.ScanExclusionRecord), "scanExclusion")]
 public abstract record StepRecord
 {
+    /// <summary>
+    /// Says what something else changed since the app made this change, or null when the target still holds
+    /// what the app wrote (or was never changed, if the change was interrupted). Undo refuses to overwrite it.
+    /// </summary>
+    public abstract string? FindConflict(SystemAdapters system);
+
     public abstract void Revert(SystemAdapters system);
 }
 
@@ -37,6 +56,12 @@ public sealed class JournalEntry
     public required IReadOnlyList<StepRecord> Steps { get; init; }
     public EntryStatus Status { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
+
+    /// <summary>
+    /// Made by a per-game profile: undone when the game closes, and at the next service start if it is still in
+    /// place after a crash or reboot.
+    /// </summary>
+    public bool Temporary { get; set; }
 }
 
 /// <summary>
@@ -56,7 +81,7 @@ public sealed class ChangeJournal
     }
 
     /// <summary>Saves a new entry in the <see cref="EntryStatus.Applying"/> state. Call before changing anything.</summary>
-    public JournalEntry Open(string tweakId, string user, string osBuild, DateTimeOffset at, IReadOnlyList<StepRecord> steps)
+    public JournalEntry Open(string tweakId, string user, string osBuild, DateTimeOffset at, IReadOnlyList<StepRecord> steps, bool temporary = false)
     {
         var entry = new JournalEntry
         {
@@ -67,6 +92,7 @@ public sealed class ChangeJournal
             AppliedAt = at,
             Steps = steps,
             Status = EntryStatus.Applying,
+            Temporary = temporary,
         };
         lock (_gate)
         {
@@ -84,15 +110,12 @@ public sealed class ChangeJournal
         return entry;
     }
 
-    public void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at)
-    {
-        lock (_gate)
+    public void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at) =>
+        Change([entry], e =>
         {
-            entry.Status = status;
-            entry.ClosedAt = status == EntryStatus.Applied ? null : at;
-            _store.Save(_entries);
-        }
-    }
+            e.Status = status;
+            e.ClosedAt = status == EntryStatus.Applied ? null : at;
+        });
 
     /// <summary>
     /// Marks the newest open change to this tweak as reverted and any older open ones as superseded, so a second
@@ -102,13 +125,112 @@ public sealed class ChangeJournal
     {
         lock (_gate)
         {
-            foreach (var entry in _entries.Where(e =>
-                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied))
+            var open = _entries.Where(e =>
+                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied).ToList();
+            Change(open, entry =>
             {
                 entry.Status = entry == newest ? EntryStatus.Reverted : EntryStatus.Superseded;
                 entry.ClosedAt = at;
+            });
+        }
+    }
+
+    /// <summary>
+    /// Marks an older change as superseded by a newer change to the same tweak (a re-apply after drift), so undo
+    /// returns to the newer change's before-state and never to the older, stale one.
+    /// </summary>
+    public void Supersede(JournalEntry older, DateTimeOffset at)
+    {
+        Change([older], e =>
+        {
+            e.Status = EntryStatus.Superseded;
+            e.ClosedAt = at;
+        });
+    }
+
+    /// <summary>
+    /// Changes entries and saves the journal. When the save fails the entries go back to how they were, so memory
+    /// never claims what the disk doesn't hold.
+    /// </summary>
+    private void Change(IReadOnlyList<JournalEntry> entries, Action<JournalEntry> change)
+    {
+        lock (_gate)
+        {
+            var before = entries.Select(e => (e.Status, e.ClosedAt, e.Temporary)).ToList();
+            foreach (var entry in entries)
+                change(entry);
+            try
+            {
+                _store.Save(_entries);
             }
-            _store.Save(_entries);
+            catch
+            {
+                for (var i = 0; i < entries.Count; i++)
+                    (entries[i].Status, entries[i].ClosedAt, entries[i].Temporary) = before[i];
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A temporary change the user chose to keep: it is no longer undone when the game closes or the service starts.
+    /// </summary>
+    public void KeepPermanently(JournalEntry entry) => Change([entry], e => e.Temporary = false);
+
+    /// <summary>When this tweak was last applied or undone for this user, or null if it never was.</summary>
+    public DateTimeOffset? LastChangedAt(string tweakId, string user)
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Where(e => e.TweakId == tweakId && e.User == user)
+                .Select(e => e.Status switch
+                {
+                    EntryStatus.Applying or EntryStatus.Applied => e.AppliedAt,
+                    EntryStatus.Reverted => e.ClosedAt,
+                    _ => null,
+                })
+                .Max();
+        }
+    }
+
+    /// <summary>Every tweak this user has a change to undo for, oldest first.</summary>
+    public IReadOnlyList<string> UndoableTweakIds(string user)
+    {
+        lock (_gate)
+        {
+            return _entries
+                .Where(e => e.User == user && e.Status is EntryStatus.Applying or EntryStatus.Applied)
+                .Select(e => e.TweakId)
+                .Distinct()
+                .ToList();
+        }
+    }
+
+    /// <summary>Every change made for this user, oldest first.</summary>
+    public IReadOnlyList<JournalEntry> EntriesFor(string user)
+    {
+        lock (_gate)
+        {
+            return _entries.Where(e => e.User == user).ToList();
+        }
+    }
+
+    /// <summary>This user's temporary changes still in place, oldest first.</summary>
+    public IReadOnlyList<JournalEntry> OpenTemporary(string user)
+    {
+        lock (_gate)
+        {
+            return _entries.Where(e => e.User == user && e.Temporary && e.Status is EntryStatus.Applying or EntryStatus.Applied).ToList();
+        }
+    }
+
+    /// <summary>Every user with a temporary change still in place, e.g. after a crash or reboot mid-game.</summary>
+    public IReadOnlyList<string> UsersWithTemporaryChanges()
+    {
+        lock (_gate)
+        {
+            return _entries.Where(e => e.Temporary && e.Status is EntryStatus.Applying or EntryStatus.Applied).Select(e => e.User).Distinct().ToList();
         }
     }
 

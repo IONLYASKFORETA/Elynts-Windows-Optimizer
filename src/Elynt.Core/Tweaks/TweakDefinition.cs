@@ -33,7 +33,46 @@ public sealed record TweakDefinition(
     EvidenceTier Tier,
     string Undo,
     IReadOnlyList<TweakStep> Steps,
-    SessionRefresh Refresh = SessionRefresh.None);
+    SessionRefresh Refresh = SessionRefresh.None)
+{
+    /// <summary>What undo can and cannot do. Destructive tweaks need an explicit confirmation to apply.</summary>
+    public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
+
+    /// <summary>For a destructive tweak: what cannot be undone, spelled out in the confirmation.</summary>
+    public string? DestructiveWarning { get; init; }
+
+    /// <summary>
+    /// Something the user must read and confirm before this tweak is applied, even though undo can put it back
+    /// (e.g. OneDrive's cloud-only files). The Engine refuses to apply without that confirmation.
+    /// </summary>
+    public string? ApplyWarning { get; init; }
+
+    public RiskFlags Risks { get; init; } = RiskFlags.None;
+
+    /// <summary>Anti-cheats that object to this tweak. The app warns and never blocks.</summary>
+    public IReadOnlyList<AntiCheatConflict> AntiCheat { get; init; } = [];
+
+    /// <summary>The hardware, edition and build this tweak fits.</summary>
+    public Applicability Applicability { get; init; } = Applicability.Always;
+
+    /// <summary>Warnings that only show on PCs with particular hardware, e.g. dual-CCD X3D CPUs.</summary>
+    public IReadOnlyList<HardwareNote> HardwareNotes { get; init; } = [];
+
+    /// <summary>
+    /// Takes effect immediately with no reboot and no signed-in session step, so a per-game profile may apply and
+    /// undo it. Never true for reboot-needing, destructive or Security tweaks.
+    /// </summary>
+    public bool ProfileEligible { get; init; }
+
+    /// <summary>
+    /// Ends on its own after a while (the 35-day update pause). Drift never reports or re-applies it once it ran out,
+    /// so a bounded change can't be renewed forever.
+    /// </summary>
+    public bool Expires { get; init; }
+
+    /// <summary>A per-game choice listed before a game is picked (see <see cref="PerGameTweak"/>). It can't be applied itself.</summary>
+    public bool PerGame { get; init; }
+}
 
 /// <summary>
 /// One declarative piece of a tweak. Behaviour comes from shared step types (registry value today;
@@ -41,8 +80,23 @@ public sealed record TweakDefinition(
 /// </summary>
 public abstract record TweakStep
 {
+    /// <summary>What this step changes, checked against <see cref="HardRules"/> before anything runs.</summary>
+    public abstract ChangeTarget Target { get; }
+
     /// <summary>The exact change, as shown in the detail pane.</summary>
     public abstract string DescribeChange();
+
+    /// <summary>
+    /// The whole store this step changes, backed up before the first change of its kind; null when the journal
+    /// alone is enough (registry values).
+    /// </summary>
+    public virtual Safety.BackupStore? Store => null;
+
+    /// <summary>
+    /// Why this PC doesn't have what the step changes (e.g. a Windows feature only some PCs ship), or null when it
+    /// does. Checked as well as the tweak's <see cref="Applicability"/>.
+    /// </summary>
+    public virtual string? WhyNotHere(SystemAdapters system) => null;
 
     /// <summary>Whether the system is already in this step's desired state.</summary>
     public abstract bool IsApplied(SystemAdapters system);

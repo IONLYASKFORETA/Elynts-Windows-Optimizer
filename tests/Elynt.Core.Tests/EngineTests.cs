@@ -1,4 +1,5 @@
 using Elynt.Core.Journal;
+using Elynt.Core.Power;
 using Elynt.Core.Tweaks;
 using Elynt.Core.Registry;
 using Elynt.Tests.Shared;
@@ -8,16 +9,25 @@ namespace Elynt.Core.Tests;
 public class EngineTests
 {
     private readonly FakeRegistry _registry = new();
+    private readonly FakeBootConfig _boot = new();
+    private readonly FakePowerPlans _power = new();
+    private readonly FakeDevices _devices = new();
+    private readonly FakeScanExclusions _exclusions = new();
     private readonly InMemoryJournalStore _store = new();
+    private readonly FakeRemovableApps _apps = new();
+    private readonly FakeOptionalFeatures _features = new();
+    private FakeSystemInfo _system = new();
 
     private Engine NewEngine() => NewEngineWith(_store);
 
     public static TheoryData<string, StartingState> EveryTweakFromEveryStartingState()
     {
         var data = new TheoryData<string, StartingState>();
-        foreach (var tweak in Catalogue.Default.Tweaks)
+        // Removal for future accounts can't be put back by design; AppRemovalTests covers that undo refuses it.
+        foreach (var id in CatalogueRoundTrip.ApplicableIds(Catalogue.Default)
+                     .Where(id => !Catalogue.Default.Tweaks.Any(t => t.Id == id && t.Steps.Any(s => s is AppDeprovisionStep))))
             foreach (var state in Enum.GetValues<StartingState>())
-                data.Add(tweak.Id, state);
+                data.Add(id, state);
         return data;
     }
 
@@ -26,9 +36,10 @@ public class EngineTests
     public void Every_catalogue_tweak_reverts_to_the_exact_starting_state(string tweakId, StartingState start)
     {
         var tweak = Catalogue.Default.Get(tweakId);
+        _system = FakeSystemInfo.Fitting(tweak.Applicability);
         Seed(tweak, start);
 
-        CatalogueRoundTrip.Run(NewEngine(), _registry, tweak);
+        CatalogueRoundTrip.Run(NewEngine(), Adapters(), tweak);
     }
 
     [Fact]
@@ -138,6 +149,41 @@ public class EngineTests
         public void Save(IReadOnlyList<JournalEntry> entries) => throw new IOException("Disk full.");
     }
 
+    /// <summary>Saves until the disk fills up.</summary>
+    private sealed class FillingJournalStore : IJournalStore
+    {
+        private readonly InMemoryJournalStore _inner = new();
+        public bool Full { get; set; }
+        public IReadOnlyList<JournalEntry> Load() => _inner.Load();
+
+        public void Save(IReadOnlyList<JournalEntry> entries)
+        {
+            if (Full)
+                throw new IOException("Disk full.");
+            _inner.Save(entries);
+        }
+    }
+
+    [Fact]
+    public void A_journal_that_cannot_save_an_undo_keeps_the_change_open_in_memory_as_on_disk()
+    {
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+        Seed(tweak, StartingState.OtherValue);
+        var store = new FillingJournalStore();
+        var journal = new ChangeJournal(store);
+        var engine = new Engine(Catalogue.Default, Adapters(), journal, "S-1-5-21-test");
+        Assert.True(engine.Apply(tweak.Id).Succeeded);
+
+        store.Full = true;
+        Assert.False(engine.Revert(tweak.Id).Succeeded);
+
+        var onDisk = Assert.Single(new ChangeJournal(store).EntriesFor("S-1-5-21-test"));
+        var inMemory = Assert.Single(journal.EntriesFor("S-1-5-21-test"));
+        Assert.Equal(onDisk.Status, inMemory.Status);
+        Assert.Equal(EntryStatus.Applied, inMemory.Status);
+        Assert.Null(inMemory.ClosedAt);
+    }
+
     [Fact]
     public void Undo_only_reverts_the_users_own_changes()
     {
@@ -175,9 +221,32 @@ public class EngineTests
             view.ExactChange);
         Assert.Equal(EvidenceTier.Proven, view.Tier);
         Assert.NotEmpty(view.Sources);
+        Assert.Equal(Reversibility.Reversible, view.Reversibility);
+        Assert.Equal(RiskFlags.None, view.Risks);
+        Assert.True(view.Applicable);
     }
 
-    private SystemAdapters Adapters() => new(_registry, new FakeSystemInfo());
+    [Fact]
+    public void A_tweak_that_needs_no_reboot_is_never_pending_one_and_fits_any_Windows_11_PC()
+    {
+        var engine = NewEngine();
+        var tweak = GamingTweaks.EnhancePointerPrecisionOff;
+
+        var applied = engine.Apply(tweak.Id);
+
+        Assert.False(applied.Tweak!.PendingReboot);
+        Assert.True(applied.Tweak.Applicable);
+    }
+
+    private SystemAdapters Adapters() => new(_registry, _system, Packages: new FakePackageManager())
+    {
+        Boot = _boot,
+        Power = _power,
+        Apps = _apps,
+        Features = _features,
+        PnpDevices = _devices,
+        ScanExclusions = _exclusions,
+    };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");
 
@@ -195,14 +264,52 @@ public class EngineTests
 
     private void Seed(TweakDefinition tweak, StartingState start)
     {
-        foreach (var step in tweak.Steps.OfType<RegistryValueStep>())
+        // Apps a tweak removes start out installed, so there is something to remove and reinstall.
+        foreach (var step in tweak.Steps.OfType<AppRemovalStep>())
+            _apps.Install(step.App.PackageName);
+        // Features a tweak switches start out the other way, on a PC that has them.
+        foreach (var step in tweak.Steps.OfType<OptionalFeatureStep>())
+            _features.Add(step.Feature, enabled: !step.Enabled);
+
+        // Boot settings and power plans start away from what the tweak wants, so there is something to undo.
+        foreach (var target in tweak.Steps.Select(s => s.Target))
+        {
+            if (target is BootSettingTarget boot)
+                _boot.Set(boot.Element, boot.Value is null ? "Yes" : "Other");
+            if (target is DeviceTarget device)
+                _devices.Add($@"{device.HardwareId}\0", device.HardwareId, enabled: !device.Enabled);
+            if (target is PowerSettingTarget setting && start == StartingState.OtherValue)
+            {
+                _power.SetSetting(PowerPlans.Balanced, setting.Subgroup, setting.Setting, PowerSource.Ac, 50);
+                _power.SetSetting(PowerPlans.Balanced, setting.Subgroup, setting.Setting, PowerSource.Dc, 25);
+            }
+            if (target is PowerPlanTarget)
+                _power.Active = start == StartingState.OtherValue ? PowerPlans.PowerSaver : PowerPlans.Balanced;
+        }
+
+        // Per-device and per-interface steps get one matching key, set up like a plain value below.
+        var targets = tweak.Steps.Select(s => s.Target).OfType<RegistryTarget>().ToList();
+        foreach (var step in tweak.Steps.OfType<RegistryEachKeyStep>())
+        {
+            var key = step.KeyPattern.Replace("*", "Seeded");
+            if (step.Filter is { } filter)
+                _registry.SetValue(new(step.Root, key, filter.ValueName), RegistryValue.String(filter.EqualsText ?? "1"));
+            else
+                _registry.CreateKey(step.Root, key);
+            var location = new RegistryLocation(step.Root, step.SubPath is null ? key : $@"{key}\{step.SubPath}", step.ValueName);
+            if (start is StartingState.OtherValue or StartingState.DifferentType)
+                targets.Add(new RegistryTarget(location, step.Desired));
+        }
+
+        foreach (var step in targets)
         {
             var location = step.Location;
             switch (start)
             {
                 case StartingState.OtherValue:
-                    // Extra bytes after the terminator also check that raw bytes survive, not a parsed string.
-                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [.. step.Desired.Data, 0x31, 0x00]));
+                    // A leading "1" makes it a different value (also inside a list of settings); the extra bytes after
+                    // the terminator check that raw bytes survive, not a parsed string.
+                    _registry.SetValue(location, new RegistryValue(step.Desired.Kind, [0x31, 0x00, .. step.Desired.Data, 0x31, 0x00]));
                     break;
                 case StartingState.ValuesAbsent:
                     _registry.CreateKey(location.Root, location.KeyPath);

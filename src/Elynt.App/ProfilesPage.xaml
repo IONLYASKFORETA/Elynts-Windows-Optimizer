@@ -1,0 +1,71 @@
+<UserControl x:Class="Elynt.App.ProfilesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+    </UserControl.Resources>
+
+    <!-- Per-game profile editor: instant changes only, applied when the game starts and undone 15 s after it closes. -->
+    <StackPanel Margin="0,0,0,16">
+        <TextBlock Text="Per-game profiles" FontSize="16" FontWeight="SemiBold" />
+        <TextBlock Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8"
+                   Text="A profile holds only instant changes. They're made when the game starts and undone 15 seconds after it closes, or at the next start if the PC crashed. The first game running stays in charge; another game's profile is skipped meanwhile. Reboot-only tweaks and Defender are never part of a profile." />
+        <CheckBox Content="Quiet tray notes when a profile is applied, undone or skipped"
+                  IsChecked="{Binding NotifyProfiles}" Margin="0,0,0,8" />
+
+        <DockPanel Margin="0,0,0,8">
+            <TextBlock Text="Game:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}" DisplayMemberPath="Label" MinWidth="280" />
+        </DockPanel>
+
+        <StackPanel Visibility="{Binding HasGame, Converter={StaticResource Visible}}">
+            <TextBlock Text="Changes while this game runs" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <ItemsControl ItemsSource="{Binding Tweaks}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding IsChecked}" Margin="0,2" ToolTip="{Binding WhatItDoes}">
+                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                        </CheckBox>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <CheckBox IsChecked="{Binding RaiseTimerResolution}" Margin="0,2"
+                      Content="Raise the timer resolution to 0.5 ms (reaches games only while the global timer resolution tweak is on)" />
+            <DockPanel Margin="0,6,0,0">
+                <TextBlock Text="Game priority:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox ItemsSource="{Binding Priorities}" SelectedItem="{Binding Priority}" DisplayMemberPath="Label" MinWidth="200" HorizontalAlignment="Left" />
+            </DockPanel>
+
+            <TextBlock Text="Background apps to close (reopened after the game)" FontWeight="SemiBold" Margin="0,10,0,4" />
+            <ListBox ItemsSource="{Binding AppsToClose}" SelectedItem="{Binding SelectedApp}" MinHeight="40" MaxHeight="120" />
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <Button Content="Add an app…" Click="AddApp" Padding="10,2" Margin="0,0,6,0" />
+                <Button Content="Remove" Click="RemoveApp" Padding="10,2" />
+            </StackPanel>
+
+            <TextBlock Text="GPU and CPU tuning while this game runs" FontWeight="SemiBold" Margin="0,10,0,4" />
+            <TextBlock Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,4"
+                       Text="Tune on the Overclocking page, then take the settings here. They're applied when the game starts, without the keep-or-revert countdown, and your usual settings come back when the profile is undone. A crash mid-game puts the GPU back on factory settings at the next start." />
+            <DockPanel Margin="0,2">
+                <TextBlock Text="GPU:" Width="40" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="Clear" Click="ClearGpu" Padding="10,2" Margin="6,0,0,0" />
+                <Button DockPanel.Dock="Right" Content="Use the GPU's current settings" Click="UseCurrentGpu" Padding="10,2" Margin="6,0,0,0" />
+                <TextBlock Text="{Binding GpuTuningSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+            <DockPanel Margin="0,2">
+                <TextBlock Text="CPU:" Width="40" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="Clear" Click="ClearCpu" Padding="10,2" Margin="6,0,0,0" />
+                <Button DockPanel.Dock="Right" Content="Use the CPU's current tune" Click="UseCurrentCpu" Padding="10,2" Margin="6,0,0,0" />
+                <TextBlock Text="{Binding CpuTuningSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Foreground="DarkOrange" Margin="0,6,0,0" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Save profile" Click="Save" Padding="12,4" Margin="0,0,6,0" />
+                <Button Content="Delete profile" Click="Delete" Padding="12,4" />
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,8,0,0" />
+    </StackPanel>
+</UserControl>

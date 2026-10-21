@@ -6,21 +6,27 @@ namespace Elynt.Core.Registry;
 /// <summary>A tweak step that sets one registry value.</summary>
 public sealed record RegistryValueStep(RegistryLocation Location, RegistryValue Desired) : TweakStep
 {
+    public override ChangeTarget Target => new RegistryTarget(Location, Desired);
+
     public override string DescribeChange() => $"Set {Location} to {Desired}";
 
     public override bool IsApplied(SystemAdapters system) => Desired.Equals(system.Registry.GetValue(Location));
 
     public override StepRecord Capture(SystemAdapters system)
     {
-        // Record every key this step will create, deepest first, so undo removes exactly those.
-        var createdKeys = new List<string>();
-        for (var path = Location.KeyPath; path.Length > 0 && !system.Registry.KeyExists(Location.Root, path); path = Parent(path))
-            createdKeys.Add(path);
-
-        return new RegistryValueRecord(Location, system.Registry.GetValue(Location), Desired, createdKeys);
+        return new RegistryValueRecord(Location, system.Registry.GetValue(Location), Desired, MissingKeys(system.Registry, Location));
     }
 
     public override void Apply(SystemAdapters system) => system.Registry.SetValue(Location, Desired);
+
+    /// <summary>Every key a write to <paramref name="location"/> will create, deepest first, so undo removes exactly those.</summary>
+    internal static IReadOnlyList<string> MissingKeys(IRegistry registry, RegistryLocation location)
+    {
+        var createdKeys = new List<string>();
+        for (var path = location.KeyPath; path.Length > 0 && !registry.KeyExists(location.Root, path); path = Parent(path))
+            createdKeys.Add(path);
+        return createdKeys;
+    }
 
     private static string Parent(string keyPath)
     {
@@ -39,6 +45,16 @@ public sealed record RegistryValueRecord(
     RegistryValue After,
     IReadOnlyList<string> CreatedKeys) : StepRecord
 {
+    public override string? FindConflict(SystemAdapters system)
+    {
+        var now = system.Registry.GetValue(Location);
+        if (After.Equals(now) || Equals(Before, now))
+            return null;
+
+        var shown = now?.ToString() ?? "deleted";
+        return $"Something else changed {Location} since the app set it to {After}. It is now {shown}.";
+    }
+
     public override void Revert(SystemAdapters system)
     {
         // A value that did not exist is deleted, never set to zero.
