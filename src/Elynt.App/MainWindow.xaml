@@ -748,6 +748,10 @@
                     </TextBlock>
                     <TextBlock Text="{Binding NotApplicableReason}" Margin="0,8,0,0" TextWrapping="Wrap"
                                Visibility="{Binding IsNotApplicable, Converter={StaticResource Visible}}" />
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                               Visibility="{Binding IsBlocked, Converter={StaticResource Visible}}">
+                        <Run Text="Before you can turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding BlockedReason, Mode=OneWay}" />
+                    </TextBlock>
                     <TextBlock Text="Restart the PC for this change to take effect." Margin="0,8,0,0" TextWrapping="Wrap"
                                Visibility="{Binding PendingReboot, Converter={StaticResource Visible}}" />
                     <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkRed"

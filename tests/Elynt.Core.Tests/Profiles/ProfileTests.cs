@@ -20,10 +20,11 @@ public class ProfileTests
     private readonly FakeProcesses _processes = new();
     private readonly FakeTimerResolution _timer = new();
 
-    private static readonly TweakDefinition Defender = LabelTests.TestTweak("security.defender-off") with { Section = Sections.Security };
+    // The real Defender-off tweak, which is in Security and so must never be allowed in a per-game profile.
+    private static readonly TweakDefinition Defender = SecurityTweaks.DefenderOff;
 
     private Engine NewEngine(ChangeJournal? journal = null) => new(
-        new Catalogue([.. Catalogue.Default.Tweaks.Where(t => !t.PerGame), Defender], GamingTweaks.PerGame),
+        new Catalogue([.. Catalogue.Default.Tweaks.Where(t => !t.PerGame)], GamingTweaks.PerGame),
         new SystemAdapters(_registry, _system) { Power = _power, Processes = _processes, Timer = _timer },
         journal ?? _journal,
         User,
