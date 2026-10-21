@@ -65,6 +65,14 @@ public sealed record TweakView(
 
     public bool Applicable => NotApplicableReason is null;
 
+    /// <summary>
+    /// A transient reason the tweak can't be turned on right now, with a guide for clearing it (e.g. Tamper Protection
+    /// being on), or null when it can. Unlike <see cref="NotApplicableReason"/>, the user can clear it and try again.
+    /// </summary>
+    public string? BlockedReason { get; init; }
+
+    public bool Blocked => BlockedReason is not null;
+
     /// <summary>Warnings that fit this PC's hardware, e.g. the X3D core-parking warning.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
@@ -515,6 +523,13 @@ public sealed partial class Engine(
         if (tweak.ApplyWarning is { } mustRead && !options.ConfirmWarning)
             return Failed(tweak, $"Read this first and confirm it: {mustRead} Nothing was changed.");
 
+        // A transient, on-the-PC block the user clears by hand (e.g. Defender's Tamper Protection), with a guide.
+        if (tweak.Guard?.Blocking(system) is { } blocked)
+        {
+            _log.LogInformation("Refused {Tweak}: blocked until the user clears it", tweak.Id);
+            return Failed(tweak, $"{blocked} Nothing was changed.");
+        }
+
         return null;
     }
 
@@ -772,6 +787,7 @@ public sealed partial class Engine(
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
                         journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
         NotApplicableReason = WhyNotApplicable(tweak),
+        BlockedReason = Blocking(tweak),
         Warnings = tweak.HardwareNotes
             .Where(note => (system.System.Hardware & note.When) == note.When)
             .Select(note => note.Text)
@@ -779,6 +795,20 @@ public sealed partial class Engine(
         ProfileEligible = tweak.ProfileEligible,
         PerGame = tweak.PerGame,
     };
+    }
+
+    /// <summary>A transient block on a tweak (e.g. Tamper Protection on), read safely so a UI list never throws.</summary>
+    private string? Blocking(TweakDefinition tweak)
+    {
+        try
+        {
+            return tweak.Guard?.Blocking(system);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read whether {Tweak} is blocked", tweak.Id);
+            return null;
+        }
     }
 
     private IReadOnlyList<GameConflict> AffectedGames(TweakDefinition tweak)

@@ -75,6 +75,12 @@ public sealed record SystemAdapters(
     public Security.IScanExclusions? ScanExclusions { get; init; }
 
     /// <summary>
+    /// Microsoft Defender's Tamper Protection and running state, read only. Without it, the Defender-off tweak fails
+    /// safe and refuses (it can't confirm Tamper Protection is off).
+    /// </summary>
+    public Security.IDefenderState? DefenderState { get; init; }
+
+    /// <summary>
     /// The PC's clock, for steps whose value depends on today (the update pause's end date). The Engine uses it too
     /// unless it is given its own.
     /// </summary>

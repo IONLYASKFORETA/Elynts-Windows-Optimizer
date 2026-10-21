@@ -102,6 +102,11 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public string? NotApplicableReason => View.NotApplicableReason;
 
+    /// <summary>A transient block the user clears by hand (e.g. Defender's Tamper Protection), with a how-to guide.</summary>
+    public bool IsBlocked => View.Blocked;
+
+    public string? BlockedReason => View.BlockedReason;
+
     private static string AntiCheatName(AntiCheat antiCheat) => antiCheat switch
     {
         AntiCheat.Vanguard => "Riot Vanguard",
@@ -142,8 +147,13 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
         }
     }
 
-    /// <summary>A not-applicable tweak can only be switched off, and only when it has something to undo.</summary>
-    public bool IsEnabled => !IsBusy && (View.Applicable || View.CanUndo);
+    /// <summary>
+    /// A not-applicable tweak can only be switched off, and only when it has something to undo. A blocked tweak (e.g.
+    /// Defender off while Tamper Protection is on) can't be turned on until the user clears the block by hand, but can
+    /// still be turned back off when it is on.
+    /// </summary>
+    public bool IsEnabled => !IsBusy && (View.Applicable || View.CanUndo) &&
+        (!IsBlocked || View.CanUndo || View.State == TweakState.On);
 
     /// <summary>The service's answer to the last flip, shown in the detail pane.</summary>
     public string? Message
