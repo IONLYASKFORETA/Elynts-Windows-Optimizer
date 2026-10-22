@@ -72,6 +72,12 @@ public sealed record TweakDefinition(
 
     /// <summary>A per-game choice listed before a game is picked (see <see cref="PerGameTweak"/>). It can't be applied itself.</summary>
     public bool PerGame { get; init; }
+
+    /// <summary>
+    /// A transient, on-the-PC condition that must be cleared by hand before the tweak can be applied (e.g. Microsoft
+    /// Defender's Tamper Protection being on), with a plain-language guide. The Engine refuses while it is blocking.
+    /// </summary>
+    public IApplyGuard? Guard { get; init; }
 }
 
 /// <summary>

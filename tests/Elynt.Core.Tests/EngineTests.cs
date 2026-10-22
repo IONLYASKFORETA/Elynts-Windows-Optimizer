@@ -246,6 +246,8 @@ public class EngineTests
         Features = _features,
         PnpDevices = _devices,
         ScanExclusions = _exclusions,
+        // Tamper Protection off, so the Defender-off tweak's round trip can run; on a real PC the user clears it by hand.
+        DefenderState = new FakeDefenderState { TamperProtectionOn = false },
     };
 
     private Engine NewEngineWith(IJournalStore store) => new(Catalogue.Default, Adapters(), new ChangeJournal(store), "S-1-5-21-test");

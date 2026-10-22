@@ -44,6 +44,8 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         // are covered by the logic tests, so CI never uninstalls apps from the runner.
         Assert.SkipWhen(tweak.Steps.Any(step => step is AppRemovalStep or AppDeprovisionStep or OptionalFeatureStep),
             "Removes apps or Windows features; covered by the fake-adapter logic tests.");
+        Assert.SkipWhen(tweak.Guard is not null,
+            "Has an apply guard the user must clear by hand (e.g. Defender's Tamper Protection); covered by its own guarded test, so CI never disables Defender.");
         var machineWide = tweak.Steps.Any(step => step.Target is not RegistryTarget { Location.Root: RegistryRoot.CurrentUser });
         Assert.SkipWhen(machineWide && !OnDisposableRunner,
             "Changes machine-wide settings, so it only runs on CI's throwaway Windows machines as admin.");
@@ -87,9 +89,40 @@ public sealed class RealRegistryRoundTripTests : IDisposable
     }
 
     private readonly WindowsScanExclusions _scanExclusions = new();
+    private readonly WindowsDefenderState _defenderState = new();
 
     private SystemAdapters Adapters() =>
-        new(_registry, new WindowsSystemInfo()) { Boot = _boot, Power = _power, PnpDevices = new WindowsDevices(), ScanExclusions = _scanExclusions };
+        new(_registry, new WindowsSystemInfo())
+        {
+            Boot = _boot, Power = _power, PnpDevices = new WindowsDevices(),
+            ScanExclusions = _scanExclusions, DefenderState = _defenderState,
+        };
+
+    /// <summary>
+    /// Turning Microsoft Defender off and back on, against the real registry, but only on a throwaway CI machine where
+    /// the user has turned Tamper Protection off. On GitHub runners Tamper Protection is on, so this skips and CI never
+    /// disables Defender. The app never turns Tamper Protection off itself; this test doesn't either.
+    /// </summary>
+    [Fact]
+    public void Turning_Defender_off_and_back_on_restores_the_exact_settings_when_Tamper_Protection_is_off()
+    {
+        Assert.SkipUnless(OnDisposableRunner, "Changes Defender's machine-wide policy, so it only runs on CI's throwaway machines as admin.");
+
+        bool tamperOn;
+        try
+        {
+            tamperOn = _defenderState.TamperProtectionOn;
+        }
+        catch (Exception ex)
+        {
+            Assert.Skip($"Microsoft Defender doesn't answer on this machine: {ex.Message}");
+            return;
+        }
+        Assert.SkipWhen(tamperOn,
+            "Tamper Protection is on (as it is on GitHub runners). The app refuses while it is on, so CI never disables Defender.");
+
+        CatalogueRoundTrip.Run(NewEngine(Catalogue.Default), Adapters(), SecurityTweaks.DefenderOff);
+    }
 
     /// <summary>Whether Defender answers here; a runner without it has no exclusion list to change.</summary>
     private bool DefenderAvailable()
