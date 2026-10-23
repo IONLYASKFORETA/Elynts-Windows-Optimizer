@@ -243,6 +243,45 @@
         </Setter>
     </Style>
 
+    <!-- A list row as a card (a tweak, an app, a startup item): a hover shade, and a red edge when selected. -->
+    <Style x:Key="Row" TargetType="ListBoxItem">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Card" Margin="0,0,0,6" Padding="16,12" CornerRadius="8" BorderThickness="1"
+                            Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource Theme.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.TextDim}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.Red}" />
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- A ListBox of Row cards. Rows wrap to the list's width rather than scrolling sideways. -->
+    <Style x:Key="CardList" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
+    </Style>
+
     <!-- A sidebar entry: a soft highlight, and a short wave bar on the left when selected. -->
     <Style x:Key="NavItem" TargetType="ListBoxItem">
         <Setter Property="Cursor" Value="Hand" />
