@@ -52,7 +52,7 @@ public partial class AppsPage : UserControl
         var (text, count) = Apps.BuildAppList();
         if (count == 0)
         {
-            MessageBox.Show(owner, "Tick the apps you want in the list first, on the Catalogue or Search tab.", "Save app list");
+            ConfirmDialog.Tell(owner, "Tick the apps you want in the list first, on the Catalogue or Search tab.", "Save app list");
             return;
         }
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -63,7 +63,7 @@ public partial class AppsPage : UserControl
         if (dialog.ShowDialog(owner) != true)
             return;
         File.WriteAllText(dialog.FileName, text);
-        MessageBox.Show(owner, $"Saved {count} {(count == 1 ? "app" : "apps")}. Load the file with \"Load app list\" on another PC to install them there.", "Save app list");
+        ConfirmDialog.Tell(owner, $"Saved {count} {(count == 1 ? "app" : "apps")}. Load the file with \"Load app list\" on another PC to install them there.", "Save app list");
     }
 
     private void LoadAppList(object sender, RoutedEventArgs e)
@@ -82,9 +82,9 @@ public partial class AppsPage : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(owner, $"Couldn't read the file: {ex.Message}", "Load app list");
+            ConfirmDialog.Tell(owner, $"Couldn't read the file: {ex.Message}", "Load app list");
             return;
         }
-        MessageBox.Show(owner, Apps.LoadAppList(text), "Load app list");
+        ConfirmDialog.Tell(owner, Apps.LoadAppList(text), "Load app list");
     }
 }
