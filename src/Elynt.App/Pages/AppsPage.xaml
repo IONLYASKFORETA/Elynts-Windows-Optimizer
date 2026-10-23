@@ -184,8 +184,8 @@
                                 <Button Grid.Column="2" Content="Update" Margin="12,0,0,0" Click="UpdateApp"
                                         Visibility="{Binding CanUpdate, Converter={StaticResource Visible}}"
                                         IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                <Button Grid.Column="3" Style="{StaticResource Button.Destructive}" Content="Uninstall" Padding="12,7"
-                                        Margin="8,0,0,0" VerticalAlignment="Center" Click="UninstallApp"
+                                <!-- Plain, so a long list isn't a column of red; the confirmation draws the uninstall itself in red. -->
+                                <Button Grid.Column="3" Content="Uninstall" Margin="8,0,0,0" VerticalAlignment="Center" Click="UninstallApp"
                                         IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
                             </Grid>
                         </DataTemplate>
