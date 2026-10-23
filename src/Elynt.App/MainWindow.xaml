@@ -31,7 +31,8 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="220" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="400" />
+            <!-- The detail pane; it collapses on pages with nothing selected to describe. -->
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <!-- Sidebar: sections, then per-game profiles and the undo history. -->
@@ -674,8 +675,8 @@
             </Grid>
         </DockPanel>
 
-        <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
-                Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}"
+        <Border Grid.Column="2" Width="384" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
+                Visibility="{Binding HasDetail, Converter={StaticResource Visible}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
