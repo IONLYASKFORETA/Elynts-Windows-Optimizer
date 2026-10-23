@@ -1,0 +1,58 @@
+name: UI screenshots
+
+# Opens the real app window on a made-up PC (the test fakes) and screenshots every page, so the UI can be looked at
+# without installing anything. The pictures go to the run's Artifacts and to the screenshots/<branch> branch.
+on:
+  push:
+    branches-ignore:
+      - 'screenshots/**'
+    paths:
+      - 'src/Elynt.App/**'
+      - 'tests/Elynt.App.Screenshots/**'
+      - '.github/workflows/ui-screenshots.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ui-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    permissions:
+      contents: write # to push the pictures to screenshots/<branch>
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The runner's screen is 1024x768, too small for the larger window sizes the tour tries.
+      - name: Enlarge the screen
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
+      - name: Take screenshots
+        run: dotnet run --project tests/Elynt.App.Screenshots --configuration Release -- out/ui-shots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: out/ui-shots
+          retention-days: 14
+
+      - name: Push to screenshots/${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          Set-Location out/ui-shots
+          git init --quiet --initial-branch shots
+          git add --all
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" `
+            commit --quiet --message "Screenshots of ${{ github.sha }}"
+          git push --force --quiet "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" `
+            "HEAD:refs/heads/screenshots/${{ github.ref_name }}"
