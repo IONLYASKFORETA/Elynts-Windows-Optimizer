@@ -23,13 +23,13 @@ public partial class HistoryPage : UserControl
 
     private async void RestoreEverything(object sender, RoutedEventArgs e)
     {
-        var answer = MessageBox.Show(
+        var answer = ConfirmDialog.Ask(
             Window.GetWindow(this),
             "Undo every change the app made that is still in place, newest first?\n\nAnything something else has changed since is left alone and listed.",
             "Restore everything",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Question);
-        if (answer == MessageBoxResult.OK)
+            ConfirmButtons.OkCancel,
+            ConfirmRisk.Destructive);
+        if (answer == ConfirmAnswer.Ok)
             await Model.RestoreEverythingAsync();
     }
 }
