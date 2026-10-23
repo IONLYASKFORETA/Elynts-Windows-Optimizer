@@ -27,14 +27,13 @@ public static class Program
 
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
-        // The tour opens the window itself, so it can wait for it and resize it.
-        app.StartupUri = null;
         app.Startup += async (_, _) =>
         {
             var exitCode = 1;
             try
             {
-                await Tour.RunAsync(output);
+                // App.xaml's StartupUri opens the window once this handler first yields.
+                await Tour.RunAsync(app, output);
                 exitCode = 0;
             }
             catch (Exception ex)

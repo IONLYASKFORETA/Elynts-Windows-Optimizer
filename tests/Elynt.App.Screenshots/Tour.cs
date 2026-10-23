@@ -18,10 +18,11 @@ internal static partial class Tour
         ("wide", 1600, 900),
     ];
 
-    public static async Task RunAsync(string output)
+    public static async Task RunAsync(Application app, string output)
     {
-        var window = new MainWindow { WindowStartupLocation = WindowStartupLocation.Manual, Left = 0, Top = 0 };
-        window.Show();
+        await WaitUntilAsync(() => app.MainWindow is MainWindow { IsLoaded: true }, TimeSpan.FromSeconds(30), () => "the window to open");
+        var window = (MainWindow)app.MainWindow;
+        (window.Left, window.Top) = (0, 0);
         var model = (MainViewModel)window.DataContext;
         await WaitUntilAsync(() => model.IsConnected, TimeSpan.FromSeconds(30), () => $"the window to connect (status: {model.Status})");
 
