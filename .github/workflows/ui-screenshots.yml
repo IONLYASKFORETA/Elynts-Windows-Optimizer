@@ -34,10 +34,12 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          try { Set-DisplayResolution -Width 2560 -Height 1440 -Force -ErrorAction Stop }
-          catch { Set-DisplayResolution -Width 1920 -Height 1080 -Force }
           Add-Type -AssemblyName System.Windows.Forms
-          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          # An unsupported size only prints a message, so check what the screen ended up at.
+          Set-DisplayResolution -Width 2560 -Height 1440 -Force
+          if ([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width -lt 2560) {
+            Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          }
 
       - name: Take screenshots
         run: dotnet run --project tests/Elynt.App.Screenshots --configuration Release -- out/ui-shots
