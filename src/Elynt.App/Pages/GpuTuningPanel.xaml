@@ -18,7 +18,7 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:GpuTuningItemViewModel}">
                     <Border Padding="12" Margin="0,4" CornerRadius="6" BorderThickness="1"
-                            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+                            BorderBrush="{StaticResource Theme.Stroke}">
                         <StackPanel>
                             <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" />
                             <TextBlock Text="On default settings" Opacity="0.7"
@@ -41,7 +41,7 @@
 
                             <!-- Intel requires its warning to be shown and accepted before tuning unlocks. -->
                             <Border Padding="10" Margin="0,8,0,0" CornerRadius="4" BorderThickness="1"
-                                    BorderBrush="DarkOrange"
+                                    BorderBrush="{StaticResource Theme.OrangeEdge}"
                                     Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
                                 <StackPanel>
                                     <TextBlock Text="Read this before tuning" FontWeight="SemiBold" />

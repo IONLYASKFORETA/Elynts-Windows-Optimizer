@@ -31,7 +31,7 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="GroupItem">
-                                            <Border BorderThickness="0,1,0,0" BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                                            <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource Theme.Stroke}"
                                                     Margin="0,12,0,0" Padding="0,8,0,0">
                                                 <Expander IsExpanded="False">
                                                     <Expander.Header>

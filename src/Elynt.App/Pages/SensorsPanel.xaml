@@ -32,7 +32,7 @@
         </ItemsControl>
 
         <Border Padding="12" Margin="0,4" CornerRadius="6" BorderThickness="1"
-                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                BorderBrush="{StaticResource Theme.Stroke}"
                 Visibility="{Binding Available, Converter={StaticResource Visible}}">
             <StackPanel>
                 <TextBlock Text="PawnIO driver (optional)" FontSize="14" FontWeight="SemiBold" />

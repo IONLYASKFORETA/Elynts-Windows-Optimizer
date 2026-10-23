@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using Elynt.App.Theme;
 using Elynt.App.ViewModels;
 using Elynt.Core;
 using Elynt.Core.Drivers;
@@ -20,6 +21,11 @@ public partial class MainWindow : Window
         _model.Cleanup.ConfirmDestructive = ConfirmDestructiveCleanup;
         _model.Drift = new DriftViewModel(() => _model.Client, ConfirmDestructiveReapply, _model.RefreshAsync);
         InitializeComponent();
+        // Opens at 1600×1000, or the screen's work area where that is smaller, and never remembers its size.
+        var screen = SystemParameters.WorkArea;
+        (Width, Height) = (Math.Min(Width, screen.Width), Math.Min(Height, screen.Height));
+        SourceInitialized += (_, _) => TitleBar.Paint(this);
+        AccentWave.Follow(this);
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         _model.Profiles.PickApp = PickApp;

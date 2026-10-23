@@ -27,7 +27,7 @@
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding WhatItDoes}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Note}" FontSize="12" TextWrapping="Wrap" Foreground="DarkOrange"
+                            <TextBlock Text="{Binding Note}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}"
                                        Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
                             <TextBlock Text="{Binding Result}" FontSize="12" TextWrapping="Wrap"
                                        Visibility="{Binding HasResult, Converter={StaticResource Visible}}" />

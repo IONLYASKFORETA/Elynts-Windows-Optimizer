@@ -4,33 +4,98 @@
         xmlns:vm="clr-namespace:Elynt.App.ViewModels"
         xmlns:pages="clr-namespace:Elynt.App.Pages"
         Title="Elynt's Windows Optimizer"
-        Width="1180" Height="720" MinWidth="900" MinHeight="520"
-        WindowStartupLocation="CenterScreen">
-    <Grid d:DataContext="{d:DesignInstance vm:MainViewModel}"
+        Width="1600" Height="1000" MinWidth="900" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Theme.Bg}">
+    <!-- Layout A: the sidebar, the page, and the detail pane on the right when something is selected. -->
+    <Grid Background="{StaticResource Theme.Bg}" TextElement.Foreground="{StaticResource Theme.Text}"
+          d:DataContext="{d:DesignInstance vm:MainViewModel}"
           xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
           xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
           mc:Ignorable="d">
         <Grid.RowDefinitions>
+            <RowDefinition Height="2" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="232" />
             <ColumnDefinition Width="*" />
             <!-- The detail pane; it collapses on pages with nothing selected to describe. -->
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Sidebar: sections, then per-game profiles and the undo history. -->
-        <DockPanel Grid.Column="0" Margin="8">
-            <TextBlock DockPanel.Dock="Top" Text="Elynt's Optimizer" FontSize="18" FontWeight="SemiBold" Margin="8,4,8,12" />
-            <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}" BorderThickness="0" />
-        </DockPanel>
+        <!-- The accent strip along the top. -->
+        <Border Grid.ColumnSpan="3" Background="{DynamicResource Theme.AccentWave}" />
+
+        <!-- Sidebar: the app mark, the pages, and a footer with the connection and updates. -->
+        <Border Grid.Row="1" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="22,22,0,18">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Theme.AccentWave}">
+                        <TextBlock Text="E" FontWeight="Bold" FontSize="15" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="ELYNT'S" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextFaint}" />
+                        <TextBlock Text="Windows Optimizer" FontSize="13.5" FontWeight="SemiBold" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom" Margin="14" Padding="12,10" CornerRadius="8" Background="{StaticResource Theme.Surface2}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="0,4,0,0" VerticalAlignment="Top">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource Theme.Good}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsConnected}" Value="False">
+                                                <Setter Property="Fill" Value="{StaticResource Theme.Red}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Margin="9,0,0,0" FontSize="11.5" Foreground="{StaticResource Theme.TextDim}" TextWrapping="Wrap"
+                                       Text="{Binding Status}" />
+                        </DockPanel>
+                        <Button Content="Retry" Click="Retry" Margin="0,10,0,0" HorizontalAlignment="Stretch"
+                                Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
+                        <Button Click="RestartIntoUpdate" Margin="0,10,0,0" Padding="10,7" HorizontalAlignment="Stretch"
+                                Style="{StaticResource Button.Primary}"
+                                Visibility="{Binding HasUpdateReady, Converter={StaticResource Visible}}">
+                            <TextBlock TextWrapping="Wrap" TextAlignment="Center">
+                                <Run Text="Restart to update to" /> <Run Text="{Binding UpdateReady, Mode=OneWay}" />
+                            </TextBlock>
+                        </Button>
+                        <!-- The update channel, until it moves to the Settings page. -->
+                        <DockPanel Margin="0,10,0,0">
+                            <TextBlock Text="Updates" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11.5"
+                                       Foreground="{StaticResource Theme.TextDim}" />
+                            <ComboBox ItemsSource="{Binding Channels}" SelectedItem="{Binding Channel}"
+                                      AutomationProperties.Name="Update channel" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}" Background="Transparent" BorderThickness="0"
+                         ItemContainerStyle="{StaticResource NavItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         AutomationProperties.Name="Pages">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Text.Icon}" Text="{Binding Converter={StaticResource PageIcon}}" FontSize="15" Width="22" />
+                                <TextBlock Margin="10,0,0,0" FontSize="13.5" VerticalAlignment="Center" Text="{Binding}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
 
         <!-- The current page. Each page is its own view under Pages; the section pages share one cell and each shows only on its own page. -->
-        <DockPanel Grid.Column="1" Margin="8" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
-            <TextBlock DockPanel.Dock="Top" Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" Margin="4,4,4,12" />
-            <pages:WindowsUpdatePanel DockPanel.Dock="Top" Margin="4,0,4,12"
+        <DockPanel Grid.Row="1" Grid.Column="1" Margin="32,26,24,0" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
+            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.H1}" Text="{Binding SelectedPage}" Margin="0,0,0,18" />
+            <pages:WindowsUpdatePanel DockPanel.Dock="Top" Margin="0,0,0,12"
                                       Visibility="{Binding IsWindowsUpdatePage, Converter={StaticResource Visible}}" />
             <Grid>
                 <pages:AppsPage Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}" />
@@ -41,36 +106,17 @@
                                         Visibility="{Binding IsCleanupPage, Converter={StaticResource Visible}}" />
                     <pages:TweakList />
                 </DockPanel>
-                <TextBlock Text="Nothing here yet. This section arrives in a later build."
-                           Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}"
-                           Opacity="0.7" Margin="8" TextWrapping="Wrap" />
+                <TextBlock Text="Nothing here yet. This section arrives in a later build." Style="{StaticResource Text.Dim}"
+                           Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" />
                 <pages:DriversPage Visibility="{Binding IsDriversPage, Converter={StaticResource Visible}}" />
                 <pages:GamesPage Visibility="{Binding IsGamesPage, Converter={StaticResource Visible}}" />
                 <pages:OverclockingPage Visibility="{Binding IsOverclockingPage, Converter={StaticResource Visible}}" />
             </Grid>
         </DockPanel>
 
-        <pages:HistoryPage Grid.Column="1" Grid.ColumnSpan="2" Visibility="{Binding IsHistoryPage, Converter={StaticResource Visible}}" />
+        <pages:HistoryPage Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="24,18,16,0"
+                           Visibility="{Binding IsHistoryPage, Converter={StaticResource Visible}}" />
 
-        <pages:DetailPane Grid.Column="2" Visibility="{Binding HasDetail, Converter={StaticResource Visible}}" />
-
-        <!-- Connection status. -->
-        <DockPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="16,4,16,10">
-            <!-- Updates: the channel, and a restart button once a newer build has downloaded. -->
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Retry" Click="Retry" Padding="16,4" Margin="0,0,16,0"
-                        Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" />
-                <Button Click="RestartIntoUpdate" Padding="16,4" Margin="0,0,16,0"
-                        Visibility="{Binding HasUpdateReady, Converter={StaticResource Visible}}">
-                    <TextBlock>
-                        <Run Text="Restart to update to" /> <Run Text="{Binding UpdateReady, Mode=OneWay}" />
-                    </TextBlock>
-                </Button>
-                <TextBlock Text="Updates:" VerticalAlignment="Center" Margin="0,0,6,0" Opacity="0.8" />
-                <ComboBox ItemsSource="{Binding Channels}" SelectedItem="{Binding Channel}" MinWidth="90"
-                          AutomationProperties.Name="Update channel" />
-            </StackPanel>
-            <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.8" />
-        </DockPanel>
+        <pages:DetailPane Grid.Row="1" Grid.Column="2" Visibility="{Binding HasDetail, Converter={StaticResource Visible}}" />
     </Grid>
 </Window>

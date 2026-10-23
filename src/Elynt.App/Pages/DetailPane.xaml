@@ -5,7 +5,7 @@
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
     <Border Width="384" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
-            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
+            BorderBrush="{StaticResource Theme.Stroke}" Background="{StaticResource Theme.Surface}">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <Grid>
             <!-- Repair detail: restart need before running, live progress, the summary and the log.
@@ -79,7 +79,7 @@
                 </TextBlock>
                 <TextBlock Text="{Binding NotApplicableReason}" Margin="0,8,0,0" TextWrapping="Wrap"
                            Visibility="{Binding IsNotApplicable, Converter={StaticResource Visible}}" />
-                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}"
                            Visibility="{Binding IsBlocked, Converter={StaticResource Visible}}">
                     <Run Text="Before you can turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding BlockedReason, Mode=OneWay}" />
                 </TextBlock>
@@ -89,7 +89,7 @@
                            Visibility="{Binding IsDestructive, Converter={StaticResource Visible}}">
                     <Run Text="Can't be undone:" FontWeight="SemiBold" /> <Run Text="{Binding View.DestructiveWarning, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkOrange"
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}"
                            Visibility="{Binding HasApplyWarning, Converter={StaticResource Visible}}">
                     <Run Text="Before you turn this on:" FontWeight="SemiBold" /> <Run Text="{Binding View.ApplyWarning, Mode=OneWay}" />
                 </TextBlock>

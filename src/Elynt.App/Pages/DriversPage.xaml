@@ -55,7 +55,7 @@
                                 <TextBlock FontWeight="SemiBold" TextWrapping="Wrap">
                                     <Run Text="{Binding Name, Mode=OneWay}" /> <Run Text="(" /><Run Text="{Binding Driver, Mode=OneWay}" /> <Run Text="{Binding Version, Mode=OneWay}" /><Run Text=")" />
                                 </TextBlock>
-                                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Foreground="DarkOrange" />
+                                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}" />
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
