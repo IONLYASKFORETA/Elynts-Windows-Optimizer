@@ -37,8 +37,12 @@ jobs:
           Add-Type -AssemblyName System.Windows.Forms
           [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 
+      # A branch carrying a throwaway UI prototype (src/Elynt.App/Prototype) shoots the prototype's layouts instead.
       - name: Take screenshots
-        run: dotnet run --project tests/Elynt.App.Screenshots --configuration Release -- out/ui-shots
+        shell: pwsh
+        run: |
+          $mode = if (Test-Path src/Elynt.App/Prototype) { '--prototype' } else { $null }
+          dotnet run --project tests/Elynt.App.Screenshots --configuration Release -- out/ui-shots $mode
 
       - uses: actions/upload-artifact@v4
         with:

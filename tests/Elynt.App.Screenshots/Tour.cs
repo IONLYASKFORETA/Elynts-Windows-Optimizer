@@ -1,10 +1,13 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Elynt.App.Prototype;
 using Elynt.App.ViewModels;
+using Elynt.Core.Tweaks;
 
 namespace Elynt.App.Screenshots;
 
@@ -18,13 +21,20 @@ internal static partial class Tour
         ("wide", 1600, 900),
     ];
 
-    public static async Task RunAsync(Application app, string output)
+    public static async Task RunAsync(Application app, string output, bool prototype)
     {
         await WaitUntilAsync(() => app.MainWindow is MainWindow { IsLoaded: true }, TimeSpan.FromSeconds(30), () => "the window to open");
         var window = (MainWindow)app.MainWindow;
         (window.Left, window.Top) = (0, 0);
         var model = (MainViewModel)window.DataContext;
         await WaitUntilAsync(() => model.IsConnected, TimeSpan.FromSeconds(30), () => $"the window to connect (status: {model.Status})");
+
+        if (prototype)
+        {
+            await ShootPrototypeAsync(window, model, output);
+            window.Close();
+            return;
+        }
 
         foreach (var theme in new[] { ThemeMode.Light, ThemeMode.Dark })
         {
@@ -66,6 +76,49 @@ internal static partial class Tour
                 await SettleAsync();
                 Shoot(window, folder, $"{name}-fullest-repair-tool", screen);
             }
+        }
+    }
+
+    /// <summary>
+    /// PROTOTYPE, throwaway: each black-and-red layout at two sizes, on Home, a tweak section with its fullest tweak
+    /// open, a second tweak section and a section the prototype doesn't redraw.
+    /// </summary>
+    private static async Task ShootPrototypeAsync(MainWindow window, MainViewModel model, string output)
+    {
+        var shell = PrototypeShell.Current ?? throw new InvalidOperationException("The window didn't start in prototype mode.");
+        string[] pages = [PrototypeViewModel.Home, Sections.Gaming, Sections.DebloatAndPrivacy, Sections.Repair];
+        foreach (var size in new[] { Sizes[0], Sizes[2] })
+        {
+            window.Width = size.Width;
+            window.Height = size.Height;
+            foreach (var (variant, _) in PrototypeShell.Variants)
+            {
+                shell.Show(variant);
+                var folder = Path.Combine(output, $"prototype-{variant.ToLowerInvariant()}-{size.Name}");
+                Directory.CreateDirectory(folder);
+                for (var i = 0; i < pages.Length; i++)
+                {
+                    shell.Model.Open(pages[i]);
+                    if (pages[i] == Sections.Gaming && model.Tweaks.Count > 1)
+                        model.SelectedTweak = model.Tweaks.MaxBy(DetailLength);
+                    await SettleAsync();
+                    ScrollSelectionIntoView(window);
+                    await SettleAsync();
+                    Shoot(window, folder, $"{i + 1:00}-{Slug(pages[i])}", screen: false);
+                }
+            }
+        }
+    }
+
+    /// <summary>Brings each list's selected item into view, as a click on it would have.</summary>
+    private static void ScrollSelectionIntoView(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is ListBox { IsVisible: true, SelectedItem: { } selected } list)
+                list.ScrollIntoView(selected);
+            ScrollSelectionIntoView(child);
         }
     }
 

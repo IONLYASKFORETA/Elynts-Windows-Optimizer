@@ -1,0 +1,247 @@
+<!-- PROTOTYPE, throwaway. Layout A: a sidebar of sections, the section's tweaks as a list, and a detail pane on the
+     right for the selected tweak. The closest to today's layout, in the new look. -->
+<UserControl x:Class="Elynt.App.Prototype.VariantA"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/ElyntOptimizer;component/Prototype/BlackRed.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- A sidebar entry: a soft highlight and a thin wave bar on the left when selected. -->
+            <Style x:Key="A.NavItem" TargetType="ListBoxItem">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <Grid Margin="10,1" Background="Transparent">
+                                <Border x:Name="Bg" CornerRadius="7" />
+                                <Border x:Name="Bar" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="0,8"
+                                        Background="{DynamicResource Proto.AccentWave}" Visibility="Collapsed" />
+                                <ContentPresenter Margin="14,9" />
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource Proto.Hover}" />
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource Proto.Surface2}" />
+                                    <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- A tweak row: a card that picks up a red edge when selected. -->
+            <Style x:Key="A.Row" TargetType="ListBoxItem">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <Border x:Name="Card" Margin="0,0,0,6" Padding="16,12" CornerRadius="8"
+                                    Background="{StaticResource Proto.Surface}" BorderBrush="{StaticResource Proto.Stroke}" BorderThickness="1">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Card" Property="Background" Value="{StaticResource Proto.Hover}" />
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Proto.Red}" />
+                                    <Setter TargetName="Card" Property="Background" Value="{StaticResource Proto.Surface2}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Background="{StaticResource Proto.Bg}" TextElement.Foreground="{StaticResource Proto.Text}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="2" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- The accent strip along the top. -->
+        <Border Grid.ColumnSpan="3" Background="{DynamicResource Proto.AccentWave}" />
+
+        <!-- Sidebar. -->
+        <Border Grid.Row="1" Background="{StaticResource Proto.Surface}" BorderBrush="{StaticResource Proto.Stroke}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="22,22,0,18">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Proto.AccentWave}">
+                        <TextBlock Text="E" FontWeight="Bold" FontSize="15" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="ELYNT'S" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Proto.TextFaint}" />
+                        <TextBlock Text="Windows Optimizer" FontSize="13.5" FontWeight="SemiBold" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom" Margin="14" Padding="12,10" CornerRadius="8" Background="{StaticResource Proto.Surface2}">
+                    <DockPanel>
+                        <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="#FF22C55E" VerticalAlignment="Center" />
+                        <TextBlock Margin="9,0,0,0" FontSize="11.5" Foreground="{StaticResource Proto.TextDim}" TextWrapping="Wrap"
+                                   Text="{Binding Model.Status}" />
+                    </DockPanel>
+                </Border>
+
+                <ListBox ItemsSource="{Binding Nav}" SelectedItem="{Binding SelectedNav}" Background="Transparent" BorderThickness="0"
+                         ItemContainerStyle="{StaticResource A.NavItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Proto.Icon}" Text="{Binding Glyph}" FontSize="15" Width="22" />
+                                <TextBlock Margin="10,0,0,0" FontSize="13.5" VerticalAlignment="Center" Text="{Binding Page}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- The page. -->
+        <Grid Grid.Row="1" Grid.Column="1" Margin="32,26,24,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Margin="0,0,0,18">
+                <TextBlock Style="{StaticResource Proto.H1}" Text="{Binding PageTitle}" />
+                <TextBlock Style="{StaticResource Proto.Dim}" Margin="0,4,0,0" Text="{Binding PageSummary}" />
+            </StackPanel>
+
+            <!-- Home. -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsHome, Converter={StaticResource Visible}}">
+                <StackPanel Margin="0,0,8,24">
+                    <Border Style="{StaticResource Proto.Card}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Proto.Label}" Margin="0,0,0,6" Text="THIS PC" />
+                                <TextBlock Style="{StaticResource Proto.H2}" Text="{Binding Hardware}" />
+                                <TextBlock Style="{StaticResource Proto.Dim}" Margin="0,4,0,0" Text="{Binding WindowsVersion}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Proto.Label}" Margin="0,0,0,6" Text="TEMPERATURES" HorizontalAlignment="Right" />
+                                <TextBlock FontSize="14" HorizontalAlignment="Right" Text="{Binding TemperatureText}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <UniformGrid Columns="3" Margin="-6,12,-6,0">
+                        <Border Style="{StaticResource Proto.Card}" Margin="6,0">
+                            <StackPanel>
+                                <TextBlock FontSize="30" FontWeight="Bold" Foreground="{DynamicResource Proto.AccentWave}" Text="{Binding TweaksOn}" />
+                                <TextBlock Style="{StaticResource Proto.Dim}">
+                                    <Run Text="tweaks on, of" /> <Run Text="{Binding TweaksAvailable, Mode=OneWay}" /> <Run Text="that fit this PC" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Proto.Card}" Margin="6,0">
+                            <StackPanel>
+                                <TextBlock FontSize="30" FontWeight="Bold" Text="{Binding RestartsWaiting}" />
+                                <TextBlock Style="{StaticResource Proto.Dim}" Text="changes waiting for a restart" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Proto.Card}" Margin="6,0">
+                            <StackPanel>
+                                <TextBlock FontSize="30" FontWeight="Bold" Text="1" />
+                                <TextBlock Style="{StaticResource Proto.Dim}" Text="driver update ready (sample)" />
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <Button Style="{StaticResource Proto.Primary}" Content="Clean up" />
+                        <Button Style="{StaticResource Proto.Ghost}" Margin="10,0,0,0" Content="Check drivers" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Proto.Label}" Margin="0,26,0,10" Text="SECTIONS" />
+                    <ItemsControl ItemsSource="{Binding Sections}" Margin="-6,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="3" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Proto.Card}" Margin="6" Padding="16,14">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource Proto.Icon}" Foreground="{StaticResource Proto.Orange}" Text="{Binding Glyph}" />
+                                            <TextBlock Margin="10,0,0,0" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center" Text="{Binding Name}" />
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource Proto.Dim}" Margin="0,8,0,8" Text="{Binding Status}" />
+                                        <ProgressBar Style="{StaticResource Proto.Meter}" Value="{Binding Fraction, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- A tweak section: one row per tweak. -->
+            <ListBox Grid.Row="1" ItemsSource="{Binding Model.Tweaks}" SelectedItem="{Binding Model.SelectedTweak}"
+                     Background="Transparent" BorderThickness="0" Padding="0,0,8,0"
+                     ItemContainerStyle="{StaticResource A.Row}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="False"
+                     Visibility="{Binding IsTweakSection, Converter={StaticResource Visible}}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Name}" />
+                                <TextBlock Style="{StaticResource Proto.Dim}" Margin="0,3,0,0" Text="{Binding LabelLine}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Proto.Dim}" Margin="16,0" VerticalAlignment="Center" Text="{Binding StateText}" />
+                            <!-- Display only: the prototype never changes anything. -->
+                            <CheckBox Grid.Column="2" Style="{StaticResource Proto.Switch}" IsHitTestVisible="False"
+                                      IsChecked="{Binding IsOn, Mode=OneWay}" Visibility="{Binding HasSwitch, Converter={StaticResource Visible}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <ContentControl Grid.Row="1" Content="{Binding}" ContentTemplate="{StaticResource Proto.OtherSection}"
+                            VerticalAlignment="Top" Visibility="{Binding IsOtherSection, Converter={StaticResource Visible}}" />
+        </Grid>
+
+        <!-- Detail pane. Visibility reads the prototype's model; the inner panel's DataContext is the selected tweak. -->
+        <Border Grid.Row="1" Grid.Column="2" Width="400" Background="{StaticResource Proto.Surface}"
+                BorderBrush="{StaticResource Proto.Stroke}" BorderThickness="1,0,0,0"
+                Visibility="{Binding HasTweakDetail, Converter={StaticResource Visible}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="24,26,24,28" DataContext="{Binding Model.SelectedTweak}">
+                    <TextBlock Style="{StaticResource Proto.H2}" FontSize="19" Text="{Binding Name}" />
+                    <ContentControl Margin="0,12,0,0" Content="{Binding}" ContentTemplate="{StaticResource Proto.TweakChips}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <CheckBox Style="{StaticResource Proto.Switch}" IsHitTestVisible="False" IsChecked="{Binding IsOn, Mode=OneWay}" />
+                        <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" Text="{Binding StateText}" />
+                    </StackPanel>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Proto.TweakDetail}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

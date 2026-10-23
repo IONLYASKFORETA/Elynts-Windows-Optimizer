@@ -60,6 +60,9 @@ public sealed class MainViewModel(
 
     public ObservableCollection<TweakItemViewModel> Tweaks { get; } = [];
 
+    /// <summary>PROTOTYPE: every section's tweaks, for the prototype Home page's counts.</summary>
+    internal IReadOnlyList<TweakItemViewModel> AllTweaks => _allTweaks;
+
     /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
     public ObservableCollection<HistoryItemViewModel> History { get; } = [];
 

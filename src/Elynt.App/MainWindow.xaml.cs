@@ -25,6 +25,8 @@ public partial class MainWindow : Window
         _model.Drift = new DriftViewModel(() => _model.Client, ConfirmDestructiveReapply, _model.RefreshAsync);
         InitializeComponent();
         DataContext = _model;
+        // PROTOTYPE, throwaway: the black-and-red layouts, only with --prototype.
+        Prototype.PrototypeShell.AttachIfAsked(this, _model);
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         _model.Profiles.PickApp = PickApp;
         Loaded += async (_, _) =>
