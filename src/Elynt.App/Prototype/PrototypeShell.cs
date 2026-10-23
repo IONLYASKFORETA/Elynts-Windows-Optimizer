@@ -39,6 +39,7 @@ public sealed class PrototypeShell
         // Today's content stays in the window, hidden, so its bindings to the window keep resolving.
         var today = (UIElement)window.Content;
         today.Visibility = Visibility.Collapsed;
+        window.Content = null;
         var host = new Grid();
         host.Children.Add(today);
         host.Children.Add(_stage);
