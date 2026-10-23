@@ -48,5 +48,12 @@ public partial class DetailPane : UserControl
             Clipboard.SetText(log);
     }
 
+    /// <summary>Applies the selected per-game tweak to a game the user picks, as its row's button does.</summary>
+    private async void ApplyForGame(object sender, RoutedEventArgs e)
+    {
+        if (Model.SelectedTweak is { } item)
+            await Model.ApplyForGameAsync(item);
+    }
+
     private void OpenLink(object sender, RequestNavigateEventArgs e) => Links.Open(e);
 }
