@@ -81,12 +81,16 @@ internal static partial class Tour
 
     /// <summary>
     /// PROTOTYPE, throwaway: each black-and-red layout at two sizes, on Home, a tweak section with its fullest tweak
-    /// open, a second tweak section and a section the prototype doesn't redraw.
+    /// open and a second tweak section. The switcher is hidden and the mouse moved off the window, so neither the
+    /// switcher nor a hover highlight shows in the pictures.
     /// </summary>
     private static async Task ShootPrototypeAsync(MainWindow window, MainViewModel model, string output)
     {
         var shell = PrototypeShell.Current ?? throw new InvalidOperationException("The window didn't start in prototype mode.");
-        string[] pages = [PrototypeViewModel.Home, Sections.Gaming, Sections.DebloatAndPrivacy, Sections.Repair];
+        shell.ShowSwitcher = false;
+        var screen = System.Windows.Forms.Screen.PrimaryScreen!.Bounds;
+        System.Windows.Forms.Cursor.Position = new System.Drawing.Point(screen.Right - 1, screen.Bottom - 1);
+        string[] pages = [PrototypeViewModel.Home, Sections.Gaming, Sections.DebloatAndPrivacy];
         foreach (var size in new[] { Sizes[0], Sizes[2] })
         {
             window.Width = size.Width;

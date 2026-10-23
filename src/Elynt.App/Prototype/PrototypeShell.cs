@@ -22,6 +22,7 @@ public sealed class PrototypeShell
     ];
 
     private readonly ContentControl _stage = new();
+    private readonly Border _switcher;
     private readonly TextBlock _label = new() { Foreground = Brushes.White, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
     private readonly Brush _wave;
     private readonly AnimationClock _waveClock;
@@ -35,9 +36,13 @@ public sealed class PrototypeShell
         window.Background = new SolidColorBrush(Color.FromRgb(0x09, 0x09, 0x0B));
         (_wave, _waveClock) = NewWave();
 
+        // Today's content stays in the window, hidden, so its bindings to the window keep resolving.
+        var today = (UIElement)window.Content;
+        today.Visibility = Visibility.Collapsed;
         var host = new Grid();
+        host.Children.Add(today);
         host.Children.Add(_stage);
-        host.Children.Add(Switcher());
+        host.Children.Add(_switcher = Switcher());
         window.Content = host;
 
         // The wave only moves while the window is in front.
@@ -59,6 +64,13 @@ public sealed class PrototypeShell
     public PrototypeViewModel Model { get; }
 
     public string Variant => Variants[_index].Key;
+
+    /// <summary>Whether the floating switcher shows (the screenshot tour hides it so it covers nothing).</summary>
+    public bool ShowSwitcher
+    {
+        get => _switcher.Visibility == Visibility.Visible;
+        set => _switcher.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     public static void AttachIfAsked(Window window, MainViewModel model)
     {
