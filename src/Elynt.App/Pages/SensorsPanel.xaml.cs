@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Elynt.App.ViewModels;
 
-namespace Elynt.App;
+namespace Elynt.App.Pages;
 
 public partial class SensorsPanel : UserControl
 {

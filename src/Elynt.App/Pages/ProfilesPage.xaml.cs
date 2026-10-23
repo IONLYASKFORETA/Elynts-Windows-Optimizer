@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Elynt.App.ViewModels;
 
-namespace Elynt.App;
+namespace Elynt.App.Pages;
 
 /// <summary>The per-game profile editor. Its DataContext is the <see cref="ProfilesPageViewModel"/>.</summary>
 public partial class ProfilesPage : UserControl

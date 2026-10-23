@@ -1,0 +1,82 @@
+<!-- Tweak list: one switch per tweak; flipping it applies straight away. -->
+<UserControl x:Class="Elynt.App.Pages.TweakList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <CollectionViewSource x:Key="TweaksByGroup" Source="{Binding Tweaks}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <ListBox ItemsSource="{Binding Source={StaticResource TweaksByGroup}}" SelectedItem="{Binding SelectedTweak}"
+             HorizontalContentAlignment="Stretch" BorderThickness="0">
+        <!-- The main tweaks are listed plainly; the possible-placebo group is folded away underneath. -->
+        <ListBox.GroupStyle>
+            <GroupStyle>
+                <GroupStyle.ContainerStyle>
+                    <Style TargetType="GroupItem">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="GroupItem">
+                                    <ItemsPresenter />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Name}" Value="Possible placebo">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <Border BorderThickness="0,1,0,0" BorderBrush="{x:Static SystemColors.ActiveBorderBrush}"
+                                                    Margin="0,12,0,0" Padding="0,8,0,0">
+                                                <Expander IsExpanded="False">
+                                                    <Expander.Header>
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="14" FontWeight="SemiBold">
+                                                                <Run Text="Possible placebo" />
+                                                                <Run Text="{Binding ItemCount, Mode=OneWay, StringFormat=({0})}" />
+                                                            </TextBlock>
+                                                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                                                       Text="Popular tweaks with no reliable evidence they help games. Each one says why." />
+                                                        </StackPanel>
+                                                    </Expander.Header>
+                                                    <ItemsPresenter Margin="0,4,0,0" />
+                                                </Expander>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </GroupStyle.ContainerStyle>
+            </GroupStyle>
+        </ListBox.GroupStyle>
+        <ListBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
+                <Grid Margin="4,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding LabelLine}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding StateText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <CheckBox IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
+                                  AutomationProperties.Name="{Binding Name}"
+                                  Visibility="{Binding HasSwitch, Converter={StaticResource Visible}}" />
+                        <Button Content="Choose a game…" Click="ApplyForGame" Padding="8,2" IsEnabled="{Binding IsEnabled}"
+                                Visibility="{Binding IsPerGame, Converter={StaticResource Visible}}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
+</UserControl>

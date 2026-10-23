@@ -1,0 +1,17 @@
+<!-- Windows Update: install quality updates now, even while paused, with live progress. -->
+<UserControl x:Class="Elynt.App.Pages.WindowsUpdatePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <StackPanel DataContext="{Binding WindowsUpdate}">
+        <StackPanel Orientation="Horizontal">
+            <Button Content="Check and install now" Padding="16,6" Click="CheckAndInstallWindowsUpdates"
+                    IsEnabled="{Binding CanStart}" />
+            <ProgressBar Width="200" Height="8" Margin="12,0,0,0" Minimum="0" Maximum="100"
+                         Value="{Binding Percent, Mode=OneWay}"
+                         Visibility="{Binding IsRunning, Converter={StaticResource Visible}}" />
+        </StackPanel>
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Opacity="0.8" Margin="0,6,0,0" />
+    </StackPanel>
+</UserControl>
