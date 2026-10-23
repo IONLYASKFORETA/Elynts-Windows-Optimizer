@@ -187,6 +187,7 @@ public sealed class MainViewModel(
         Sections.Overclocking => "GPU and CPU tuning, temperatures, and your BIOS settings with guides for this PC.",
         PerGameProfiles => "Instant changes made while a game runs, and the games found on this PC.",
         UndoHistory => "Every change the app made, newest first, with undo for each one.",
+        // Settings opens with its own line.
         _ => "",
     };
 
