@@ -1,0 +1,43 @@
+<!-- Settings: the app's own preferences, the update channel and Animated accents. -->
+<UserControl x:Class="Elynt.App.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <!-- Full width up to a comfortable reading width, then held to the left. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="760" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,8,24">
+                <TextBlock Style="{StaticResource Text.Dim}" Text="How the app updates and how it looks. Saved for your Windows account." />
+
+                <TextBlock Style="{StaticResource Text.Label}" Text="UPDATES" />
+                <Border Style="{StaticResource Card}" Padding="16,14">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" MinWidth="130" VerticalAlignment="Center"
+                                  ItemsSource="{Binding Channels}" SelectedItem="{Binding Channel}"
+                                  AutomationProperties.Name="Update channel" />
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Text="Update channel" />
+                            <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0"
+                                       Text="Beta gets every new build first. Stable gets a build once it has been tried on beta." />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <TextBlock Style="{StaticResource Text.Label}" Text="LOOK" />
+                <Border Style="{StaticResource Card}" Padding="16,14">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding AnimatedAccents}"
+                                  AutomationProperties.Name="Animated accents" />
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Text="Animated accents" />
+                            <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0"
+                                       Text="A slow red-orange wave across the accents while this window is in front. It holds still when Windows' animation effects are off." />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

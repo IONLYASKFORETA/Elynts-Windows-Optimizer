@@ -52,6 +52,6 @@
 
 **Strike**: an unclean shutdown or WHEA hardware error while a CPU tune was on. Each one skips that start's re-apply and steps Curve Optimizer back by 5; the second turns the tune off until it passes the stress test again.
 
-**Accent wave**: the slow red-to-orange colour wave on the app's accents (the top strip, the selected page's bar, switches that are on, main buttons, meters). It moves only while the window is in front, Windows' animation effects are on and the user hasn't turned it off; otherwise it holds still.
+**Accent wave**: the slow red-to-orange colour wave on the app's accents (the top strip, the selected page's bar, switches that are on, main buttons, meters). It moves only while the window is in front, Windows' animation effects are on and the user hasn't turned off Animated accents on the Settings page; otherwise it holds still. Animated accents starts off when Windows' animation effects are off.
 
 **Detail pane**: the panel on the right of the window that explains the selected tweak or repair tool in full: its labels, warnings, what it does, the evidence, the exact change and how to undo it. It is hidden on pages with nothing selected.

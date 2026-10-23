@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Elynt.App.Theme;
 using Elynt.Core;
 using Elynt.Core.Apps;
 using Elynt.Core.Drivers;
@@ -29,6 +30,7 @@ public sealed class MainViewModel(
 
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
+    public const string Settings = "Settings";
 
     private EnginePipeClient? _client;
     // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
@@ -55,8 +57,8 @@ public sealed class MainViewModel(
     private SensorsPageViewModel? _sensors;
     private CpuTuningPageViewModel? _cpu;
 
-    /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
-    public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
+    /// <summary>The sidebar: the ten sections, then per-game profiles, the undo history and Settings.</summary>
+    public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory, Settings];
 
     public ObservableCollection<TweakItemViewModel> Tweaks { get; } = [];
 
@@ -149,12 +151,16 @@ public sealed class MainViewModel(
                 OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
+                OnPropertyChanged(nameof(IsSettingsPage));
                 ShowPage();
             }
         }
     }
 
     public bool IsHistoryPage => SelectedPage == UndoHistory;
+
+    /// <summary>The Settings page: the update channel and Animated accents.</summary>
+    public bool IsSettingsPage => SelectedPage == Settings;
 
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
@@ -163,7 +169,7 @@ public sealed class MainViewModel(
     public ServicesPageViewModel? ServicesPage { get; set; }
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage;
+    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage && !IsSettingsPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
@@ -336,6 +342,23 @@ public sealed class MainViewModel(
             UpdateReady = null;
             OnPropertyChanged();
             _ = CheckForUpdatesAsync();
+        }
+    }
+
+    /// <summary>
+    /// The "Animated accents" switch on the Settings page: whether the accent wave may move. Applied straight away and
+    /// saved, so it is remembered between launches.
+    /// </summary>
+    public bool AnimatedAccents
+    {
+        get => AccentWave.IsEnabled;
+        set
+        {
+            if (value == AccentWave.IsEnabled)
+                return;
+            AccentWave.IsEnabled = value;
+            UserSettings.Update(s => s with { AnimatedAccents = value });
+            OnPropertyChanged();
         }
     }
 
