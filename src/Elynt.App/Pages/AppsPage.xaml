@@ -15,12 +15,12 @@
         <Style x:Key="ActionBar" TargetType="Border">
             <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
             <Setter Property="BorderThickness" Value="0,1,0,0" />
-            <Setter Property="Padding" Value="0,12,0,14" />
-            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="0,10,0,12" />
+            <Setter Property="Margin" Value="0,4,0,0" />
         </Style>
         <!-- A queue's progress and outcome, under the action bar's buttons; it takes no room while there is none. -->
         <Style x:Key="QueueStatus" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
-            <Setter Property="Margin" Value="0,10,0,0" />
+            <Setter Property="Margin" Value="0,8,0,0" />
             <Style.Triggers>
                 <Trigger Property="Text" Value="{x:Null}">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -55,7 +55,7 @@
                             <TextBlock Text="Install all runtimes (Visual C++, DirectX legacy and .NET)" TextWrapping="Wrap" />
                         </CheckBox>
                         <!-- The app list buttons on the left, the install itself on the right; they fit on one line at the smallest window. -->
-                        <DockPanel Margin="0,10,0,0" LastChildFill="False">
+                        <DockPanel Margin="0,8,0,0" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Content="Install ticked apps"
                                     Padding="16,7" VerticalAlignment="Center"
                                     Click="InstallApps" IsEnabled="{Binding CanInstall}" />
@@ -69,7 +69,9 @@
                         <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding InstallStatus}" />
                     </StackPanel>
                 </Border>
-                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}">
+                <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
+                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         ScrollViewer.CanContentScroll="False">
                     <ListBox.GroupStyle>
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
@@ -136,7 +138,7 @@
                                         <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
                                         <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
                                                 Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Not reviewed" FontSize="11" />
+                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
                                         </Border>
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />
@@ -173,7 +175,7 @@
                                         <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
                                         <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
                                                 Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Not reviewed" FontSize="11" />
+                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
                                         </Border>
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />
