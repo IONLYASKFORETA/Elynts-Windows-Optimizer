@@ -40,6 +40,7 @@ internal static partial class Tour
             await ShootPagesAsync(window, model, folder, screen: size.Name == "default");
         }
 
+        await ShootConfirmationAsync(window, model, output);
         await CheckWaveHoldsStillAsync(window);
         window.Close();
     }
@@ -68,6 +69,34 @@ internal static partial class Tour
                 Shoot(window, folder, $"{name}-fullest-repair-tool", screen);
             }
         }
+    }
+
+    /// <summary>
+    /// A confirmation dialog: the one a destructive tweak asks before it is applied, over the window at its default
+    /// size. Shown without waiting for an answer, then closed.
+    /// </summary>
+    private static async Task ShootConfirmationAsync(MainWindow window, MainViewModel model, string output)
+    {
+        var size = Sizes[0];
+        (window.Width, window.Height) = (size.Width, size.Height);
+        TweakItemViewModel? destructive = null;
+        foreach (var page in model.Pages)
+        {
+            model.SelectedPage = page;
+            destructive = model.Tweaks.FirstOrDefault(t => t.View.DestructiveWarning is not null);
+            if (destructive is not null)
+                break;
+        }
+        if (destructive is null)
+            throw new InvalidOperationException("The sample PC has no destructive tweak to confirm.");
+        await SettleAsync();
+
+        var dialog = window.DestructiveTweakDialog(destructive.View);
+        dialog.Show();
+        await SettleAsync();
+        Shoot(dialog, Path.Combine(output, size.Name), "confirmation-destructive-tweak", screen: true);
+        dialog.Close();
+        await SettleAsync();
     }
 
     /// <summary>The accent wave must stop while the window is minimised or the wave is turned off.</summary>
