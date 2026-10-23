@@ -168,6 +168,30 @@ public sealed class MainViewModel(
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
 
+    /// <summary>
+    /// The line under the page's title: on a tweak section, how many of its tweaks that fit this PC are on; on any
+    /// other page, what the page is for. Empty when there is nothing to say yet (a tweak section before it loads).
+    /// </summary>
+    public string PageSummary => IsTweakPage ? TweakSummary() : SelectedPage switch
+    {
+        Sections.Apps => "Install and update apps from a reviewed list, or search all of winget.",
+        Sections.StartupAndServices => "Choose what starts when you sign in, and how services start.",
+        Sections.Repair => "Windows' own repair tools, each saying up front whether it needs a restart.",
+        Sections.Drivers => "Your GPU and chipset drivers, the latest from each vendor, and a silent install.",
+        Sections.Overclocking => "GPU and CPU tuning, temperatures, and your BIOS settings with guides for this PC.",
+        PerGameProfiles => "Instant changes made while a game runs, and the games found on this PC.",
+        UndoHistory => "Every change the app made, newest first, with undo for each one.",
+        _ => "",
+    };
+
+    private string TweakSummary()
+    {
+        if (Tweaks.Count == 0)
+            return "";
+        var count = TweakCount.Of(Tweaks.Select(t => t.View));
+        return count.Total == 0 ? "None of these tweaks fit this PC." : count.Text;
+    }
+
     public bool IsHistoryEmpty => History.Count == 0;
 
     /// <summary>The answer to the last restore everything, shown above the history.</summary>
@@ -667,6 +691,7 @@ public sealed class MainViewModel(
             _ = Cleanup.OnShownAsync();
 
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(PageSummary));
         OnPropertyChanged(nameof(IsCleanupPage));
         OnPropertyChanged(nameof(IsRepairPage));
         OnPropertyChanged(nameof(IsTweakPage));
@@ -911,6 +936,8 @@ public sealed class MainViewModel(
         {
             item.IsBusy = false;
             item.RefreshSwitch();
+            // The title's "N of M on" follows the switch.
+            OnPropertyChanged(nameof(PageSummary));
         }
     }
 }
