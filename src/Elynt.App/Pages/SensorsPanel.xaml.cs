@@ -18,13 +18,12 @@ public partial class SensorsPanel : UserControl
     {
         if (Model is not { } model)
             return;
-        var accepted = MessageBox.Show(
-            Window.GetWindow(this)!,
+        var accepted = ConfirmDialog.Ask(
+            Window.GetWindow(this),
             $"Install the PawnIO driver?\n\n{model.FaceitWarning}\n\nYou can remove it any time with \"Uninstall driver\".",
             "Turn on PawnIO",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Ordinary) == ConfirmAnswer.Yes;
         if (accepted)
             await model.InstallAsync();
     }

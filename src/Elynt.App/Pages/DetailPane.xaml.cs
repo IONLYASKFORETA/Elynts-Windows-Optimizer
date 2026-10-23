@@ -22,9 +22,9 @@ public partial class DetailPane : UserControl
         var confirmed = false;
         if (item.View.Confirmation is { } warning)
         {
-            var answer = MessageBox.Show(Window.GetWindow(this), $"{warning}\n\nRun \"{item.Name}\" anyway?", item.Name,
-                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
+            var answer = ConfirmDialog.Ask(Window.GetWindow(this), $"{warning}\n\nRun \"{item.Name}\" anyway?", item.Name,
+                ConfirmButtons.YesNo, ConfirmRisk.Destructive);
+            if (answer != ConfirmAnswer.Yes)
                 return;
             confirmed = true;
         }
@@ -36,9 +36,9 @@ public partial class DetailPane : UserControl
         if (Model.SelectedRepairTool is not { Result.FollowUpToolId: { } followUpId } item
             || Model.FindRepairTool(followUpId) is not { } followUp)
             return;
-        var answer = MessageBox.Show(Window.GetWindow(this), $"{followUp.WhatItDoes}\n\n{followUp.RestartText}", followUp.Name,
-            MessageBoxButton.OKCancel, MessageBoxImage.Information, MessageBoxResult.Cancel);
-        if (answer == MessageBoxResult.OK)
+        var answer = ConfirmDialog.Ask(Window.GetWindow(this), $"{followUp.WhatItDoes}\n\n{followUp.RestartText}", followUp.Name,
+            ConfirmButtons.OkCancel, ConfirmRisk.Ordinary);
+        if (answer == ConfirmAnswer.Ok)
             await Model.RunRepairAsync(item, followUpId, confirmed: false);
     }
 
@@ -46,6 +46,13 @@ public partial class DetailPane : UserControl
     {
         if (Model.SelectedRepairTool?.Result?.LogText is { Length: > 0 } log)
             Clipboard.SetText(log);
+    }
+
+    /// <summary>Applies the selected per-game tweak to a game the user picks, as its row's button does.</summary>
+    private async void ApplyForGame(object sender, RoutedEventArgs e)
+    {
+        if (Model.SelectedTweak is { } item)
+            await Model.ApplyForGameAsync(item);
     }
 
     private void OpenLink(object sender, RequestNavigateEventArgs e) => Links.Open(e);

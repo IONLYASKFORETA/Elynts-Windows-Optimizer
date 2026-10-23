@@ -87,7 +87,21 @@
 
         <!-- The current page. Each page is its own view under Pages; the section pages share one cell and each shows only on its own page. -->
         <DockPanel Grid.Row="1" Grid.Column="1" Margin="32,26,24,0" Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}">
-            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.H1}" Text="{Binding SelectedPage}" Margin="0,0,0,18" />
+            <!-- The page's name and a one-line summary: how many tweaks are on, or what the page is for. -->
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,18">
+                <TextBlock Style="{StaticResource Text.H1}" Text="{Binding SelectedPage}" />
+                <TextBlock Margin="0,4,0,0" Text="{Binding PageSummary}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Dim}">
+                            <Style.Triggers>
+                                <Trigger Property="Text" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
             <pages:WindowsUpdatePanel DockPanel.Dock="Top" Margin="0,0,0,12"
                                       Visibility="{Binding IsWindowsUpdatePage, Converter={StaticResource Visible}}" />
             <Grid>
