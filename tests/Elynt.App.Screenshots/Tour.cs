@@ -41,7 +41,7 @@ internal static partial class Tour
         }
 
         await ShootConfirmationAsync(window, model, output);
-        await CheckWaveHoldsStillAsync(window);
+        await CheckWaveHoldsStillAsync(window, model);
         window.Close();
     }
 
@@ -99,21 +99,31 @@ internal static partial class Tour
         await SettleAsync();
     }
 
-    /// <summary>The accent wave must stop while the window is minimised or the wave is turned off.</summary>
-    private static async Task CheckWaveHoldsStillAsync(Window window)
+    /// <summary>
+    /// The accent wave must stop while the window is minimised, and when the Settings page's Animated accents switch is
+    /// turned off. The switch saves its value, which goes to the tour's own settings file (see Program).
+    /// </summary>
+    private static async Task CheckWaveHoldsStillAsync(Window window, MainViewModel model)
     {
         // CI machines often have Windows' animation effects off, which holds the wave still too.
-        Console.WriteLine($"Accent wave moving while the window is open: {AccentWave.IsMoving} (Windows animations on: {SystemParameters.ClientAreaAnimation})");
+        Console.WriteLine($"Accent wave moving while the window is open: {AccentWave.IsMoving} (Windows animations on: {SystemParameters.ClientAreaAnimation}, Animated accents: {model.AnimatedAccents})");
         window.WindowState = WindowState.Minimized;
         await SettleAsync();
         if (AccentWave.IsMoving)
             throw new InvalidOperationException("The accent wave kept moving while the window was minimised.");
         window.WindowState = WindowState.Normal;
-        AccentWave.IsEnabled = false;
+        window.Activate();
+        model.SelectedPage = MainViewModel.Settings;
+        // On first, so turning it off is a real change even where it starts off (Windows' animation effects off).
+        var animatedAccents = model.AnimatedAccents;
+        model.AnimatedAccents = true;
         await SettleAsync();
-        if (AccentWave.IsMoving)
-            throw new InvalidOperationException("The accent wave kept moving after it was turned off.");
-        AccentWave.IsEnabled = true;
+        Console.WriteLine($"Accent wave moving with Animated accents on and the window in front: {AccentWave.IsMoving}");
+        model.AnimatedAccents = false;
+        await SettleAsync();
+        if (AccentWave.IsEnabled || AccentWave.IsMoving)
+            throw new InvalidOperationException("The accent wave kept moving after Animated accents was turned off.");
+        model.AnimatedAccents = animatedAccents;
     }
 
     private static int DetailLength(TweakItemViewModel tweak) =>
