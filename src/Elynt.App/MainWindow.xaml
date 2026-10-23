@@ -31,7 +31,8 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="220" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="400" />
+            <!-- The detail pane; it collapses on pages with nothing selected to describe. -->
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <!-- Sidebar: sections, then per-game profiles and the undo history. -->
@@ -674,13 +675,14 @@
             </Grid>
         </DockPanel>
 
-        <Border Grid.Column="2" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
-                Visibility="{Binding IsSectionPage, Converter={StaticResource Visible}}"
+        <Border Grid.Column="2" Width="384" Margin="8" Padding="16" CornerRadius="8" BorderThickness="1"
+                Visibility="{Binding HasDetail, Converter={StaticResource Visible}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
-                <!-- Repair detail: restart need before running, live progress, the summary and the log. -->
-                <StackPanel Visibility="{Binding HasRepairSelection, Converter={StaticResource Visible}}"
+                <!-- Repair detail: restart need before running, live progress, the summary and the log.
+                     Visibility reads the window's model: this panel's own DataContext is the selected tool. -->
+                <StackPanel Visibility="{Binding DataContext.HasRepairSelection, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}"
                             DataContext="{Binding SelectedRepairTool}">
                     <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding View.RestartText}" Margin="0,4,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -731,7 +733,8 @@
                     </ItemsControl>
                 </StackPanel>
 
-                <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource Visible}}"
+                <!-- Tweak detail. As above, Visibility reads the window's model, not the selected tweak. -->
+                <StackPanel Visibility="{Binding DataContext.HasSelection, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}"
                             DataContext="{Binding SelectedTweak}">
                     <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock Margin="0,4,0,0" Opacity="0.7">

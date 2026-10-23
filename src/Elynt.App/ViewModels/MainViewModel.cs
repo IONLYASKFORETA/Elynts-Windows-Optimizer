@@ -121,7 +121,10 @@ public sealed class MainViewModel(
         set
         {
             if (Set(ref _selectedRepairTool, value))
+            {
                 OnPropertyChanged(nameof(HasRepairSelection));
+                OnPropertyChanged(nameof(HasDetail));
+            }
         }
     }
 
@@ -192,11 +195,17 @@ public sealed class MainViewModel(
         set
         {
             if (Set(ref _selectedTweak, value))
+            {
                 OnPropertyChanged(nameof(HasSelection));
+                OnPropertyChanged(nameof(HasDetail));
+            }
         }
     }
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
+
+    /// <summary>Shows the right-hand detail pane: only a tweak or repair tool has details, so other pages get the width.</summary>
+    public bool HasDetail => HasSelection || HasRepairSelection;
 
     /// <summary>Shows the "nothing here yet" note: a tweak page with no tweaks, or a panel page whose panel isn't available.</summary>
     public bool IsEmpty =>
@@ -663,6 +672,7 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
+        OnPropertyChanged(nameof(HasDetail));
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsWindowsUpdatePage));
         if (IsWindowsUpdatePage)
