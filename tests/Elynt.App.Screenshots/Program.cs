@@ -25,6 +25,7 @@ public static class Program
             _ => engine);
         var serving = Task.Run(() => server.RunAsync(stop.Token));
 
+        var bindingErrors = BindingErrorLog.Listen();
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.InitializeComponent();
         app.Startup += async (_, _) =>
@@ -57,6 +58,14 @@ public static class Program
             // Stopping the server cancels its wait for the next client.
         }
         Console.WriteLine($"Screenshots in {output}");
+        // Reported, not fatal here, so the pictures still get published; the workflow fails on this file.
+        if (bindingErrors.Errors.Count > 0)
+        {
+            File.WriteAllLines(Path.Combine(output, "binding-errors.txt"), bindingErrors.Errors);
+            Console.WriteLine($"{bindingErrors.Errors.Count} binding errors:");
+            foreach (var error in bindingErrors.Errors)
+                Console.WriteLine(error);
+        }
         return result;
     }
 }

@@ -56,3 +56,14 @@ jobs:
             commit --quiet --message "Screenshots of ${{ github.sha }}"
           git push --force --quiet "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" `
             "HEAD:refs/heads/screenshots/${{ github.ref_name }}"
+
+      # The tour lists every WPF binding error it hit. They fail silently in the app (a binding read from the wrong
+      # object once left two detail panels drawn over each other), so any of them fails this run.
+      - name: Check for binding errors
+        shell: pwsh
+        run: |
+          if (Test-Path out/ui-shots/binding-errors.txt) {
+            Get-Content out/ui-shots/binding-errors.txt
+            Write-Host "::error::The tour hit WPF binding errors (listed above)."
+            exit 1
+          }
