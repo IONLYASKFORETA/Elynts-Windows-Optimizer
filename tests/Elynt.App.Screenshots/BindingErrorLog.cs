@@ -5,7 +5,7 @@ namespace Elynt.App.Screenshots;
 
 /// <summary>
 /// Collects WPF's data binding errors. A binding that resolves against the wrong object fails silently in the app
-/// (a detail panel that never hides, say), so the tour reports every one it hits.
+/// (a detail panel that never hides, say), so the tour reports every one it hits, apart from WPF's own known noise.
 /// </summary>
 internal sealed class BindingErrorLog : TraceListener
 {
@@ -29,7 +29,18 @@ internal sealed class BindingErrorLog : TraceListener
     public override void WriteLine(string? message)
     {
         _line.Append(message);
-        _errors.Add(_line.ToString());
+        var error = _line.ToString();
         _line.Clear();
+        if (!IsFrameworkNoise(error))
+            _errors.Add(error);
     }
+
+    /// <summary>
+    /// The built-in item styles bind an item's content alignment to its list, and log error 4 when a list item is
+    /// removed before that binding runs (every time a page swaps its list). Harmless, and not from this app's XAML.
+    /// </summary>
+    private static bool IsFrameworkNoise(string error) =>
+        error.Contains("AncestorType='System.Windows.Controls.ItemsControl'", StringComparison.Ordinal) &&
+        (error.Contains("Path=HorizontalContentAlignment;", StringComparison.Ordinal) ||
+         error.Contains("Path=VerticalContentAlignment;", StringComparison.Ordinal));
 }
