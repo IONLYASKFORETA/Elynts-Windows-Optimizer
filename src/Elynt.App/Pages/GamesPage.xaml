@@ -4,35 +4,61 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <DockPanel DataContext="{Binding Games}" Margin="4">
-        <local:ProfilesPage DockPanel.Dock="Top"
-                            DataContext="{Binding DataContext.Profiles, RelativeSource={RelativeSource AncestorType=Window}}" />
-        <StackPanel DockPanel.Dock="Top">
-            <TextBlock Text="Installed games" FontSize="16" FontWeight="SemiBold" />
-            <TextBlock Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games."
-                       Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
-            <Button Content="Add a game by its .exe…" Click="AddGame" HorizontalAlignment="Left" Padding="12,4" />
-            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,6" />
-            <TextBlock Text="No games found yet." Opacity="0.7"
-                       Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" />
-        </StackPanel>
-        <ItemsControl ItemsSource="{Binding Games}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Grid Margin="0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Detail}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="Remove" Click="RemoveGame" Padding="8,2" VerticalAlignment="Center"
-                                Visibility="{Binding CanRemove, Converter={StaticResource Visible}}" />
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-    </DockPanel>
+    <UserControl.Resources>
+        <!-- The service's answer to the last add or remove; it takes no room while there is none. -->
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Style.Triggers>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- The editor and the games scroll together, so both stay reachable at the smallest window. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <!-- Full width up to a comfortable width for the editor's form, then held to the left. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="960" />
+            </Grid.ColumnDefinitions>
+            <StackPanel DataContext="{Binding Games}" Margin="0,0,8,24">
+                <local:ProfilesPage DataContext="{Binding DataContext.Profiles, RelativeSource={RelativeSource AncestorType=Window}}" />
+
+                <TextBlock Style="{StaticResource Text.Label}" Margin="0,32,0,6" Text="INSTALLED GAMES" />
+                <TextBlock Style="{StaticResource Text.Dim}"
+                           Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games." />
+                <Button Content="Add a game by its .exe…" Click="AddGame" HorizontalAlignment="Left" Margin="0,12,0,0" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0" Text="{Binding Message}" />
+                <TextBlock Style="{StaticResource Text.Dim}" Margin="0,12,0,0" Text="No games found yet."
+                           Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" />
+                <!-- A card per game; Remove only on games added by their .exe. -->
+                <ItemsControl ItemsSource="{Binding Games}" Margin="0,12,0,0" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource Card}" Padding="16,12" CornerRadius="8" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource Theme.Text}" />
+                                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Detail}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Remove" Click="RemoveGame" Margin="12,0,0,0" VerticalAlignment="Center"
+                                            Visibility="{Binding CanRemove, Converter={StaticResource Visible}}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
 </UserControl>
