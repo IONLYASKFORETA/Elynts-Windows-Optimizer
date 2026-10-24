@@ -40,7 +40,7 @@
                     <TextBlock Text="{Binding Message}" Style="{StaticResource Optional}" Margin="0,8,0,0" />
                 </StackPanel>
 
-                <Border DockPanel.Dock="Top" Style="{StaticResource TableHeader}" Margin="0,16,0,0">
+                <Border DockPanel.Dock="Top" Style="{StaticResource Table.Header}" Margin="0,16,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -58,7 +58,7 @@
                     </Grid>
                 </Border>
 
-                <ListBox Style="{StaticResource Table}" ItemsSource="{Binding Services}" VirtualizingPanel.IsVirtualizing="True">
+                <ListBox Style="{StaticResource Table.List}" ItemsSource="{Binding Services}" VirtualizingPanel.IsVirtualizing="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:ServiceItemViewModel}">
                             <Grid>

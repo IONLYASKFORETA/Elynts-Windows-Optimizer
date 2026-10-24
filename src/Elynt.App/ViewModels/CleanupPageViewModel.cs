@@ -12,6 +12,7 @@ namespace Elynt.App.ViewModels;
 public sealed class CleanupPageViewModel : ObservableObject
 {
     private EnginePipeClient? _client;
+    private Task<EnginePipeClient>? _connecting;
     private bool _isBusy;
     private bool _hasScanned;
     private string _status = "Scan to see how much space each category takes. Nothing is deleted until you press Clean.";
@@ -195,8 +196,24 @@ public sealed class CleanupPageViewModel : ObservableObject
         }
     }
 
-    private async Task<EnginePipeClient> ClientAsync() =>
-        _client ??= await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
+    /// <summary>
+    /// The page's own connection. Opening the page and starting a scan at once (Home's Clean up) share one connect
+    /// rather than each opening a connection.
+    /// </summary>
+    private async Task<EnginePipeClient> ClientAsync()
+    {
+        if (_client is { } client)
+            return client;
+        _connecting ??= EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
+        try
+        {
+            return _client = await _connecting;
+        }
+        finally
+        {
+            _connecting = null;
+        }
+    }
 
     private async Task DropClientAsync()
     {

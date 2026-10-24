@@ -4,62 +4,161 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <!-- A fixed-width column on the right, set off from the page by a line on its left. Everything in it wraps to that
-         width and scrolls up and down. -->
-    <Border Width="400" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1,0,0,0">
+    <UserControl.Resources>
+        <!-- A repair tool's restart need as a label: orange when it needs or may need a restart, as on its row. -->
+        <Style x:Key="RestartPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding View.Restart}" Value="None">
+                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="RestartPillText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding View.Restart}" Value="None">
+                    <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- A column on the right (the window sets its width), set off from the page by a line on its left. Everything in it
+         wraps to that width and scrolls up and down. -->
+    <Border Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1,0,0,0">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Grid Margin="24,24,24,28">
-                <!-- Repair detail: restart need before running, live progress, the summary and the log.
+                <!-- Repair detail, in the tweak detail's style: the name, the restart need, any warning, then what it does and
+                     exactly what it runs, the Run button, live progress, the summary and the log.
                      Visibility reads the window's model: this panel's own DataContext is the selected tool. -->
                 <StackPanel Visibility="{Binding DataContext.HasRepairSelection, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource Visible}}"
                             DataContext="{Binding SelectedRepairTool}">
-                    <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding View.RestartText}" Margin="0,4,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
-    
-                    <TextBlock Text="What it does" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <TextBlock Text="{Binding View.WhatItDoes}" TextWrapping="Wrap" />
-    
-                    <TextBlock Text="Opt-in: read this first" FontWeight="SemiBold" Margin="0,16,0,4"
-                               Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}" />
-                    <TextBlock Text="{Binding View.Confirmation}" TextWrapping="Wrap"
-                               Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}" />
-    
-                    <TextBlock Text="Exactly what it runs" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <ItemsControl ItemsSource="{Binding View.ExactCommands}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-    
-                    <TextBlock Text="{Binding View.NotAvailableReason}" Margin="0,16,0,0" TextWrapping="Wrap" FontWeight="SemiBold" />
-                    <Button Content="Run" Click="RunRepair" IsEnabled="{Binding CanRun}" HorizontalAlignment="Left"
-                            Padding="24,4" Margin="0,16,0,0" />
-    
-                    <TextBlock Text="{Binding StepText}" Margin="0,12,0,4" TextWrapping="Wrap" />
-                    <ProgressBar Height="6" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
+                    <TextBlock Style="{StaticResource Text.H2}" FontSize="19" Text="{Binding Name}" />
+
+                    <!-- Labels, as on the tool's row: the restart need, then the opt-in mark. -->
+                    <WrapPanel Margin="0,12,0,0">
+                        <Border Style="{StaticResource RestartPill}">
+                            <TextBlock Style="{StaticResource RestartPillText}" Text="{Binding RestartBadge}" />
+                        </Border>
+                        <Border Style="{StaticResource Pill.Warning}" Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}">
+                            <TextBlock Text="Opt-in" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                        </Border>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Text.Body}" Text="{Binding View.RestartText}" Margin="0,2,0,0"
+                               FontWeight="SemiBold" Foreground="{StaticResource Theme.Text}" />
+
+                    <!-- Warnings, before anything else: red for the opt-in tool's confirmation (it can't be undone),
+                         orange for why the tool can't run on this PC. -->
+                    <StackPanel Margin="0,6,0,0">
+                        <Border Style="{StaticResource DangerBox}" Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Text.Body}" FontWeight="SemiBold" Foreground="{StaticResource Theme.Text}"
+                                           Text="Opt-in: read this first" />
+                                <TextBlock Style="{StaticResource Text.Body}" Text="{Binding View.Confirmation}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <Border>
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource WarningBox}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding View.NotAvailableReason}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Style="{StaticResource Text.Body}" Text="{Binding View.NotAvailableReason}"
+                                       FontWeight="SemiBold" Foreground="{StaticResource Theme.Text}" />
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Text.Label}" Text="WHAT IT DOES" />
+                    <TextBlock Style="{StaticResource Text.Body}" Text="{Binding View.WhatItDoes}" />
+
+                    <TextBlock Style="{StaticResource Text.Label}" Text="EXACTLY WHAT IT RUNS" />
+                    <Border Style="{StaticResource CodeBox}">
+                        <ItemsControl ItemsSource="{Binding View.ExactCommands}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+
+                    <Button Style="{StaticResource Button.Primary}" Content="Run" Click="RunRepair" IsEnabled="{Binding CanRun}"
+                            HorizontalAlignment="Left" Padding="28,8" Margin="0,20,0,0" />
+
+                    <!-- Live progress: the step under way and its meter, while the tool runs. -->
+                    <TextBlock Text="{Binding StepText}" Margin="0,14,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+                                <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding StepText}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- Fluent's own progress bar, in the accent wave: it has a moving bar for a step whose progress is unknown. -->
+                    <ProgressBar Height="4" Margin="0,8,0,0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
                                  IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}"
                                  Visibility="{Binding IsRunning, Converter={StaticResource Visible}}" />
-    
-                    <TextBlock Text="{Binding Result.Summary}" Margin="0,12,0,0" TextWrapping="Wrap"
+
+                    <!-- How it went, the follow-up and the log. -->
+                    <TextBlock Style="{StaticResource Text.Body}" Text="{Binding Result.Summary}" Margin="0,16,0,0"
+                               Foreground="{StaticResource Theme.Text}"
                                Visibility="{Binding HasResult, Converter={StaticResource Visible}}" />
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Content="Fix at next restart" Click="RunFollowUp" Padding="12,4" Margin="0,0,8,0"
+                    <WrapPanel>
+                        <Button Content="Fix at next restart" Click="RunFollowUp" Padding="12,4" Margin="0,12,8,0"
                                 Visibility="{Binding HasFollowUp, Converter={StaticResource Visible}}" />
-                        <Button Content="Copy log" Click="CopyRepairLog" Padding="12,4"
+                        <Button Content="Copy log" Click="CopyRepairLog" Padding="12,4" Margin="0,12,8,0"
                                 Visibility="{Binding HasLog, Converter={StaticResource Visible}}" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Result.LogLocation, StringFormat=Saved to {0}}" Margin="0,8,0,0">
+                        <TextBlock.Style>
+                            <!-- Only once there's a result with a saved log. -->
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Dim}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasResult}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Result.LogLocation}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- The run's output, once there is some. -->
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Output.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Style="{StaticResource Text.Label}" Text="OUTPUT" />
+                        <Border Style="{StaticResource CodeBox}">
+                            <ItemsControl ItemsSource="{Binding Output}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
                     </StackPanel>
-                    <TextBlock Text="{Binding Result.LogLocation, StringFormat=Saved to {0}}" Margin="0,4,0,0" Opacity="0.7" TextWrapping="Wrap" />
-    
-                    <TextBlock Text="Output" FontWeight="SemiBold" Margin="0,16,0,4" />
-                    <ItemsControl ItemsSource="{Binding Output}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
                 </StackPanel>
 
                 <!-- Tweak detail: the name, labels, switch and state, any warnings, then what it does, the evidence, the

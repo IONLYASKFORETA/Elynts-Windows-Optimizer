@@ -282,15 +282,27 @@
         <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
     </Style>
 
-    <!-- Tables (services, Undo history, drift): dark rows split by faint dividers, under a small-caps header. -->
-    <!-- The header row, above the table's ListBox: Text.Label headings (in CAPITALS) in the same columns as the rows. -->
-    <Style x:Key="TableHeader" TargetType="Border">
+    <!-- A table (the Undo history, drift): a header row of Text.Label cells, then dark rows split by faint lines. The
+         header and the rows have the same side padding, so grids with the same columns inside them line up. -->
+    <Style x:Key="Table.Header" TargetType="Border">
         <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
         <Setter Property="Padding" Value="12,0,12,8" />
     </Style>
-    <!-- A table row: a faint divider under it, a hover shade, and a short wave edge on the left when selected. -->
-    <Style x:Key="TableRow" TargetType="ListBoxItem">
+    <Style x:Key="Table.Row" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="12,10" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Theme.Surface}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <!-- A table in a ListBox, for one long enough to need virtualising (the services): Table.Row rows, the selected one
+         a shade lighter with a short wave edge on the left. -->
+    <Style x:Key="Table.ListRow" TargetType="ListBoxItem">
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -298,8 +310,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                     <Grid>
-                        <Border x:Name="Bg" Padding="12,10" Background="Transparent"
-                                BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,0,1">
+                        <Border x:Name="Bg" Style="{StaticResource Table.Row}">
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
                         </Border>
                         <Border x:Name="Edge" Width="2" HorizontalAlignment="Left" Margin="0,6"
@@ -307,9 +318,6 @@
                         <Border x:Name="Focus" BorderThickness="1" BorderBrush="{StaticResource Theme.TextDim}" Visibility="Collapsed" />
                     </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
-                        </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
                             <Setter TargetName="Edge" Property="Visibility" Value="Visible" />
@@ -322,14 +330,14 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <!-- The table's ListBox of TableRow rows. Rows wrap to the table's width rather than scrolling sideways. -->
-    <Style x:Key="Table" TargetType="ListBox">
+    <!-- Its ListBox: rows wrap to the table's width rather than scrolling sideways. Put a Table.Header above it. -->
+    <Style x:Key="Table.List" TargetType="ListBox">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
-        <Setter Property="ItemContainerStyle" Value="{StaticResource TableRow}" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Table.ListRow}" />
     </Style>
 
     <!-- A sidebar entry: a soft highlight, and a short wave bar on the left when selected. -->

@@ -20,7 +20,7 @@ public class SmbiosTableTests
 
         Assert.Equal("Micro-Star International Co., Ltd.", table.BoardManufacturer);
         Assert.Equal("MAG B650 TOMAHAWK WIFI (MS-7D75)", table.BoardProduct);
-        Assert.Equal([new MemoryModule(MemoryType.Ddr5, 4800, 6000), new MemoryModule(MemoryType.Ddr5, 4800, 6000)], table.Memory);
+        Assert.Equal([new MemoryModule(MemoryType.Ddr5, 4800, 6000) { SizeMb = 16384 }, new MemoryModule(MemoryType.Ddr5, 4800, 6000) { SizeMb = 16384 }], table.Memory);
     }
 
     [Fact]
@@ -32,8 +32,21 @@ public class SmbiosTableTests
 
         var table = SmbiosTable.Parse(raw);
 
-        Assert.Equal([new MemoryModule(MemoryType.Ddr4, 3200, 3600), new MemoryModule(MemoryType.Ddr5, 70000, 72000)], table.Memory);
+        Assert.Equal([new MemoryModule(MemoryType.Ddr4, 3200, 3600) { SizeMb = 8192 }, new MemoryModule(MemoryType.Ddr5, 70000, 72000) { SizeMb = 8192 }], table.Memory);
         Assert.Equal("", table.BoardManufacturer);
+    }
+
+    [Fact]
+    public void Reads_each_modules_size_with_modules_of_32_GB_and_more_in_the_extended_field()
+    {
+        var raw = RawSmbios(
+            MemoryDevice(sizeMb: 16384, type: 0x22, speed: 4800, configured: 6000),
+            MemoryDevice(sizeMb: 0x7FFF, type: 0x22, speed: 4800, configured: 6000, extendedSizeMb: 49152),
+            MemoryDevice(sizeMb: 0x8000 | 512, type: 0x02, speed: 0, configured: 0)); // bit 15: the size is in KB
+
+        var table = SmbiosTable.Parse(raw);
+
+        Assert.Equal([16384, 49152, 0], table.Memory.Select(m => m.SizeMb));
     }
 
     [Fact]
@@ -65,10 +78,12 @@ public class SmbiosTableTests
         return Structure(2, formatted, manufacturer, product);
     }
 
-    private static byte[] MemoryDevice(ushort sizeMb, byte type, ushort speed, ushort configured, uint extendedSpeed = 0, uint extendedConfigured = 0)
+    private static byte[] MemoryDevice(
+        int sizeMb, byte type, ushort speed, ushort configured, uint extendedSpeed = 0, uint extendedConfigured = 0, uint extendedSizeMb = 0)
     {
         var formatted = new byte[0x5C - 4];
-        BitConverter.GetBytes(sizeMb).CopyTo(formatted, 0x0C - 4);
+        BitConverter.GetBytes((ushort)sizeMb).CopyTo(formatted, 0x0C - 4);
+        BitConverter.GetBytes(extendedSizeMb).CopyTo(formatted, 0x1C - 4);
         formatted[0x12 - 4] = type;
         BitConverter.GetBytes(speed).CopyTo(formatted, 0x15 - 4);
         BitConverter.GetBytes(configured).CopyTo(formatted, 0x20 - 4);

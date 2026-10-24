@@ -366,6 +366,14 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetPcOverview_arrives_unchanged()
+    {
+        var overview = await _client.GetPcOverviewAsync(TestContext.Current.CancellationToken);
+
+        AssertSameJson(_engine.GetPcOverview(), overview);
+    }
+
+    [Fact]
     public async Task ListStartupItems_arrives_unchanged()
     {
         var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
@@ -770,6 +778,13 @@ public sealed class PipeContractTests : IAsyncLifetime
             [new BiosReadout(BiosReadoutIds.Pbo, "Precision Boost Overdrive", ReadoutState.Unknown, "Can't tell.")],
             [new BiosGuide("bios.guide.x", "Turn on EXPO", "Faster memory.", ["Press Delete."], [new Source("A source", "https://example.com")])],
             [new StabilityTool("OCCT", "https://www.ocbase.com/", "Memory test.")]);
+
+        public Overview.PcOverview GetPcOverview() => new(
+            new Overview.PcHardware("ASUSTeK COMPUTER INC. ROG STRIX B650E-F GAMING WIFI", "AMD Ryzen 7 7800X3D 8-Core Processor",
+                ["NVIDIA GeForce RTX 4070 SUPER", "AMD Radeon(TM) Graphics"], 32768),
+            new Overview.WindowsRelease(WindowsEdition.Pro, "24H2", "26100.4652"),
+            TweaksOn: 12, TweaksApplicable: 58, PendingReboots: 2,
+            [new Overview.SectionCount(Sections.Gaming, 5, 20), new Overview.SectionCount(Sections.Repair, 0, 0)]);
 
         public DriverReport GetDrivers() => new(
             [new InstalledGpu("NVIDIA GeForce RTX 4070", @"PCI\VEN_10DE&DEV_2786", GpuVendor.Nvidia, "591.74", "32.0.15.9174")],

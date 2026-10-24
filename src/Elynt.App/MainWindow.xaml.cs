@@ -10,8 +10,21 @@ namespace Elynt.App;
 
 public partial class MainWindow : Window
 {
+    // Below this width the sidebar folds to its icons and the detail pane narrows, so the page between them keeps room.
+    private const double CompactBelow = 1200;
+
+    public static readonly DependencyProperty IsCompactProperty = DependencyProperty.Register(
+        nameof(IsCompact), typeof(bool), typeof(MainWindow), new PropertyMetadata(false, (d, _) => ((MainWindow)d).Fold()));
+
     private readonly MainViewModel _model;
     private TrayNotes? _tray;
+
+    /// <summary>Whether the window is narrow enough that the sidebar shows only its icons.</summary>
+    public bool IsCompact
+    {
+        get => (bool)GetValue(IsCompactProperty);
+        private set => SetValue(IsCompactProperty, value);
+    }
 
     public MainWindow()
     {
@@ -26,6 +39,7 @@ public partial class MainWindow : Window
         (Width, Height) = (Math.Min(Width, screen.Width), Math.Min(Height, screen.Height));
         SourceInitialized += (_, _) => TitleBar.Paint(this);
         AccentWave.Follow(this);
+        SizeChanged += (_, e) => IsCompact = e.NewSize.Width < CompactBelow;
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         _model.Profiles.PickApp = PickApp;
@@ -41,6 +55,12 @@ public partial class MainWindow : Window
             await _model.CheckForUpdatesAsync();
         };
         Closed += (_, _) => _tray?.Dispose();
+    }
+
+    private void Fold()
+    {
+        SidebarColumn.Width = new GridLength(IsCompact ? 72 : 232);
+        Detail.Width = IsCompact ? 320 : 400;
     }
 
     private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();

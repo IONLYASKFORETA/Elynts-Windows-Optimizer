@@ -4,71 +4,164 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <DockPanel Margin="8">
-        <DockPanel DockPanel.Dock="Top" Margin="4,4,4,8">
-            <Button DockPanel.Dock="Right" Content="Restore everything" Padding="16,6" Click="RestoreEverything"
+    <UserControl.Resources>
+        <!-- A message from the service (drift, restore everything); it takes no room while there is none. -->
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Style.Triggers>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!-- The header label over a table column. -->
+        <Style x:Key="ColumnLabel" TargetType="TextBlock" BasedOn="{StaticResource Text.Label}">
+            <Setter Property="Margin" Value="0,0,16,0" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="Cell" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="Margin" Value="0,0,16,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- The page's name and one-line summary, where every other page has them, with Restore everything beside them. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,18">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Destructive}" Content="Restore everything" Padding="16,7"
+                    VerticalAlignment="Top" Margin="16,0,0,0" Click="RestoreEverything"
                     IsEnabled="{Binding CanRestoreEverything}"
                     ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed." />
-            <TextBlock Text="{Binding SelectedPage}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
-        </DockPanel>
-        <TextBlock DockPanel.Dock="Top" Margin="4,0,4,8" TextWrapping="Wrap" Opacity="0.8"
-                   Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
-        <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
-        <StackPanel DockPanel.Dock="Top" Margin="4,0,4,12" DataContext="{Binding Drift}">
-            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <ItemsControl ItemsSource="{Binding Items}" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type vm:DriftItemViewModel}">
-                        <CheckBox IsChecked="{Binding Ticked}" Margin="0,2"
-                                  AutomationProperties.Name="{Binding Name, StringFormat='Re-apply {0}'}">
-                            <StackPanel>
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding Detail}" Opacity="0.8" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </CheckBox>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
-                <Button Content="Re-apply all" Padding="16,6" Margin="0,0,8,0" Click="ReapplyAllDrift" IsEnabled="{Binding CanReapply}" />
-                <Button Content="Re-apply ticked" Padding="16,6" Click="ReapplyTickedDrift" IsEnabled="{Binding CanReapply}" />
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.H1}" Text="{Binding SelectedPage}" />
+                <TextBlock Style="{StaticResource Text.Dim}" Margin="0,4,0,0" Text="{Binding PageSummary}" />
             </StackPanel>
-            <CheckBox Content="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)"
-                      IsChecked="{Binding AutoReapply}" Margin="0,8,0,0" />
-            <CheckBox Content="Show a tray note when a Windows update undoes changes"
-                      IsChecked="{Binding NotifyDrift}" Margin="0,4,0,0" />
-        </StackPanel>
-        <TextBlock DockPanel.Dock="Top" Text="{Binding HistoryMessage}" Margin="4,0,4,8" TextWrapping="Wrap" FontWeight="SemiBold" />
-        <Grid>
-            <ListView ItemsSource="{Binding History}" BorderThickness="0" HorizontalContentAlignment="Stretch">
-                <ListView.View>
-                    <GridView>
-                        <GridViewColumn Header="When" Width="150" DisplayMemberBinding="{Binding When}" />
-                        <GridViewColumn Header="Tweak" Width="300">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding TweakName}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,4,0,0" />
+        </DockPanel>
+
+        <!-- Everything under the title scrolls together, so the history keeps its room at the smallest window even
+             when drift is listed above it. -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,8,24">
+                <TextBlock Style="{StaticResource Text.Body}"
+                           Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+
+                <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
+                <StackPanel DataContext="{Binding Drift}">
+                    <TextBlock Style="{StaticResource Note}" Margin="0,16,0,0" Text="{Binding Message}" />
+                    <StackPanel Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
+                        <Border Style="{StaticResource Table.Header}" Margin="0,14,0,0">
+                            <TextBlock Style="{StaticResource ColumnLabel}" Text="WHAT WINDOWS UNDID" />
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DriftItemViewModel}">
+                                    <Border Style="{StaticResource Table.Row}">
+                                        <CheckBox IsChecked="{Binding Ticked}"
+                                                  AutomationProperties.Name="{Binding Name, StringFormat='Re-apply {0}'}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                                           Foreground="{StaticResource Theme.Text}" />
+                                                <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Detail}" />
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource Button.Primary}" Content="Re-apply all" Padding="16,7" Margin="0,0,8,0"
+                                    Click="ReapplyAllDrift" IsEnabled="{Binding CanReapply}" />
+                            <Button Content="Re-apply ticked" Click="ReapplyTickedDrift" IsEnabled="{Binding CanReapply}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <!-- The two drift switches, as on Settings: the words on the left, the switch on the right. -->
+                    <Border Style="{StaticResource Card}" Padding="16,14" Margin="0,16,0,0">
+                        <StackPanel>
+                            <DockPanel>
+                                <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding AutoReapply}"
+                                          AutomationProperties.Name="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                                <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
+                                           VerticalAlignment="Center"
+                                           Text="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                            </DockPanel>
+                            <Border Height="1" Margin="0,12" Background="{StaticResource Theme.Stroke}" />
+                            <DockPanel>
+                                <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding NotifyDrift}"
+                                          AutomationProperties.Name="Show a tray note when a Windows update undoes changes" />
+                                <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
+                                           VerticalAlignment="Center"
+                                           Text="Show a tray note when a Windows update undoes changes" />
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <TextBlock Style="{StaticResource Note}" Margin="0,16,0,0" Text="{Binding HistoryMessage}" />
+
+                <!-- The history: When, Tweak with the row's message, State and Undo. The header and the rows use the same
+                     columns; the text ones share the width and wrap, and Undo keeps a fixed column so it stays in view. -->
+                <Border Style="{StaticResource Table.Header}" Margin="0,24,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.2*" />
+                            <ColumnDefinition Width="3*" />
+                            <ColumnDefinition Width="1.6*" />
+                            <ColumnDefinition Width="84" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource ColumnLabel}" Text="WHEN" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource ColumnLabel}" Text="TWEAK" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource ColumnLabel}" Text="STATE" />
+                    </Grid>
+                </Border>
+                <ItemsControl ItemsSource="{Binding History}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
+                            <Border Style="{StaticResource Table.Row}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.2*" />
+                                        <ColumnDefinition Width="3*" />
+                                        <ColumnDefinition Width="1.6*" />
+                                        <ColumnDefinition Width="84" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource Cell}" Text="{Binding When}" />
+                                    <StackPanel Grid.Column="1" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Text="{Binding TweakName}" />
+                                        <!-- Why the last undo of this row didn't happen. -->
+                                        <Border Margin="0,6,0,0">
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource WarningBox}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Message}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Message}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource Theme.Orange}" />
+                                        </Border>
                                     </StackPanel>
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
-                        <GridViewColumn Header="State" Width="190" DisplayMemberBinding="{Binding StateText}" />
-                        <GridViewColumn Width="90">
-                            <GridViewColumn.CellTemplate>
-                                <DataTemplate DataType="{x:Type vm:HistoryItemViewModel}">
-                                    <Button Content="Undo" Padding="12,2" Click="UndoChange" IsEnabled="{Binding CanUndo}"
+                                    <TextBlock Grid.Column="2" Style="{StaticResource Cell}" Text="{Binding StateText}" />
+                                    <Button Grid.Column="3" Content="Undo" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Click="UndoChange" IsEnabled="{Binding CanUndo}"
                                             AutomationProperties.Name="{Binding TweakName, StringFormat='Undo {0}'}" />
-                                </DataTemplate>
-                            </GridViewColumn.CellTemplate>
-                        </GridViewColumn>
-                    </GridView>
-                </ListView.View>
-            </ListView>
-            <TextBlock Text="No changes yet. Everything you switch on shows up here."
-                       Visibility="{Binding IsHistoryEmpty, Converter={StaticResource Visible}}"
-                       Opacity="0.7" Margin="8,32,8,8" TextWrapping="Wrap" />
-        </Grid>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Style="{StaticResource Text.Dim}" Margin="12,16,12,0"
+                           Text="No changes yet. Everything you switch on shows up here."
+                           Visibility="{Binding IsHistoryEmpty, Converter={StaticResource Visible}}" />
+            </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </UserControl>

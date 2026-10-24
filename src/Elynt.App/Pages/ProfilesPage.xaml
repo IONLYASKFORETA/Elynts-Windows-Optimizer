@@ -3,69 +3,157 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Visible" />
+        <!-- A heading inside the editor's card. -->
+        <Style x:Key="Subhead" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,22,0,8" />
+        </Style>
+        <!-- The words before a drop-down or a tuning summary. -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+        <!-- The service's answer to the last save or delete; it takes no room while there is none. -->
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Style.Triggers>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <!-- Per-game profile editor: instant changes only, applied when the game starts and undone 15 s after it closes. -->
-    <StackPanel Margin="0,0,0,16">
-        <TextBlock Text="Per-game profiles" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8"
+    <StackPanel>
+        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" Text="PER-GAME PROFILES" />
+        <TextBlock Style="{StaticResource Text.Dim}"
                    Text="A profile holds only instant changes. They're made when the game starts and undone 15 seconds after it closes, or at the next start if the PC crashed. The first game running stays in charge; another game's profile is skipped meanwhile. Reboot-only tweaks and Defender are never part of a profile." />
-        <CheckBox Content="Quiet tray notes when a profile is applied, undone or skipped"
-                  IsChecked="{Binding NotifyProfiles}" Margin="0,0,0,8" />
 
-        <DockPanel Margin="0,0,0,8">
-            <TextBlock Text="Game:" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}" DisplayMemberPath="Label" MinWidth="280" />
-        </DockPanel>
-
-        <StackPanel Visibility="{Binding HasGame, Converter={StaticResource Visible}}">
-            <TextBlock Text="Changes while this game runs" FontWeight="SemiBold" Margin="0,4,0,4" />
-            <ItemsControl ItemsSource="{Binding Tweaks}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <CheckBox IsChecked="{Binding IsChecked}" Margin="0,2" ToolTip="{Binding WhatItDoes}">
-                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
-                        </CheckBox>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <CheckBox IsChecked="{Binding RaiseTimerResolution}" Margin="0,2"
-                      Content="Raise the timer resolution to 0.5 ms (reaches games only while the global timer resolution tweak is on)" />
-            <DockPanel Margin="0,6,0,0">
-                <TextBlock Text="Game priority:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <ComboBox ItemsSource="{Binding Priorities}" SelectedItem="{Binding Priority}" DisplayMemberPath="Label" MinWidth="200" HorizontalAlignment="Left" />
+        <!-- The tray-note switch, as on Settings: the words on the left, the switch on the right. -->
+        <Border Style="{StaticResource Card}" Padding="16,14" Margin="0,14,0,0">
+            <DockPanel>
+                <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding NotifyProfiles}"
+                          AutomationProperties.Name="Quiet tray notes when a profile is applied, undone or skipped" />
+                <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0" VerticalAlignment="Center"
+                           Text="Quiet tray notes when a profile is applied, undone or skipped" />
             </DockPanel>
+        </Border>
 
-            <TextBlock Text="Background apps to close (reopened after the game)" FontWeight="SemiBold" Margin="0,10,0,4" />
-            <ListBox ItemsSource="{Binding AppsToClose}" SelectedItem="{Binding SelectedApp}" MinHeight="40" MaxHeight="120" />
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                <Button Content="Add an app…" Click="AddApp" Padding="10,2" Margin="0,0,6,0" />
-                <Button Content="Remove" Click="RemoveApp" Padding="10,2" />
+        <!-- The editor: the game, then what its profile changes. -->
+        <Border Style="{StaticResource Card}" Margin="0,8,0,0">
+            <StackPanel>
+                <DockPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Game:" />
+                    <ComboBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}" DisplayMemberPath="Label" MinWidth="280"
+                              AutomationProperties.Name="Game" />
+                </DockPanel>
+
+                <StackPanel Visibility="{Binding HasGame, Converter={StaticResource Visible}}">
+                    <TextBlock Style="{StaticResource Subhead}" Text="Changes while this game runs" />
+                    <ItemsControl ItemsSource="{Binding Tweaks}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsChecked}" Margin="0,2" ToolTip="{Binding WhatItDoes}">
+                                    <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <CheckBox IsChecked="{Binding RaiseTimerResolution}" Margin="0,2"
+                              AutomationProperties.Name="Raise the timer resolution to 0.5 ms (reaches games only while the global timer resolution tweak is on)">
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Raise the timer resolution to 0.5 ms (reaches games only while the global timer resolution tweak is on)" />
+                    </CheckBox>
+                    <DockPanel Margin="0,12,0,0">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Game priority:" />
+                        <ComboBox ItemsSource="{Binding Priorities}" SelectedItem="{Binding Priority}" DisplayMemberPath="Label" MinWidth="200"
+                                  HorizontalAlignment="Left" AutomationProperties.Name="Game priority" />
+                    </DockPanel>
+
+                    <TextBlock Style="{StaticResource Subhead}" Text="Background apps to close (reopened after the game)" />
+                    <!-- The apps as row cards in a dark well, so the list shows where it is even while it is empty. -->
+                    <Border Background="{StaticResource Theme.Bg}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1"
+                            CornerRadius="8" Padding="6,6,6,0">
+                        <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding AppsToClose}" SelectedItem="{Binding SelectedApp}"
+                                 MinHeight="40" MaxHeight="170" AutomationProperties.Name="Background apps to close">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Add an app…" Click="AddApp" Margin="0,0,8,0" />
+                        <Button Content="Remove" Click="RemoveApp" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Subhead}" Margin="0,22,0,4" Text="GPU and CPU tuning while this game runs" />
+                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,0,0,8"
+                               Text="Tune on the Overclocking page, then take the settings here. They're applied when the game starts, without the keep-or-revert countdown, and your usual settings come back when the profile is undone. A crash mid-game puts the GPU back on factory settings at the next start." />
+                    <!-- GPU and CPU: the summary wraps between the label and the buttons, which stay on the right. -->
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="GPU:" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" VerticalAlignment="Center" Margin="0,0,12,0"
+                                   Text="{Binding GpuTuningSummary}" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Use the GPU's current settings" Click="UseCurrentGpu" />
+                            <Button Content="Clear" Click="ClearGpu" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Grid>
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="CPU:" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" VerticalAlignment="Center" Margin="0,0,12,0"
+                                   Text="{Binding CpuTuningSummary}" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="Use the CPU's current tune" Click="UseCurrentCpu" />
+                            <Button Content="Clear" Click="ClearCpu" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Grid>
+                    <!-- Anti-cheat warnings for this game and the profile as edited. -->
+                    <Border Margin="0,10,0,0">
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource WarningBox}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Warnings}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Warnings}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}" />
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                        <Button Style="{StaticResource Button.Primary}" Content="Save profile" Padding="16,7" Margin="0,0,8,0" Click="Save" />
+                        <Button Content="Delete profile" VerticalAlignment="Center" Click="Delete" />
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock Style="{StaticResource Note}" Margin="0,12,0,0" Text="{Binding Message}" />
             </StackPanel>
-
-            <TextBlock Text="GPU and CPU tuning while this game runs" FontWeight="SemiBold" Margin="0,10,0,4" />
-            <TextBlock Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,4"
-                       Text="Tune on the Overclocking page, then take the settings here. They're applied when the game starts, without the keep-or-revert countdown, and your usual settings come back when the profile is undone. A crash mid-game puts the GPU back on factory settings at the next start." />
-            <DockPanel Margin="0,2">
-                <TextBlock Text="GPU:" Width="40" VerticalAlignment="Center" />
-                <Button DockPanel.Dock="Right" Content="Clear" Click="ClearGpu" Padding="10,2" Margin="6,0,0,0" />
-                <Button DockPanel.Dock="Right" Content="Use the GPU's current settings" Click="UseCurrentGpu" Padding="10,2" Margin="6,0,0,0" />
-                <TextBlock Text="{Binding GpuTuningSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            </DockPanel>
-            <DockPanel Margin="0,2">
-                <TextBlock Text="CPU:" Width="40" VerticalAlignment="Center" />
-                <Button DockPanel.Dock="Right" Content="Clear" Click="ClearCpu" Padding="10,2" Margin="6,0,0,0" />
-                <Button DockPanel.Dock="Right" Content="Use the CPU's current tune" Click="UseCurrentCpu" Padding="10,2" Margin="6,0,0,0" />
-                <TextBlock Text="{Binding CpuTuningSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
-            </DockPanel>
-            <TextBlock Text="{Binding Warnings}" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}" Margin="0,6,0,0" />
-
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Button Content="Save profile" Click="Save" Padding="12,4" Margin="0,0,6,0" />
-                <Button Content="Delete profile" Click="Delete" Padding="12,4" />
-            </StackPanel>
-        </StackPanel>
-
-        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,8,0,0" />
+        </Border>
     </StackPanel>
 </UserControl>
