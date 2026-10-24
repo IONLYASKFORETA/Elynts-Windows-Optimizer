@@ -1,0 +1,4 @@
+System.Windows.Data Error: 23 : Cannot convert '<null>' from type '<null>' to type 'System.Uri' for 'en-US' culture with default conversions; consider using Converter property of Binding. NotSupportedException:'System.NotSupportedException: UriTypeConverter cannot convert from (null).
+   at System.ComponentModel.TypeConverter.GetConvertFromException(Object value)
+   at System.UriTypeConverter.ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, Object value)
+   at MS.Internal.Data.DefaultValueConverter.ConvertHelper(Object o, Type destinationType, DependencyObject targetElement, CultureInfo culture, Boolean isForward)'
