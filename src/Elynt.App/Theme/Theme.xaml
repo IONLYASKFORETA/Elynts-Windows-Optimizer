@@ -83,6 +83,31 @@
         <Setter Property="FontSize" Value="16" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- The answer to the last action ("Looking up the latest driver…"): body text in full white, taking no room while
+         there is nothing to say. -->
+    <Style x:Key="Text.Message" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Text" Value="{x:Null}">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <!-- A link in text (a source, a vendor's page): orange, underlined under the mouse. -->
+    <Style x:Key="Link" TargetType="Hyperlink">
+        <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 
     <!-- Boxes. -->
     <Style x:Key="Card" TargetType="Border">
@@ -129,6 +154,30 @@
         <Setter Property="TextElement.FontFamily" Value="Cascadia Mono, Consolas" />
         <Setter Property="TextElement.FontSize" Value="12" />
         <Setter Property="TextElement.Foreground" Value="#FFE4E4E7" />
+    </Style>
+    <!-- A card of readouts, one row per item with faint lines between them (sensor values, BIOS settings), hidden while
+         there are none. Each row is a CardRow, whose line on top sits on the card's own edge for the first one. -->
+    <Style x:Key="CardRows" TargetType="ItemsControl">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ItemsControl">
+                    <Border Style="{StaticResource Card}" Padding="16,0">
+                        <ItemsPresenter Margin="0,-1,0,0" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="HasItems" Value="False">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="CardRow" TargetType="Border">
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="Padding" Value="0,10" />
     </Style>
 
     <!-- On/off switch: the accent wave when on, grey when off. -->

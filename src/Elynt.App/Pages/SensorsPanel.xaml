@@ -7,46 +7,62 @@
     </UserControl.Resources>
 
     <!-- Sensors: live readouts, plus the optional PawnIO driver. PawnIO is only installed when the user turns it on. -->
-    <StackPanel Margin="4,4,4,16">
-        <TextBlock Text="Sensors" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Text="{Binding Note}" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8"
+    <StackPanel Margin="0,0,0,22">
+        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" Text="SENSORS" />
+        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,0,0,10" Text="{Binding Note}"
                    Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
 
-        <ItemsControl ItemsSource="{Binding Sensors}" Margin="0,0,0,8">
+        <!-- One row per sensor: its name, the value, and where it was read from. -->
+        <ItemsControl Style="{StaticResource CardRows}" ItemsSource="{Binding Sensors}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type sensors:SensorView}">
-                    <Grid Margin="0,2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="180" />
-                            <ColumnDefinition Width="100" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{Binding Name}" />
-                        <TextBlock Grid.Column="1" FontWeight="SemiBold">
-                            <Run Text="{Binding Value, Mode=OneWay, StringFormat=0.#}" /> <Run Text="{Binding Unit, Mode=OneWay}" />
-                        </TextBlock>
-                        <TextBlock Grid.Column="2" Text="{Binding Source}" Opacity="0.6" />
-                    </Grid>
+                    <Border Style="{StaticResource CardRow}" Padding="0,9">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center" FontSize="13.5" Foreground="{StaticResource Theme.TextBody}" TextWrapping="Wrap"
+                                       Text="{Binding Name}" />
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="12,0" TextAlignment="Right"
+                                       FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource Theme.Text}">
+                                <Run Text="{Binding Value, Mode=OneWay, StringFormat=0.#}" /> <Run Text="{Binding Unit, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Grid.Column="2" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Text="{Binding Source}" />
+                        </Grid>
+                    </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <Border Padding="12" Margin="0,4" CornerRadius="6" BorderThickness="1"
-                BorderBrush="{StaticResource Theme.Stroke}"
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0"
                 Visibility="{Binding Available, Converter={StaticResource Visible}}">
             <StackPanel>
-                <TextBlock Text="PawnIO driver (optional)" FontSize="14" FontWeight="SemiBold" />
-                <TextBlock Text="A signed low-level driver that lets the app read the CPU's own sensors and PBO state. It is only installed if you turn it on, and you can uninstall it any time."
-                           TextWrapping="Wrap" Opacity="0.7" Margin="0,2,0,6" />
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                <TextBlock Text="{Binding FaceitWarning}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,8" />
-                <WrapPanel>
-                    <Button Content="Turn on PawnIO" Click="TurnOn" Padding="12,4" Margin="0,0,8,4"
+                <TextBlock Style="{StaticResource Text.H2}" FontSize="14" Text="PawnIO driver (optional)" />
+                <TextBlock Style="{StaticResource Text.Dim}" Margin="0,4,0,0"
+                           Text="A signed low-level driver that lets the app read the CPU's own sensors and PBO state. It is only installed if you turn it on, and you can uninstall it any time." />
+                <TextBlock Style="{StaticResource Text.Body}" Margin="0,10,0,0" Text="{Binding Status}" />
+                <Border Margin="0,10,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource WarningBox}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding FaceitWarning}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Style="{StaticResource Text.Body}" Text="{Binding FaceitWarning}" />
+                </Border>
+                <WrapPanel Margin="0,14,0,0">
+                    <Button Content="Turn on PawnIO" Click="TurnOn" Margin="0,0,8,6" VerticalAlignment="Center"
+                            Style="{StaticResource Button.Primary}" Padding="16,7"
                             IsEnabled="{Binding CanInstall}" />
-                    <Button Content="Uninstall driver" Click="Uninstall" Padding="12,4" Margin="0,0,8,4"
+                    <Button Content="Uninstall driver" Click="Uninstall" Margin="0,0,8,6" VerticalAlignment="Center"
                             IsEnabled="{Binding CanUninstall}" />
                 </WrapPanel>
-                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBlock Style="{StaticResource Text.Message}" Margin="0,4,0,0" Text="{Binding Message}" />
             </StackPanel>
         </Border>
     </StackPanel>
