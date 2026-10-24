@@ -4,37 +4,76 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <!-- A category's kind as a pill: plain for a safe cache, orange for one that stutters at first or can't be undone. -->
+        <Style x:Key="KindPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding KindText}" Value="Safe">
+                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="KindText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding KindText}" Value="Safe">
+                    <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <DockPanel DataContext="{Binding Cleanup}">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,4,8">
-            <Button Content="Scan" Click="ScanCleanup" IsEnabled="{Binding CanScan}" Padding="16,4" Margin="0,0,8,0" />
-            <Button Content="Clean ticked" Click="CleanTicked" IsEnabled="{Binding CanClean}" Padding="16,4" Margin="0,0,16,0" />
-            <CheckBox Content="Clean safe caches automatically once a week" IsChecked="{Binding WeeklyEnabled, Mode=TwoWay}"
-                      VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" TextWrapping="Wrap" Margin="4,0,4,4" />
-        <TextBlock DockPanel.Dock="Top" Text="{Binding TickedSummary}" Opacity="0.7" Margin="4,0,4,8" />
-        <ListBox ItemsSource="{Binding Categories}" MaxHeight="380" HorizontalContentAlignment="Stretch" BorderThickness="0">
+        <!-- Scan, clean, and the weekly schedule; they wrap onto a second line when the detail pane leaves little room. -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+            <Button Content="Scan" Click="ScanCleanup" IsEnabled="{Binding CanScan}" Style="{StaticResource Button.Primary}"
+                    Padding="16,7" Margin="0,0,8,8" />
+            <Button Content="Clean ticked" Click="CleanTicked" IsEnabled="{Binding CanClean}" Style="{StaticResource Button.Primary}"
+                    Padding="16,7" Margin="0,0,16,8" />
+            <DockPanel VerticalAlignment="Center" Margin="0,0,0,8">
+                <CheckBox DockPanel.Dock="Left" Style="{StaticResource Switch}" VerticalAlignment="Top"
+                          IsChecked="{Binding WeeklyEnabled, Mode=TwoWay}"
+                          AutomationProperties.Name="Clean safe caches automatically once a week" />
+                <TextBlock Style="{StaticResource Text.Body}" Margin="10,1,0,0" Text="Clean safe caches automatically once a week" />
+            </DockPanel>
+        </WrapPanel>
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" Style="{StaticResource Text.Body}" Margin="0,0,0,2" />
+        <TextBlock DockPanel.Dock="Top" Text="{Binding TickedSummary}" Style="{StaticResource Text.Dim}" Margin="0,0,0,10" />
+
+        <!-- A row per category: its tick box, its size and kind, what it does, any warning in orange, and the result.
+             Everything stacks under the name so the row still reads at the narrowest page. The list's height is held to
+             half of the page (see the code-behind), so the section's tweaks underneath keep room at the smallest window. -->
+        <ListBox x:Name="CategoryList" Style="{StaticResource CardList}" ItemsSource="{Binding Categories}">
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:CleanupCategoryItemViewModel}">
-                    <Grid Margin="4,4" ToolTip="{Binding LocationsText}">
+                    <Grid ToolTip="{Binding LocationsText}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <CheckBox IsChecked="{Binding IsTicked, Mode=TwoWay}" IsEnabled="{Binding CanTick}"
-                                  VerticalAlignment="Top" Margin="0,2,8,0" AutomationProperties.Name="{Binding Name}" />
+                                  VerticalAlignment="Top" Margin="0,-6,6,0" AutomationProperties.Name="{Binding Name}" />
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding WhatItDoes}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Note}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}"
-                                       Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
-                            <TextBlock Text="{Binding Result}" FontSize="12" TextWrapping="Wrap"
+                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Theme.Text}" />
+                            <WrapPanel Margin="0,6,0,-6">
+                                <TextBlock Text="{Binding SizeText}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
+                                           Foreground="{StaticResource Theme.Text}" VerticalAlignment="Center" Margin="0,0,8,6" />
+                                <Border Style="{StaticResource KindPill}">
+                                    <TextBlock Text="{Binding KindText}" Style="{StaticResource KindText}" />
+                                </Border>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding WhatItDoes}" Style="{StaticResource Text.Dim}" Margin="0,6,0,0" />
+                            <DockPanel Margin="0,6,0,0" Visibility="{Binding HasNote, Converter={StaticResource Visible}}">
+                                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Icon}" Text="&#xE7BA;" FontSize="12"
+                                           Foreground="{StaticResource Theme.Orange}" VerticalAlignment="Top" Margin="0,2,8,0" />
+                                <TextBlock Text="{Binding Note}" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Result}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Foreground="{StaticResource Theme.Text}"
                                        Visibility="{Binding HasResult, Converter={StaticResource Visible}}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Margin="8,0,0,0">
-                            <TextBlock Text="{Binding SizeText}" HorizontalAlignment="Right" />
-                            <TextBlock Text="{Binding KindText}" Opacity="0.7" FontSize="12" HorizontalAlignment="Right" />
                         </StackPanel>
                     </Grid>
                 </DataTemplate>

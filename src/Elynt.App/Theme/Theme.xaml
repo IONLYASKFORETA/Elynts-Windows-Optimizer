@@ -282,6 +282,56 @@
         <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
     </Style>
 
+    <!-- Tables (services, Undo history, drift): dark rows split by faint dividers, under a small-caps header. -->
+    <!-- The header row, above the table's ListBox: Text.Label headings (in CAPITALS) in the same columns as the rows. -->
+    <Style x:Key="TableHeader" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="12,0,12,8" />
+    </Style>
+    <!-- A table row: a faint divider under it, a hover shade, and a short wave edge on the left when selected. -->
+    <Style x:Key="TableRow" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <Border x:Name="Bg" Padding="12,10" Background="Transparent"
+                                BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,0,1">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                        <Border x:Name="Edge" Width="2" HorizontalAlignment="Left" Margin="0,6"
+                                Background="{DynamicResource Theme.AccentWave}" Visibility="Collapsed" />
+                        <Border x:Name="Focus" BorderThickness="1" BorderBrush="{StaticResource Theme.TextDim}" Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                            <Setter TargetName="Edge" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- The table's ListBox of TableRow rows. Rows wrap to the table's width rather than scrolling sideways. -->
+    <Style x:Key="Table" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource TableRow}" />
+    </Style>
+
     <!-- A sidebar entry: a soft highlight, and a short wave bar on the left when selected. -->
     <Style x:Key="NavItem" TargetType="ListBoxItem">
         <Setter Property="Cursor" Value="Hand" />
