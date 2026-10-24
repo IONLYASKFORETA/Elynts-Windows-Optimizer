@@ -1,0 +1,417 @@
+<!-- The app's one look: black, with red accents and the red-orange accent wave. Colours first, then the named styles
+     pages use, then the few control styles that replace Fluent's own. Pages take colours and styles from here rather
+     than defining their own. Merged last in App.xaml, so it wins over Fluent and FluentColors.xaml. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Colours. -->
+    <SolidColorBrush x:Key="Theme.Bg" Color="#FF09090B" />
+    <SolidColorBrush x:Key="Theme.Surface" Color="#FF111114" />
+    <SolidColorBrush x:Key="Theme.Surface2" Color="#FF19191E" />
+    <SolidColorBrush x:Key="Theme.Hover" Color="#FF1F1F26" />
+    <SolidColorBrush x:Key="Theme.Stroke" Color="#FF26262D" />
+    <SolidColorBrush x:Key="Theme.StrokeStrong" Color="#FF3F3F46" />
+    <SolidColorBrush x:Key="Theme.Code" Color="#FF0C0C0F" />
+    <SolidColorBrush x:Key="Theme.Text" Color="#FFF4F4F5" />
+    <SolidColorBrush x:Key="Theme.TextBody" Color="#FFD4D4D8" />
+    <SolidColorBrush x:Key="Theme.TextDim" Color="#FFA1A1AA" />
+    <SolidColorBrush x:Key="Theme.TextFaint" Color="#FF6B6B75" />
+    <SolidColorBrush x:Key="Theme.Red" Color="#FFE5162D" />
+    <SolidColorBrush x:Key="Theme.RedHover" Color="#FFF0283D" />
+    <SolidColorBrush x:Key="Theme.Orange" Color="#FFFF7A1A" />
+    <SolidColorBrush x:Key="Theme.RedTint" Color="#1FE5162D" />
+    <SolidColorBrush x:Key="Theme.RedEdge" Color="#66E5162D" />
+    <SolidColorBrush x:Key="Theme.OrangeTint" Color="#1AFF7A1A" />
+    <SolidColorBrush x:Key="Theme.OrangeEdge" Color="#55FF7A1A" />
+    <!-- Only for the connection dot. -->
+    <SolidColorBrush x:Key="Theme.Good" Color="#FF22C55E" />
+
+    <!-- The accent wave's still form. AccentWave puts the moving one in the app's own resources, which win over this,
+         so accents refer to it with DynamicResource. -->
+    <LinearGradientBrush x:Key="Theme.AccentWave" MappingMode="Absolute" StartPoint="0,0" EndPoint="480,0" SpreadMethod="Repeat">
+        <GradientStop Color="#FFE5162D" Offset="0" />
+        <GradientStop Color="#FFFF7A1A" Offset="0.5" />
+        <GradientStop Color="#FFE5162D" Offset="1" />
+    </LinearGradientBrush>
+
+    <FontFamily x:Key="Theme.IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- Fluent brushes the app draws differently from FluentColors.xaml's straight mapping. -->
+    <!-- Selected list rows: a red tint rather than a solid accent block. -->
+    <SolidColorBrush x:Key="ListBoxItemSelectedBackgroundThemeBrush" Color="#FFE5162D" Opacity="0.16" />
+    <SolidColorBrush x:Key="ListBoxItemSelectedBackgroundPointerOverThemeBrush" Color="#FFE5162D" Opacity="0.22" />
+    <SolidColorBrush x:Key="ListBoxItemSelectedBackgroundPressedThemeBrush" Color="#FFE5162D" Opacity="0.26" />
+    <SolidColorBrush x:Key="ListBoxItemBackgroundSelectedPressedThemeBrush" Color="#FFE5162D" Opacity="0.26" />
+    <SolidColorBrush x:Key="DataGridRowSelectedBackgroundThemeBrush" Color="#FFE5162D" Opacity="0.16" />
+    <SolidColorBrush x:Key="DataGridRowSelectedForegroundThemeBrush" Color="#FFF4F4F5" />
+    <!-- Secondary buttons pick up a red edge under the mouse. -->
+    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFE5162D" />
+
+    <!-- Text. -->
+    <Style x:Key="Text.H1" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Text.H2" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Text.Body" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13.5" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextBody}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Text.Dim" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- A small-caps heading over a part of a card or pane ("WHAT IT DOES"). -->
+    <Style x:Key="Text.Label" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+        <Setter Property="Margin" Value="0,18,0,6" />
+    </Style>
+    <Style x:Key="Text.Icon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Theme.IconFont}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The answer to the last action ("Looking up the latest driver…"): body text in full white, taking no room while
+         there is nothing to say. -->
+    <Style x:Key="Text.Message" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Text" Value="{x:Null}">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <!-- A link in text (a source, a vendor's page): orange, underlined under the mouse. -->
+    <Style x:Key="Link" TargetType="Hyperlink">
+        <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Boxes. -->
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Theme.Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="20" />
+    </Style>
+    <!-- A small label (evidence tier, reversibility, a risk). -->
+    <Style x:Key="Pill" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+    <Style x:Key="Pill.Warning" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="Background" Value="{StaticResource Theme.OrangeTint}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.OrangeEdge}" />
+        <Setter Property="TextElement.Foreground" Value="{StaticResource Theme.Orange}" />
+    </Style>
+    <!-- Tinted boxes for warnings: orange for "read this first", red for what can't be undone. -->
+    <Style x:Key="WarningBox" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Theme.OrangeTint}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.OrangeEdge}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+    <Style x:Key="DangerBox" TargetType="Border" BasedOn="{StaticResource WarningBox}">
+        <Setter Property="Background" Value="{StaticResource Theme.RedTint}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.RedEdge}" />
+    </Style>
+    <!-- Commands and registry paths, in a monospace box. -->
+    <Style x:Key="CodeBox" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Theme.Code}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="TextElement.FontFamily" Value="Cascadia Mono, Consolas" />
+        <Setter Property="TextElement.FontSize" Value="12" />
+        <Setter Property="TextElement.Foreground" Value="#FFE4E4E7" />
+    </Style>
+    <!-- A card of readouts, one row per item with faint lines between them (sensor values, BIOS settings), hidden while
+         there are none. Each row is a CardRow, whose line on top sits on the card's own edge for the first one. -->
+    <Style x:Key="CardRows" TargetType="ItemsControl">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ItemsControl">
+                    <Border Style="{StaticResource Card}" Padding="16,0">
+                        <ItemsPresenter Margin="0,-1,0,0" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="HasItems" Value="False">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="CardRow" TargetType="Border">
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="Padding" Value="0,10" />
+    </Style>
+
+    <!-- On/off switch: the accent wave when on, grey when off. -->
+    <Style x:Key="Switch" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Width="44" Height="22" Background="Transparent">
+                        <Border x:Name="Track" CornerRadius="11" Background="{StaticResource Theme.Surface2}"
+                                BorderBrush="{StaticResource Theme.StrokeStrong}" BorderThickness="1" />
+                        <Border x:Name="Fill" CornerRadius="11" Background="{DynamicResource Theme.AccentWave}" Opacity="0" />
+                        <Ellipse x:Name="Thumb" Width="14" Height="14" Fill="#FF8A8A93" HorizontalAlignment="Left" Margin="4,0,0,0" />
+                        <!-- Keyboard focus: a ring around the whole switch. -->
+                        <Border x:Name="Focus" CornerRadius="13" Margin="-3" BorderThickness="2"
+                                BorderBrush="{StaticResource Theme.Text}" Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Fill" Property="Opacity" Value="1" />
+                            <Setter TargetName="Thumb" Property="Fill" Value="White" />
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,4,0" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Buttons. A plain button is the secondary form (Fluent's, recoloured); these are the other two. -->
+    <Style x:Key="Button.Primary" TargetType="Button">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="18,8" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" CornerRadius="7" Background="{DynamicResource Theme.AccentWave}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.88" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.75" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- For what can't be undone: solid red, never the wave. -->
+    <Style x:Key="Button.Destructive" TargetType="Button" BasedOn="{StaticResource Button.Primary}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" CornerRadius="7" Background="{StaticResource Theme.Red}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.RedHover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Opacity" Value="0.8" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A thin meter in the accent wave ("3 of 12 on"). Plain progress bars get the wave through Fluent's own style. -->
+    <Style x:Key="Meter" TargetType="ProgressBar">
+        <Setter Property="Height" Value="4" />
+        <Setter Property="Maximum" Value="1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid>
+                        <Border CornerRadius="2" Background="{StaticResource Theme.Surface2}" />
+                        <Border x:Name="PART_Track" />
+                        <Border x:Name="PART_Indicator" CornerRadius="2" HorizontalAlignment="Left" Background="{DynamicResource Theme.AccentWave}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A list row as a card (a tweak, an app, a startup item): a hover shade, and a red edge when selected. -->
+    <Style x:Key="Row" TargetType="ListBoxItem">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Card" Margin="0,0,0,6" Padding="16,12" CornerRadius="8" BorderThickness="1"
+                            Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource Theme.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.TextDim}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.Red}" />
+                            <Setter TargetName="Card" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- A ListBox of Row cards. Rows wrap to the list's width rather than scrolling sideways. -->
+    <Style x:Key="CardList" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Row}" />
+    </Style>
+
+    <!-- A table (the Undo history, drift): a header row of Text.Label cells, then dark rows split by faint lines. The
+         header and the rows have the same side padding, so grids with the same columns inside them line up. -->
+    <Style x:Key="Table.Header" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="12,0,12,8" />
+    </Style>
+    <Style x:Key="Table.Row" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="12,10" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource Theme.Surface}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- A sidebar entry: a soft highlight, and a short wave bar on the left when selected. -->
+    <Style x:Key="NavItem" TargetType="ListBoxItem">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid Margin="10,1" Background="Transparent">
+                        <Border x:Name="Bg" CornerRadius="7" />
+                        <Border x:Name="Bar" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="0,8"
+                                Background="{DynamicResource Theme.AccentWave}" Visibility="Collapsed" />
+                        <Border x:Name="Focus" CornerRadius="7" BorderThickness="2" BorderBrush="{StaticResource Theme.Text}" Visibility="Collapsed" />
+                        <ContentPresenter Margin="14,9" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                            <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Tabs: plain text headers, dim until selected, with a wave underline on the selected one. -->
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Grid Background="Transparent" Margin="0,0,4,0">
+                        <ContentPresenter ContentSource="Header" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" />
+                        <Border x:Name="Underline" Height="2" CornerRadius="1" VerticalAlignment="Bottom" Margin="10,0"
+                                Background="{DynamicResource Theme.AccentWave}" Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                            <Setter Property="Panel.ZIndex" Value="1" />
+                            <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

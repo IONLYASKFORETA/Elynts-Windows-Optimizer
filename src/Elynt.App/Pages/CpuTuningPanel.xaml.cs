@@ -1,6 +1,6 @@
 using System.Windows.Controls;
 
-namespace Elynt.App;
+namespace Elynt.App.Pages;
 
 public partial class CpuTuningPanel : UserControl
 {

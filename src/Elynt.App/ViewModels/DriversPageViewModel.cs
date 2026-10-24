@@ -23,6 +23,15 @@ public sealed class DriversPageViewModel(DriverReport report, Func<EnginePipeCli
 
     public bool HasProblem => Problem is not null;
 
+    /// <summary>Whether any driver has been checked since the service connected.</summary>
+    public bool Checked => Gpus.Any(g => g.UpdateFound is not null);
+
+    /// <summary>How many drivers had a newer one at their last check, for the Home page.</summary>
+    public int UpdatesFound => Gpus.Count(g => g.UpdateFound == true);
+
+    /// <summary>Looks up the latest driver for every GPU and the chipset, as each one's own check button does.</summary>
+    public Task CheckAllAsync() => Task.WhenAll(Gpus.Select(g => g.CheckAsync()));
+
     /// <summary>Problem-driver warnings, old-driver cleaning and its backups. Loads itself.</summary>
     public DriverCleaningViewModel Cleaning { get; } = Loaded(new DriverCleaningViewModel(client, askToReboot));
 
@@ -106,6 +115,9 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
 
     public bool HasVendorPage => VendorPage is not null;
 
+    /// <summary>Whether the last check found a newer driver, or null before the first check.</summary>
+    public bool? UpdateFound { get; private set; }
+
     /// <summary>Back up and remove this vendor's old driver packages before installing (pnputil; restorable).</summary>
     public bool RemoveOldDrivers
     {
@@ -122,6 +134,7 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
     public Task CheckAsync() => RunAsync("Looking up the latest driver…", async c =>
     {
         var check = await c.CheckDriverAsync(Request);
+        UpdateFound = check.Found && check.UpdateAvailable;
         Message = check.Message;
         VendorPage = check.Found ? null : check.VendorPage;
     });

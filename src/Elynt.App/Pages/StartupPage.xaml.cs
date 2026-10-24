@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Elynt.App.ViewModels;
 
-namespace Elynt.App;
+namespace Elynt.App.Pages;
 
 /// <summary>The Startup list. Its DataContext is the <see cref="StartupPageViewModel"/>.</summary>
 public partial class StartupPage : UserControl

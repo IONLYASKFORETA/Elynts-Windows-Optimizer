@@ -1,0 +1,229 @@
+<!-- Home page: this PC at a glance, what is waiting, quick Clean up and Check drivers, and a card per section.
+     Its DataContext is the window's MainViewModel; everything below reads the Home page's own view model. -->
+<UserControl x:Class="Elynt.App.Pages.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <!-- A card that is also a button (a waiting item, a section): a hover shade, and a lighter edge under the keyboard. -->
+        <Style x:Key="CardButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Padding" Value="16,14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Card" CornerRadius="10" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                                Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="Background" Value="{StaticResource Theme.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.TextDim}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource Theme.Red}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A stat card's big number: in the accent wave while it counts something, plain at zero. -->
+        <Style x:Key="BigNumber" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource Theme.AccentWave}" />
+        </Style>
+        <Style x:Key="StatCard" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Margin" Value="6,0,6,12" />
+            <Setter Property="Padding" Value="20,16" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel DataContext="{Binding HomePage}" Margin="0,0,8,24">
+            <!-- This PC: its parts and Windows, with live temperatures on the right. -->
+            <Border Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" Text="THIS PC" />
+                        <TextBlock Style="{StaticResource Text.H2}" Text="{Binding Heading}" />
+                        <ItemsControl ItemsSource="{Binding Specs}" Margin="0,8,0,0" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="84" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.TextDim}" Text="{Binding Label}" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" Text="{Binding Value}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="24,0,0,0" MinWidth="140" MaxWidth="250">
+                        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" HorizontalAlignment="Right" Text="TEMPERATURES" />
+                        <ItemsControl ItemsSource="{Binding Temperatures}" Focusable="False"
+                                      Visibility="{Binding HasTemperatures, Converter={StaticResource Visible}}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0">
+                                        <TextBlock Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Text="{Binding Label}" />
+                                        <TextBlock Margin="10,0,0,0" FontSize="18" FontWeight="SemiBold" Text="{Binding Value}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Text.Dim}" TextAlignment="Right" Text="No readings yet."
+                                   Visibility="{Binding HasNoTemperatures, Converter={StaticResource Visible}}" />
+                        <!-- Without PawnIO: how to get the CPU's own temperature, and where. -->
+                        <StackPanel Visibility="{Binding HasTemperatureNote, Converter={StaticResource Visible}}">
+                            <TextBlock Style="{StaticResource Text.Dim}" TextAlignment="Right" Margin="0,8,0,0" Text="{Binding TemperatureNote}" />
+                            <Button Content="Go to Overclocking" Click="OpenOverclocking" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="12,4" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Stat cards. -->
+            <UniformGrid Columns="{Binding StatColumns, RelativeSource={RelativeSource AncestorType=local:HomePage}}" Margin="-6,12,-6,0">
+                <Border Style="{StaticResource StatCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding TweaksOn}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource BigNumber}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TweaksOn}" Value="0">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,2,0,0" Text="{Binding TweaksOnCaption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource StatCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding RestartsWaiting}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource BigNumber}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding RestartsWaiting}" Value="0">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,2,0,0" Text="{Binding RestartsCaption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource StatCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DriverUpdatesText}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource BigNumber}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DriverUpdates}" Value="0">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,2,0,0" Text="{Binding DriverUpdatesCaption}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource StatCard}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DriftFound}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource BigNumber}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DriftFound}" Value="0">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,2,0,0" Text="{Binding DriftCaption}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Quick actions, through the Cleanup and Drivers pages' own scan and check. -->
+            <WrapPanel Margin="0,4,0,0">
+                <Button Style="{StaticResource Button.Primary}" Content="Clean up" Click="CleanUp" Margin="0,0,10,0"
+                        IsEnabled="{Binding IsConnected}" />
+                <Button Content="Check drivers" Click="CheckDrivers" Padding="18,8" IsEnabled="{Binding IsConnected}" />
+            </WrapPanel>
+
+            <!-- What is waiting: each item opens the page that deals with it. -->
+            <TextBlock Style="{StaticResource Text.Label}" Margin="0,26,0,10" Text="WAITING" />
+            <TextBlock Style="{StaticResource Text.Dim}" Text="Nothing is waiting: no restarts, driver updates found or changes Windows undid."
+                       Visibility="{Binding NothingWaiting, Converter={StaticResource Visible}}" />
+            <ItemsControl ItemsSource="{Binding Waiting}" Focusable="False"
+                          Visibility="{Binding HasWaiting, Converter={StaticResource Visible}}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Style="{StaticResource CardButton}" Margin="0,0,0,6" Padding="16,12" Click="OpenWaiting"
+                                AutomationProperties.Name="{Binding Text}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Icon}" Foreground="{StaticResource Theme.Orange}"
+                                           Margin="0,0,12,0" Text="&#xE7BA;" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Text="{Binding Page}" />
+                                    <TextBlock Style="{StaticResource Text.Icon}" FontSize="11" Margin="6,1,0,0" Foreground="{StaticResource Theme.TextDim}"
+                                               Text="&#xE76C;" />
+                                </StackPanel>
+                                <TextBlock FontSize="13.5" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding Text}" />
+                            </DockPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- A card per section: how much of it is on. Each opens its section. -->
+            <TextBlock Style="{StaticResource Text.Label}" Margin="0,26,0,10" Text="SECTIONS" />
+            <ItemsControl ItemsSource="{Binding SectionCards}" Margin="-6,0" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="{Binding SectionColumns, RelativeSource={RelativeSource AncestorType=local:HomePage}}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Style="{StaticResource CardButton}" Margin="6" Click="OpenSection" AutomationProperties.Name="{Binding Section}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Icon}" Foreground="{StaticResource Theme.Orange}"
+                                               Text="{Binding Section, Converter={StaticResource PageIcon}}" />
+                                    <TextBlock Margin="10,0,0,0" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" Text="{Binding Section}" />
+                                </DockPanel>
+                                <TextBlock Style="{StaticResource Text.Dim}" Margin="0,8,0,8" Text="{Binding Status}" />
+                                <ProgressBar Style="{StaticResource Meter}" Value="{Binding Fraction, Mode=OneWay}" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

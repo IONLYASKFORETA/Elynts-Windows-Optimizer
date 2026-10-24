@@ -28,14 +28,18 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The runner's screen is 1024x768, too small for the larger window sizes the tour tries.
+      # The runner's screen is 1024x768, too small for the larger window sizes the tour tries. 1440p if the runner's
+      # display offers it (the wide shots are a maximised 1440p window), else 1080p.
       - name: Enlarge the screen
         continue-on-error: true
         shell: pwsh
         run: |
-          Set-DisplayResolution -Width 1920 -Height 1080 -Force
           Add-Type -AssemblyName System.Windows.Forms
-          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          # An unsupported size only prints a message, so check what the screen ended up at.
+          Set-DisplayResolution -Width 2560 -Height 1440 -Force
+          if ([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width -lt 2560) {
+            Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          }
 
       - name: Take screenshots
         run: dotnet run --project tests/Elynt.App.Screenshots --configuration Release -- out/ui-shots

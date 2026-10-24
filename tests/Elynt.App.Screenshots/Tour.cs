@@ -4,18 +4,19 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Elynt.App.Theme;
 using Elynt.App.ViewModels;
 
 namespace Elynt.App.Screenshots;
 
-/// <summary>Walks every page of the window at a few sizes and in both themes, saving what each one looks like.</summary>
+/// <summary>Walks every page of the window at a few sizes, saving what each one looks like.</summary>
 internal static partial class Tour
 {
     private static readonly (string Name, double Width, double Height)[] Sizes =
     [
-        ("default", 1180, 720), // the size the window opens at
+        ("default", 1600, 1000), // the size the window opens at, where the screen has room
         ("smallest", 900, 520), // its minimum size
-        ("wide", 1600, 900),
+        ("wide", 2560, 1400), // a 1440p screen, maximised
     ];
 
     public static async Task RunAsync(Application app, string output)
@@ -26,20 +27,23 @@ internal static partial class Tour
         var model = (MainViewModel)window.DataContext;
         await WaitUntilAsync(() => model.IsConnected, TimeSpan.FromSeconds(30), () => $"the window to connect (status: {model.Status})");
 
-        foreach (var theme in new[] { ThemeMode.Light, ThemeMode.Dark })
+        Console.WriteLine($"Opened at {window.Width}x{window.Height} on a {SystemParameters.WorkArea.Width}x{SystemParameters.WorkArea.Height} work area, theme {Application.Current.ThemeMode.Value}");
+
+        // There is one theme, so one pass per size.
+        foreach (var size in Sizes)
         {
-            Application.Current.ThemeMode = theme;
-            foreach (var size in theme == ThemeMode.Light ? Sizes : Sizes[..1])
-            {
-                window.Width = size.Width;
-                window.Height = size.Height;
-                var folder = Path.Combine(output, $"{theme.Value.ToLowerInvariant()}-{size.Name}");
-                Directory.CreateDirectory(folder);
-                // Real screen pixels too (title bar, backdrop, leftover drawing), once per page.
-                var screen = theme == ThemeMode.Light && size.Name == "default";
-                await ShootPagesAsync(window, model, folder, screen);
-            }
+            window.Width = size.Width;
+            window.Height = size.Height;
+            await SettleAsync();
+            Console.WriteLine($"{size.Name}: {window.ActualWidth}x{window.ActualHeight}, sidebar {(window.IsCompact ? "folded to icons" : "full")}");
+            var folder = Path.Combine(output, size.Name);
+            Directory.CreateDirectory(folder);
+            // Real screen pixels too (title bar, backdrop, leftover drawing), once per page.
+            await ShootPagesAsync(window, model, folder, screen: size.Name == "default");
         }
+
+        await ShootConfirmationAsync(window, model, output);
+        await CheckWaveHoldsStillAsync(window, model);
         window.Close();
     }
 
@@ -67,6 +71,61 @@ internal static partial class Tour
                 Shoot(window, folder, $"{name}-fullest-repair-tool", screen);
             }
         }
+    }
+
+    /// <summary>
+    /// A confirmation dialog: the one a destructive tweak asks before it is applied, over the window at its default
+    /// size. Shown without waiting for an answer, then closed.
+    /// </summary>
+    private static async Task ShootConfirmationAsync(MainWindow window, MainViewModel model, string output)
+    {
+        var size = Sizes[0];
+        (window.Width, window.Height) = (size.Width, size.Height);
+        TweakItemViewModel? destructive = null;
+        foreach (var page in model.Pages)
+        {
+            model.SelectedPage = page;
+            destructive = model.Tweaks.FirstOrDefault(t => t.View.DestructiveWarning is not null);
+            if (destructive is not null)
+                break;
+        }
+        if (destructive is null)
+            throw new InvalidOperationException("The sample PC has no destructive tweak to confirm.");
+        await SettleAsync();
+
+        var dialog = window.DestructiveTweakDialog(destructive.View);
+        dialog.Show();
+        await SettleAsync();
+        Shoot(dialog, Path.Combine(output, size.Name), "confirmation-destructive-tweak", screen: true);
+        dialog.Close();
+        await SettleAsync();
+    }
+
+    /// <summary>
+    /// The accent wave must stop while the window is minimised, and when the Settings page's Animated accents switch is
+    /// turned off. The switch saves its value, which goes to the tour's own settings file (see Program).
+    /// </summary>
+    private static async Task CheckWaveHoldsStillAsync(Window window, MainViewModel model)
+    {
+        // CI machines often have Windows' animation effects off, which holds the wave still too.
+        Console.WriteLine($"Accent wave moving while the window is open: {AccentWave.IsMoving} (Windows animations on: {SystemParameters.ClientAreaAnimation}, Animated accents: {model.AnimatedAccents})");
+        window.WindowState = WindowState.Minimized;
+        await SettleAsync();
+        if (AccentWave.IsMoving)
+            throw new InvalidOperationException("The accent wave kept moving while the window was minimised.");
+        window.WindowState = WindowState.Normal;
+        window.Activate();
+        model.SelectedPage = MainViewModel.Settings;
+        // On first, so turning it off is a real change even where it starts off (Windows' animation effects off).
+        var animatedAccents = model.AnimatedAccents;
+        model.AnimatedAccents = true;
+        await SettleAsync();
+        Console.WriteLine($"Accent wave moving with Animated accents on and the window in front: {AccentWave.IsMoving}");
+        model.AnimatedAccents = false;
+        await SettleAsync();
+        if (AccentWave.IsEnabled || AccentWave.IsMoving)
+            throw new InvalidOperationException("The accent wave kept moving after Animated accents was turned off.");
+        model.AnimatedAccents = animatedAccents;
     }
 
     private static int DetailLength(TweakItemViewModel tweak) =>

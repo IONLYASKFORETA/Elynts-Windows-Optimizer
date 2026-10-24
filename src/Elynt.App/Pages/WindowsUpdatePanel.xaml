@@ -1,0 +1,17 @@
+<!-- Windows Update: install quality updates now, even while paused, with live progress. -->
+<UserControl x:Class="Elynt.App.Pages.WindowsUpdatePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <!-- The button, then the meter while it runs, then what it's doing. Stacked rather than side by side, so the button
+         and the meter both keep their room beside the detail pane at the smallest window. -->
+    <StackPanel DataContext="{Binding WindowsUpdate}" Margin="0,0,0,8">
+        <Button Style="{StaticResource Button.Primary}" Content="Check and install now" Padding="16,8" HorizontalAlignment="Left"
+                Click="CheckAndInstallWindowsUpdates" IsEnabled="{Binding CanStart}" />
+        <ProgressBar Style="{StaticResource Meter}" Margin="0,14,0,0" Minimum="0" Maximum="100"
+                     Value="{Binding Percent, Mode=OneWay}"
+                     Visibility="{Binding IsRunning, Converter={StaticResource Visible}}" />
+        <TextBlock Style="{StaticResource Text.Dim}" Text="{Binding Message}" Margin="0,10,0,0" />
+    </StackPanel>
+</UserControl>
