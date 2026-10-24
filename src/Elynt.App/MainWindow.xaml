@@ -163,6 +163,7 @@
             <pages:WindowsUpdatePanel DockPanel.Dock="Top" Margin="0,0,0,12"
                                       Visibility="{Binding IsWindowsUpdatePage, Converter={StaticResource Visible}}" />
             <Grid>
+                <pages:HomePage Visibility="{Binding IsHomePage, Converter={StaticResource Visible}}" />
                 <pages:AppsPage Visibility="{Binding IsAppsPage, Converter={StaticResource Visible}}" />
                 <pages:RepairPage Visibility="{Binding IsRepairPage, Converter={StaticResource Visible}}" />
                 <pages:StartupAndServicesPage Visibility="{Binding IsStartupPage, Converter={StaticResource Visible}}" />
