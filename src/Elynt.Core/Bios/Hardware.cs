@@ -19,7 +19,11 @@ public enum MemoryType
 /// <summary>One installed memory module, with speeds in MT/s (the "DDR5-6000" number).</summary>
 /// <param name="RatedMts">The module's own SMBIOS speed: the JEDEC rating firmware reports, not the XMP/EXPO speed.</param>
 /// <param name="ConfiguredMts">The speed the BIOS is running it at right now.</param>
-public sealed record MemoryModule(MemoryType Type, int RatedMts, int ConfiguredMts);
+public sealed record MemoryModule(MemoryType Type, int RatedMts, int ConfiguredMts)
+{
+    /// <summary>The module's size in MB, or 0 when firmware doesn't say.</summary>
+    public int SizeMb { get; init; }
+}
 
 /// <summary>Read-only facts about the PC's board, CPU and memory, as firmware reports them.</summary>
 /// <param name="Pbo">Whether AMD Precision Boost Overdrive is on, if the adapter can tell.</param>

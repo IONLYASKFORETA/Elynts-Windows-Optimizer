@@ -10,6 +10,7 @@ public sealed class PageIcon : IValueConverter
 {
     public static string For(string? page) => page switch
     {
+        MainViewModel.Home => "",
         Sections.Gaming => "",
         Sections.DebloatAndPrivacy => "",
         Sections.Security => "",

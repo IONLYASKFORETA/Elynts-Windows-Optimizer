@@ -28,6 +28,7 @@ public sealed class MainViewModel(
 {
     private StartupPageViewModel? _startup;
 
+    public const string Home = "Home";
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
     public const string Settings = "Settings";
@@ -38,7 +39,7 @@ public sealed class MainViewModel(
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
     private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
     private RepairToolItemViewModel? _selectedRepairTool;
-    private string _selectedPage = Sections.Gaming;
+    private string _selectedPage = Home;
     private TweakItemViewModel? _selectedTweak;
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
@@ -57,8 +58,15 @@ public sealed class MainViewModel(
     private SensorsPageViewModel? _sensors;
     private CpuTuningPageViewModel? _cpu;
 
-    /// <summary>The sidebar: the ten sections, then per-game profiles, the undo history and Settings.</summary>
-    public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory, Settings];
+    /// <summary>The sidebar: Home (the page the app opens on), the ten sections, then per-game profiles, the undo history and Settings.</summary>
+    public IReadOnlyList<string> Pages { get; } = [Home, .. Sections.All, PerGameProfiles, UndoHistory, Settings];
+
+    private HomeViewModel? _home;
+
+    /// <summary>The Home page: the PC overview, temperatures, what is waiting and a card per section.</summary>
+    public HomeViewModel HomePage => _home ??= new HomeViewModel(this);
+
+    public bool IsHomePage => SelectedPage == Home;
 
     public ObservableCollection<TweakItemViewModel> Tweaks { get; } = [];
 
@@ -147,6 +155,7 @@ public sealed class MainViewModel(
             if (Set(ref _selectedPage, value))
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
+                OnPropertyChanged(nameof(IsHomePage));
                 OnPropertyChanged(nameof(IsAppsPage));
                 OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
@@ -169,7 +178,7 @@ public sealed class MainViewModel(
     public ServicesPageViewModel? ServicesPage { get; set; }
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage && !IsSettingsPage;
+    public bool IsTweakPage => !IsHomePage && !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage && !IsSettingsPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
@@ -180,6 +189,7 @@ public sealed class MainViewModel(
     /// </summary>
     public string PageSummary => IsTweakPage ? TweakSummary() : SelectedPage switch
     {
+        Home => "Your PC at a glance.",
         Sections.Apps => "Install and update apps from a reviewed list, or search all of winget.",
         Sections.StartupAndServices => "Choose what starts when you sign in, and how services start.",
         Sections.Repair => "Windows' own repair tools, each saying up front whether it needs a restart.",
@@ -443,6 +453,7 @@ public sealed class MainViewModel(
             Gpu = await LoadGpuAsync(_client);
             Sensors = await LoadSensorsAsync(_client);
             Cpu = await LoadCpuAsync(_client);
+            await HomePage.RefreshAsync();
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();

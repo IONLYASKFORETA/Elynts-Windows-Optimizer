@@ -77,7 +77,16 @@ public sealed record SmbiosTable(string BoardManufacturer, string BoardProduct, 
             speed = s.Length >= 0x58 ? (int)(BinaryPrimitives.ReadUInt32LittleEndian(s[0x54..]) & 0x7FFFFFFF) : 0;
         if (configured == 0xFFFF)
             configured = s.Length >= 0x5C ? (int)(BinaryPrimitives.ReadUInt32LittleEndian(s[0x58..]) & 0x7FFFFFFF) : 0;
-        return new MemoryModule(type, speed, configured);
+        var sizeMb = size switch
+        {
+            0xFFFF => 0, // unknown
+            // 32 GB and more: the size is in the SMBIOS 2.7 extended DWORD, in MB.
+            0x7FFF => s.Length >= 0x20 ? (int)(BinaryPrimitives.ReadUInt32LittleEndian(s[0x1C..]) & 0x7FFFFFFF) : 0,
+            // Bit 15 set: the size is in KB.
+            _ when (size & 0x8000) != 0 => (size & 0x7FFF) / 1024,
+            _ => size,
+        };
+        return new MemoryModule(type, speed, configured) { SizeMb = sizeMb };
     }
 
     /// <summary>The index of the first byte of the double-null that ends a string set, or -1 if it is cut off.</summary>
