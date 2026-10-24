@@ -6,26 +6,32 @@
         <BooleanToVisibilityConverter x:Key="Visible" />
     </UserControl.Resources>
 
-    <!-- GPU tuning: sliders bounded by the driver's ranges; every change goes back after 15 s unless kept. -->
-    <StackPanel Margin="4,4,4,16">
-        <TextBlock Text="GPU tuning" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Text="Every change goes back on its own after 15 seconds unless you keep it. If Windows crashes or freezes, the GPU starts on default settings next time."
-                   Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
-        <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Margin="0,0,0,8" FontWeight="SemiBold"
-                   Visibility="{Binding HasNotice, Converter={StaticResource Visible}}" />
+    <!-- GPU tuning: a card per GPU, sliders bounded by the driver's ranges; every change goes back after 15 s unless kept. -->
+    <StackPanel Margin="0,0,0,22">
+        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" Text="GPU TUNING" />
+        <TextBlock Style="{StaticResource Text.Dim}"
+                   Text="Every change goes back on its own after 15 seconds unless you keep it. If Windows crashes or freezes, the GPU starts on default settings next time." />
+        <Border Style="{StaticResource WarningBox}" Margin="0,10,0,0"
+                Visibility="{Binding HasNotice, Converter={StaticResource Visible}}">
+            <TextBlock Style="{StaticResource Text.Body}" Text="{Binding Notice}" />
+        </Border>
 
-        <ItemsControl ItemsSource="{Binding Gpus}">
+        <ItemsControl ItemsSource="{Binding Gpus}" Margin="0,12,0,0" Focusable="False">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:GpuTuningItemViewModel}">
-                    <Border Padding="12" Margin="0,4" CornerRadius="6" BorderThickness="1"
-                            BorderBrush="{StaticResource Theme.Stroke}">
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                         <StackPanel>
-                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" />
-                            <TextBlock Text="On default settings" Opacity="0.7"
-                                       Visibility="{Binding AtDefaults, Converter={StaticResource Visible}}" />
+                            <!-- The name, with "On default settings" as a label beside it. -->
+                            <DockPanel>
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                        Visibility="{Binding AtDefaults, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="On default settings" FontSize="11" Foreground="{StaticResource Theme.TextDim}" />
+                                </Border>
+                                <TextBlock Style="{StaticResource Text.H2}" VerticalAlignment="Center" Text="{Binding Name}" />
+                            </DockPanel>
 
                             <!-- Live sensor values, refreshed every 2 seconds. -->
-                            <ItemsControl ItemsSource="{Binding Readouts}" Margin="0,6,0,0"
+                            <ItemsControl ItemsSource="{Binding Readouts}" Margin="0,12,0,-6" Focusable="False"
                                           Visibility="{Binding HasReadouts, Converter={StaticResource Visible}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -34,73 +40,105 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding}" Margin="0,0,16,0" Opacity="0.8" />
+                                        <Border Style="{StaticResource Pill}" Padding="10,4">
+                                            <TextBlock Text="{Binding}" FontSize="12.5" Foreground="{StaticResource Theme.TextBody}" />
+                                        </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
                             <!-- Intel requires its warning to be shown and accepted before tuning unlocks. -->
-                            <Border Padding="10" Margin="0,8,0,0" CornerRadius="4" BorderThickness="1"
-                                    BorderBrush="{StaticResource Theme.OrangeEdge}"
+                            <Border Style="{StaticResource WarningBox}" Margin="0,14,0,0"
                                     Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
                                 <StackPanel>
-                                    <TextBlock Text="Read this before tuning" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Margin="0,4,0,8" />
-                                    <Button Content="I understand the risks, unlock tuning" Command="{Binding AcceptWarning}"
-                                            Padding="12,4" HorizontalAlignment="Left" />
+                                    <TextBlock Style="{StaticResource Text.Body}" FontWeight="SemiBold" Foreground="{StaticResource Theme.Text}"
+                                               Text="Read this before tuning" />
+                                    <TextBlock Style="{StaticResource Text.Body}" Margin="0,4,0,10" Text="{Binding Warning}" />
+                                    <Button Content="I understand the risks, unlock tuning" Command="{Binding AcceptWarning}" HorizontalAlignment="Left" />
                                 </StackPanel>
                             </Border>
 
-                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,8,0,0"
+                            <!-- A slider per setting: its name and range, the slider, and the value it is set to. -->
+                            <ItemsControl ItemsSource="{Binding Controls}" Margin="0,12,0,0" Focusable="False"
                                           IsEnabled="{Binding IsUnlocked}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:TuningSliderViewModel}">
-                                        <Grid Margin="0,4">
+                                        <Grid Margin="0,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="140" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="90" />
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Name}" />
-                                                <TextBlock Text="{Binding RangeText}" FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock FontSize="13.5" Foreground="{StaticResource Theme.Text}" TextWrapping="Wrap" Text="{Binding Name}" />
+                                                <TextBlock Style="{StaticResource Text.Dim}" FontSize="11.5" Margin="0,2,0,0" Text="{Binding RangeText}" />
                                             </StackPanel>
-                                            <Slider Grid.Column="1" VerticalAlignment="Center" Margin="8,0"
+                                            <Slider Grid.Column="1" VerticalAlignment="Center" Margin="12,0"
                                                     Minimum="{Binding Min}" Maximum="{Binding Max}"
                                                     SmallChange="{Binding Step}" LargeChange="{Binding Step}"
                                                     TickFrequency="{Binding Step}" IsSnapToTickEnabled="True"
                                                     Value="{Binding Value, Mode=TwoWay}"
                                                     AutomationProperties.Name="{Binding Name}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding ValueText}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" VerticalAlignment="Center" TextAlignment="Right" FontSize="13.5" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Theme.Text}" Text="{Binding ValueText}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <WrapPanel Margin="0,8,0,0">
-                                <Button Content="Apply" Command="{Binding Apply}" Padding="12,4" Margin="0,0,8,4" />
-                                <Button Content="Auto overclock" Command="{Binding AutoOverclock}" Padding="12,4" Margin="0,0,8,4"
+                            <WrapPanel Margin="0,14,0,0">
+                                <Button Content="Apply" Command="{Binding Apply}" Margin="0,0,8,6" VerticalAlignment="Center"
+                                        Style="{StaticResource Button.Primary}" Padding="16,7" />
+                                <Button Content="Auto overclock" Command="{Binding AutoOverclock}" Margin="0,0,8,6" VerticalAlignment="Center"
                                         Visibility="{Binding CanAutoOverclock, Converter={StaticResource Visible}}" />
-                                <Button Content="Auto undervolt" Command="{Binding AutoUndervolt}" Padding="12,4" Margin="0,0,8,4"
+                                <Button Content="Auto undervolt" Command="{Binding AutoUndervolt}" Margin="0,0,8,6" VerticalAlignment="Center"
                                         Visibility="{Binding CanAutoUndervolt, Converter={StaticResource Visible}}" />
-                                <Button Content="Reset to defaults" Command="{Binding Reset}" Padding="12,4" Margin="0,0,8,4" />
+                                <Button Content="Reset to defaults" Command="{Binding Reset}" Margin="0,0,8,6" VerticalAlignment="Center" />
                             </WrapPanel>
 
-                            <StackPanel Margin="0,8,0,0" Visibility="{Binding ShowsNvidiaApp, Converter={StaticResource Visible}}">
-                                <TextBlock TextWrapping="Wrap" Opacity="0.8"
-                                           Text="For a one-click safe overclock, use Automatic Tuning in the NVIDIA App (System, then Performance). Use either it or the sliders here, not both: they overwrite each other." />
-                                <Button Content="Open the NVIDIA App" Command="{Binding OpenNvidiaApp}" Padding="12,4" Margin="0,4,0,0" HorizontalAlignment="Left" />
-                            </StackPanel>
+                            <!-- Keep or go back: the change goes back on its own when the countdown runs out. -->
+                            <Border Style="{StaticResource WarningBox}" Margin="0,10,0,0" Padding="14,12"
+                                    Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Theme.Text}" Text="{Binding Countdown}" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="Keep" Command="{Binding Keep}" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                Style="{StaticResource Button.Primary}" Padding="16,7" />
+                                        <Button Content="Go back now" Command="{Binding GoBack}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
-                                        Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}">
-                                <TextBlock Text="{Binding Countdown}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
-                                <Button Content="Keep" Command="{Binding Keep}" Padding="12,4" Margin="0,0,8,0" />
-                                <Button Content="Go back now" Command="{Binding GoBack}" Padding="12,4" />
-                            </StackPanel>
+                            <Border Margin="0,10,0,0" Padding="0,12,0,0" BorderThickness="0,1,0,0" BorderBrush="{StaticResource Theme.Stroke}"
+                                    Visibility="{Binding ShowsNvidiaApp, Converter={StaticResource Visible}}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Text.Dim}"
+                                               Text="For a one-click safe overclock, use Automatic Tuning in the NVIDIA App (System, then Performance). Use either it or the sliders here, not both: they overwrite each other." />
+                                    <Button Content="Open the NVIDIA App" Command="{Binding OpenNvidiaApp}" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
 
-                            <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Margin="0,8,0,0" Opacity="0.8" />
-                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <!-- Something to know, such as a change that went back because it wasn't kept. -->
+                            <TextBlock Margin="0,10,0,0" Text="{Binding Notice}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Dim}">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </Trigger>
+                                            <Trigger Property="Text" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource Text.Message}" Margin="0,8,0,0" Text="{Binding Message}" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>
