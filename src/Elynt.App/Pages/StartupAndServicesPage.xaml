@@ -5,7 +5,7 @@
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
     <UserControl.Resources>
-        <!-- A line that takes no room while it has nothing to say. -->
+        <!-- Body text that takes no room while it has nothing to say (a service with no description). -->
         <Style x:Key="Optional" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
             <Style.Triggers>
                 <Trigger Property="Text" Value="{x:Null}">
@@ -37,7 +37,7 @@
                     <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Dim}" />
                     <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search every service by name"
                              VerticalContentAlignment="Center" Margin="0,10,0,0" />
-                    <TextBlock Text="{Binding Message}" Style="{StaticResource Optional}" Margin="0,8,0,0" />
+                    <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Message}" Margin="0,8,0,0" />
                 </StackPanel>
 
                 <Border DockPanel.Dock="Top" Style="{StaticResource Table.Header}" Margin="0,16,0,0">
