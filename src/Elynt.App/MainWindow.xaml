@@ -180,7 +180,8 @@
             </Grid>
         </DockPanel>
 
-        <pages:HistoryPage Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="24,18,16,0"
+        <!-- The Undo history draws its own title and summary, in the same place, with Restore everything beside them. -->
+        <pages:HistoryPage Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="32,26,24,0"
                            Visibility="{Binding IsHistoryPage, Converter={StaticResource Visible}}" />
 
         <!-- 400 wide, or 320 when the window is narrow (set in code). -->
