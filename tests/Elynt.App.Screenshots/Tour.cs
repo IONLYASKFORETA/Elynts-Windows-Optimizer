@@ -34,6 +34,8 @@ internal static partial class Tour
         {
             window.Width = size.Width;
             window.Height = size.Height;
+            await SettleAsync();
+            Console.WriteLine($"{size.Name}: {window.ActualWidth}x{window.ActualHeight}, sidebar {(window.IsCompact ? "folded to icons" : "full")}");
             var folder = Path.Combine(output, size.Name);
             Directory.CreateDirectory(folder);
             // Real screen pixels too (title bar, backdrop, leftover drawing), once per page.

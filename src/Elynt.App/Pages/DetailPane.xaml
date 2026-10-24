@@ -26,9 +26,9 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- A fixed-width column on the right, set off from the page by a line on its left. Everything in it wraps to that
-         width and scrolls up and down. -->
-    <Border Width="400" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1,0,0,0">
+    <!-- A column on the right (the window sets its width), set off from the page by a line on its left. Everything in it
+         wraps to that width and scrolls up and down. -->
+    <Border Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1,0,0,0">
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Grid Margin="24,24,24,28">
                 <!-- Repair detail, in the tweak detail's style: the name, the restart need, any warning, then what it does and
