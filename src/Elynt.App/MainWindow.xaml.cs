@@ -48,69 +48,66 @@ public partial class MainWindow : Window
     private async void Retry(object sender, RoutedEventArgs e) => await _model.ConnectAsync();
 
     private bool ConfirmNotReviewed(IReadOnlyList<string> names) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"These apps aren't in the reviewed catalogue:\n\n{string.Join("\n", names)}\n\n" +
             "Nobody has checked that they are free, safe or install silently. Install them only if you trust the publisher.\n\nInstall anyway?",
             "Not reviewed",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Ordinary) == ConfirmAnswer.Yes;
 
     private bool ConfirmUninstall(string name, string note) =>
-        MessageBox.Show(this, $"Uninstall {name}?\n\n{note}".TrimEnd(), "Uninstall",
-            MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) == MessageBoxResult.OK;
+        ConfirmDialog.Ask(this, $"Uninstall {name}?\n\n{note}".TrimEnd(), "Uninstall",
+            ConfirmButtons.OkCancel, ConfirmRisk.Destructive) == ConfirmAnswer.Ok;
 
     /// <summary>The separate confirmation a destructive tweak needs. "No" is the default button.</summary>
-    private bool ConfirmDestructive(TweakView tweak) =>
-        MessageBox.Show(
+    private bool ConfirmDestructive(TweakView tweak) => DestructiveTweakDialog(tweak).Ask() == ConfirmAnswer.Yes;
+
+    /// <summary>The dialog <see cref="ConfirmDestructive"/> asks with, not yet shown. The screenshot tour shows it too.</summary>
+    public ConfirmDialog DestructiveTweakDialog(TweakView tweak) =>
+        new(
             this,
             $"{tweak.Name}\n\nThis can't be undone. {tweak.DestructiveWarning}\n\nDo it anyway?",
             "This can't be undone",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Destructive);
 
     /// <summary>The warning a tweak needs read before it is applied (OneDrive, the Store). "No" is the default button.</summary>
     private bool ConfirmWarning(TweakView tweak) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"{tweak.Name}\n\n{tweak.ApplyWarning}\n\nGo ahead?",
             "Before you go on",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Ordinary) == ConfirmAnswer.Yes;
 
     /// <summary>Drivers can stop Windows from starting, so changing one is asked about first. "No" is the default.</summary>
     private bool ConfirmDriverChange(ServiceItemViewModel item, Elynt.Core.Tweaks.ServiceStart start) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"{item.Title} is a driver. Setting it to {start} can stop Windows from starting if it is needed for your hardware.\n\n" +
             "The previous configuration is saved and can be put back from the Services page or the Undo history.\n\nChange it anyway?",
             "Change a driver",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Destructive) == ConfirmAnswer.Yes;
 
     /// <summary>The separate confirmation deleting a startup item needs. "No" is the default button.</summary>
     private bool ConfirmDeleteStartupItem(StartupItemView item) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"Delete {item.Name} from startup?\n\n{item.Location}\n\nThis can't be undone. Turning it off instead stops it starting and can be undone.\n\nDelete it anyway?",
             "This can't be undone",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Destructive) == ConfirmAnswer.Yes;
 
     /// <summary>The separate confirmation destructive cleanup categories need. "No" is the default button.</summary>
     private bool ConfirmDestructiveCleanup(string warnings) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"These can't be undone:\n\n{warnings}\n\nClean them anyway?",
             "This can't be undone",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Destructive) == ConfirmAnswer.Yes;
 
     private void ShowDrift()
     {
@@ -119,13 +116,12 @@ public partial class MainWindow : Window
     }
 
     private bool ConfirmDestructiveReapply(string names) =>
-        MessageBox.Show(
+        ConfirmDialog.Ask(
             this,
             $"Windows undid these, and putting them back can't be undone:\n\n{names}\n\nRe-apply them too? Choose No to re-apply only the rest.",
             "This can't be undone",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No) == MessageBoxResult.Yes;
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Destructive) == ConfirmAnswer.Yes;
 
     private void ShowFromTray()
     {
@@ -138,14 +134,13 @@ public partial class MainWindow : Window
     /// <summary>The reboot prompt after a driver installer reported that Windows must restart. "Later" is the default.</summary>
     private void AskToReboot(DriverInstallResult result)
     {
-        var answer = MessageBox.Show(
+        var answer = ConfirmDialog.Ask(
             this,
             $"{result.Message}\n\nRestart now? Save your work in other apps first.",
             "Restart to finish the driver install",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Information,
-            MessageBoxResult.No);
-        if (answer == MessageBoxResult.Yes)
+            ConfirmButtons.YesNo,
+            ConfirmRisk.Ordinary);
+        if (answer == ConfirmAnswer.Yes)
             Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 0") { UseShellExecute = false, CreateNoWindow = true });
     }
 

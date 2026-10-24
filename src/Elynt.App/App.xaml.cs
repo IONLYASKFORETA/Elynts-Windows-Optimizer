@@ -15,6 +15,8 @@ public partial class App : Application
         if (ThemeMode != ThemeMode.Dark)
             ThemeMode = ThemeMode.Dark;
         AccentWave.Install(this);
+        // The "Animated accents" switch, set before the window shows.
+        AccentWave.IsEnabled = UserSettings.Load().AccentsAnimate(SystemParameters.ClientAreaAnimation);
         base.OnStartup(e);
     }
 }

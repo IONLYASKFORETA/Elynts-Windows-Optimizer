@@ -30,7 +30,9 @@ public static class Program
             if (!support.Supported)
             {
                 AppLog.Warning("Refusing to run: {Message}", support.Message);
-                MessageBox.Show(support.Message, "Elynt's Windows Optimizer", MessageBoxButton.OK, MessageBoxImage.Information);
+                // The app's resources hold its look, which the note needs; the app itself never runs.
+                new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }.InitializeComponent();
+                ConfirmDialog.Tell(null, support.Message, "Elynt's Windows Optimizer");
                 return 1;
             }
 

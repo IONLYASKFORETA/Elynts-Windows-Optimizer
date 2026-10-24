@@ -47,11 +47,8 @@
         </Style>
     </UserControl.Resources>
 
-    <!-- Pulled up under the window's page title, so the one-line summary sits just below it. -->
-    <ScrollViewer Margin="0,-14,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel DataContext="{Binding HomePage}" Margin="0,0,8,24">
-            <TextBlock Style="{StaticResource Text.Dim}" Margin="0,0,0,18" Text="Your PC at a glance" />
-
             <!-- This PC: its parts and Windows, with live temperatures on the right. -->
             <Border Style="{StaticResource Card}">
                 <Grid>

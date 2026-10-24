@@ -20,21 +20,19 @@ public sealed partial class Engine
     public PcOverview GetPcOverview()
     {
         var tweaks = ListTweaks();
-        // A per-game tweak's template is never on itself; each game it is set for is listed, and counted, on its own.
-        var counted = tweaks.Where(t => t.Applicable && !t.PerGame).ToList();
+        // Counted as a section's own header counts them, so Home and the section always agree.
+        var all = TweakCount.Of(tweaks);
         return new PcOverview(
             ReadPcHardware(),
             WindowsRelease.Of(system.System),
-            counted.Count(IsOn),
-            counted.Count,
+            all.On,
+            all.Total,
             tweaks.Count(t => t.PendingReboot),
             Sections.All.Select(section =>
             {
-                var inSection = counted.Where(t => t.Section == section).ToList();
-                return new SectionCount(section, inSection.Count(IsOn), inSection.Count);
+                var count = TweakCount.Of(tweaks.Where(t => t.Section == section));
+                return new SectionCount(section, count.On, count.Total);
             }).ToList());
-
-        static bool IsOn(TweakView tweak) => tweak.State == TweakState.On;
     }
 
     /// <summary>The board, CPU and memory from the firmware, and the GPUs from the driver inventory. Never throws.</summary>

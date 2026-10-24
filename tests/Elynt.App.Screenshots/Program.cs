@@ -1,6 +1,7 @@
 using System.IO;
 using System.IO.Pipes;
 using System.Windows;
+using Elynt.Core;
 using Elynt.Core.Ipc;
 
 namespace Elynt.App.Screenshots;
@@ -24,6 +25,11 @@ public static class Program
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous),
             _ => engine);
         var serving = Task.Run(() => server.RunAsync(stop.Token));
+
+        // The tour flips the Animated accents switch, which saves. A throwaway settings file keeps that out of the
+        // user's own file, and starts every tour with nothing saved.
+        var settings = Directory.CreateTempSubdirectory("elynt-tour-");
+        UserSettings.File = new AppSettingsFile(Path.Combine(settings.FullName, "settings.json"));
 
         var bindingErrors = BindingErrorLog.Listen();
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -57,6 +63,7 @@ public static class Program
         {
             // Stopping the server cancels its wait for the next client.
         }
+        settings.Delete(recursive: true);
         Console.WriteLine($"Screenshots in {output}");
         // Reported, not fatal here, so the pictures still get published; the workflow fails on this file.
         if (bindingErrors.Errors.Count > 0)

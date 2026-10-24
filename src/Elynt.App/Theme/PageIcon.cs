@@ -23,6 +23,7 @@ public sealed class PageIcon : IValueConverter
         Sections.Overclocking => "",
         MainViewModel.PerGameProfiles => "",
         MainViewModel.UndoHistory => "",
+        MainViewModel.Settings => "",
         _ => "",
     };
 
