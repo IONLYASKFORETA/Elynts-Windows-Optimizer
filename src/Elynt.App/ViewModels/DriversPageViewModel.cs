@@ -108,12 +108,17 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
         get => _vendorPage;
         private set
         {
-            if (Set(ref _vendorPage, value))
-                OnPropertyChanged(nameof(HasVendorPage));
+            if (!Set(ref _vendorPage, value))
+                return;
+            OnPropertyChanged(nameof(HasVendorPage));
+            OnPropertyChanged(nameof(VendorLink));
         }
     }
 
     public bool HasVendorPage => VendorPage is not null;
+
+    /// <summary>The vendor page as a link target; a Uri so the link binds without converting a missing page.</summary>
+    public Uri? VendorLink => Uri.TryCreate(VendorPage, UriKind.Absolute, out var link) ? link : null;
 
     /// <summary>Whether the last check found a newer driver, or null before the first check.</summary>
     public bool? UpdateFound { get; private set; }

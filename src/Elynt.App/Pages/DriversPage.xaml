@@ -60,7 +60,7 @@
                                     <TextBlock Style="{StaticResource Text.Message}" Margin="0,4,0,0" Text="{Binding Message}" />
                                     <TextBlock Margin="0,6,0,0" FontSize="12.5" TextWrapping="Wrap"
                                                Visibility="{Binding HasVendorPage, Converter={StaticResource Visible}}">
-                                        <Hyperlink Style="{StaticResource Link}" NavigateUri="{Binding VendorPage}" RequestNavigate="OpenLink">
+                                        <Hyperlink Style="{StaticResource Link}" NavigateUri="{Binding VendorLink}" RequestNavigate="OpenLink">
                                             <Run Text="&#xE8A7;" FontFamily="{StaticResource Theme.IconFont}" FontSize="11" />
                                             <Run Text="Open the vendor's driver page" />
                                         </Hyperlink>
