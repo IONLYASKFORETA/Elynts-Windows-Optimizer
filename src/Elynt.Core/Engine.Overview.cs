@@ -38,15 +38,7 @@ public sealed partial class Engine
     /// <summary>The board, CPU and memory from the firmware, and the GPUs from the driver inventory. Never throws.</summary>
     private PcHardware ReadPcHardware()
     {
-        HardwareSnapshot? snapshot = null;
-        try
-        {
-            snapshot = system.Hardware?.Read();
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
-        }
+        var snapshot = TryReadHardware();
 
         IReadOnlyList<string> gpus = [];
         try
@@ -58,7 +50,7 @@ public sealed partial class Engine
             _log.LogWarning(ex, "Couldn't read the display adapters");
         }
 
-        var board = $"{snapshot?.BoardManufacturer} {snapshot?.BoardProduct}".Trim();
+        var board = snapshot?.BoardName ?? "";
         var memoryMb = snapshot?.Memory.Sum(module => module.SizeMb) ?? 0;
         return new PcHardware(
             board.Length > 0 ? board : null,

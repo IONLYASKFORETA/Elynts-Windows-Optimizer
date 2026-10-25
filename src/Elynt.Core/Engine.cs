@@ -645,19 +645,20 @@ public sealed partial class Engine(
     public Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
         Repair.RunAsync(toolId, confirmed, progress, cancellation);
 
-    public BiosReport GetBiosReport()
+    public BiosReport GetBiosReport() => BiosAdvisor.Build(PawnIo.Fill(TryReadHardware()));
+
+    /// <summary>The board, CPU and memory as firmware reports them, or null when they can't be read. Never throws.</summary>
+    private HardwareSnapshot? TryReadHardware()
     {
-        HardwareSnapshot? hardware = null;
         try
         {
-            hardware = system.Hardware?.Read();
+            return system.Hardware?.Read();
         }
         catch (Exception ex)
         {
             _log.LogWarning(ex, "Couldn't read the board, CPU and memory details");
+            return null;
         }
-
-        return BiosAdvisor.Build(PawnIo.Fill(hardware));
     }
 
     public Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>

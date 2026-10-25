@@ -32,7 +32,11 @@ public sealed record HardwareSnapshot(
     string BoardProduct,
     string CpuName,
     IReadOnlyList<MemoryModule> Memory,
-    ReadoutState Pbo);
+    ReadoutState Pbo)
+{
+    /// <summary>The board's maker and model in one, or empty when firmware gives neither.</summary>
+    public string BoardName => $"{BoardManufacturer} {BoardProduct}".Trim();
+}
 
 /// <summary>Reads the hardware facts the BIOS readouts and guides are built from. It never changes anything.</summary>
 public interface IHardwareInfo

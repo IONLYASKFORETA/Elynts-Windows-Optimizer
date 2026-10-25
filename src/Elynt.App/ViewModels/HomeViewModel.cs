@@ -102,7 +102,10 @@ public sealed class HomeViewModel : ObservableObject
             var readings = new List<Spec>();
             if (_sensors.Sensors.FirstOrDefault(s => s.Id == SensorIds.CpuTemperature) is { } cpu)
                 readings.Add(new(_sensors.FromPawnIo ? "CPU" : "CPU area", Degrees(cpu.Value)));
-            var gpus = _sensors.Sensors.Where(s => s.Kind == SensorKind.Temperature && s.Id != SensorIds.CpuTemperature).ToList();
+            // A card's own temperature is "<card>.temperature"; other readings (hotspot, memory) aren't another GPU.
+            var gpus = _sensors.Sensors
+                .Where(s => s.Kind == SensorKind.Temperature && s.Id != SensorIds.CpuTemperature && s.Id.EndsWith(".temperature", StringComparison.Ordinal))
+                .ToList();
             for (var i = 0; i < gpus.Count; i++)
                 readings.Add(new(gpus.Count == 1 ? "GPU" : $"GPU {i + 1}", Degrees(gpus[i].Value)));
             return readings;
@@ -193,6 +196,14 @@ public sealed class HomeViewModel : ObservableObject
         Open(Sections.Drivers);
         if (_main.Drivers is { } drivers)
             await drivers.CheckAllAsync();
+    }
+
+    /// <summary>Forgets the service's figures when the connection drops, so nothing old shows as current.</summary>
+    public void Clear()
+    {
+        _overview = null;
+        _sensors = null;
+        OnPropertyChanged(string.Empty);
     }
 
     /// <summary>Reads the overview and the temperatures, and re-reads the driver and drift results.</summary>

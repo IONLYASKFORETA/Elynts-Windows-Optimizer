@@ -569,6 +569,7 @@ public sealed class MainViewModel(
         Gpu = null;
         Sensors = null;
         Cpu = null;
+        _home?.Clear();
         var client = _client;
         _client = null;
         if (client is not null)
