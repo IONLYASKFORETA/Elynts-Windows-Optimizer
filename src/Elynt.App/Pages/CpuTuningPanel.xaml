@@ -7,74 +7,101 @@
     </UserControl.Resources>
 
     <!-- CPU tuning through PawnIO: undervolt and power limits that only ever go down; every change goes back after 60 s unless kept. -->
-    <StackPanel Margin="4,4,4,16">
-        <TextBlock Text="CPU tuning" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Text="{Binding CpuName}" Opacity="0.8" />
-        <TextBlock Text="{Binding Explainer, Mode=OneTime}"
-                   Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,8" />
-        <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" Margin="0,0,0,8" FontWeight="SemiBold"
-                   Visibility="{Binding HasNotice, Converter={StaticResource Visible}}" />
+    <StackPanel Margin="0,0,0,22">
+        <TextBlock Style="{StaticResource Text.Label}" Margin="0,0,0,6" Text="CPU TUNING" />
+        <TextBlock Style="{StaticResource Text.Dim}" Text="{Binding Explainer, Mode=OneTime}" />
+        <Border Style="{StaticResource WarningBox}" Margin="0,10,0,0"
+                Visibility="{Binding HasNotice, Converter={StaticResource Visible}}">
+            <TextBlock Style="{StaticResource Text.Body}" Text="{Binding Notice}" />
+        </Border>
 
-        <ItemsControl ItemsSource="{Binding Warnings}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Padding="8" Margin="0,0,0,6" CornerRadius="4" BorderThickness="1" BorderBrush="{StaticResource Theme.OrangeEdge}">
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" />
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.H2}" Text="{Binding CpuName}" />
 
-        <StackPanel Visibility="{Binding Available, Converter={StaticResource Visible}}">
-            <WrapPanel Margin="0,4,0,4">
-                <CheckBox Content="Advanced (Curve Optimizer down to -30)" IsChecked="{Binding Advanced}" Margin="0,0,16,4" />
-                <CheckBox Content="Unofficial: I accept Curve Optimizer isn't supported by AMD on this CPU" IsChecked="{Binding Unofficial}"
-                          Visibility="{Binding OffersUnofficial, Converter={StaticResource Visible}}" Margin="0,0,0,4" />
-            </WrapPanel>
+                <ItemsControl ItemsSource="{Binding Warnings}" Margin="0,4,0,0" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource WarningBox}">
+                                <TextBlock Style="{StaticResource Text.Body}" Text="{Binding}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-            <ItemsControl ItemsSource="{Binding Controls}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type vm:TuningSliderViewModel}">
-                        <Grid Margin="0,4">
+                <StackPanel Visibility="{Binding Available, Converter={StaticResource Visible}}">
+                    <!-- Tick boxes whose text wraps, so they stay readable at the smallest window. -->
+                    <StackPanel Margin="0,10,0,0">
+                        <CheckBox IsChecked="{Binding Advanced}" Margin="0,4,0,0"
+                                  AutomationProperties.Name="Advanced (Curve Optimizer down to -30)">
+                            <TextBlock Text="Advanced (Curve Optimizer down to -30)" TextWrapping="Wrap" />
+                        </CheckBox>
+                        <CheckBox IsChecked="{Binding Unofficial}" Margin="0,4,0,0"
+                                  AutomationProperties.Name="Unofficial: I accept Curve Optimizer isn't supported by AMD on this CPU"
+                                  Visibility="{Binding OffersUnofficial, Converter={StaticResource Visible}}">
+                            <TextBlock Text="Unofficial: I accept Curve Optimizer isn't supported by AMD on this CPU" TextWrapping="Wrap" />
+                        </CheckBox>
+                    </StackPanel>
+
+                    <!-- A slider per setting: its name and range, the slider, and the value it is set to. -->
+                    <ItemsControl ItemsSource="{Binding Controls}" Margin="0,10,0,0" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:TuningSliderViewModel}">
+                                <Grid Margin="0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="90" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock FontSize="13.5" Foreground="{StaticResource Theme.Text}" TextWrapping="Wrap" Text="{Binding Name}" />
+                                        <TextBlock Style="{StaticResource Text.Dim}" FontSize="11.5" Margin="0,2,0,0" Text="{Binding RangeText}" />
+                                    </StackPanel>
+                                    <Slider Grid.Column="1" VerticalAlignment="Center" Margin="12,0"
+                                            Minimum="{Binding Min}" Maximum="{Binding Max}"
+                                            SmallChange="{Binding Step}" LargeChange="{Binding Step}"
+                                            TickFrequency="{Binding Step}" IsSnapToTickEnabled="True"
+                                            Value="{Binding Value, Mode=TwoWay}"
+                                            AutomationProperties.Name="{Binding Name}" />
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" TextAlignment="Right" FontSize="13.5" FontWeight="SemiBold"
+                                               Foreground="{StaticResource Theme.Text}" Text="{Binding ValueText}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <WrapPanel Margin="0,14,0,0">
+                        <Button Content="Apply" Command="{Binding Apply}" Margin="0,0,8,6" VerticalAlignment="Center"
+                                Style="{StaticResource Button.Primary}" Padding="16,7" />
+                        <Button Content="Use Intel Default Settings" Command="{Binding UseIntelDefaults}" Margin="0,0,8,6" VerticalAlignment="Center"
+                                Visibility="{Binding HasIntelDefaults, Converter={StaticResource Visible}}" />
+                        <Button Content="Stress test (5 min)" Command="{Binding StressTest}" Margin="0,0,8,6" VerticalAlignment="Center" />
+                        <Button Content="{Binding AutoApplyText}" Command="{Binding ToggleAutoApply}" Margin="0,0,8,6" VerticalAlignment="Center" />
+                        <Button Content="Back to BIOS settings" Command="{Binding Reset}" Margin="0,0,8,6" VerticalAlignment="Center" />
+                    </WrapPanel>
+
+                    <!-- Keep or go back: the change goes back on its own when the countdown runs out. -->
+                    <Border Style="{StaticResource WarningBox}" Margin="0,10,0,0" Padding="14,12"
+                            Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}">
+                        <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="{Binding Name}" />
-                                <TextBlock Text="{Binding RangeText}" FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Theme.Text}" Text="{Binding Countdown}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Keep" Command="{Binding Keep}" Margin="0,0,8,0" VerticalAlignment="Center"
+                                        Style="{StaticResource Button.Primary}" Padding="16,7" />
+                                <Button Content="Go back now" Command="{Binding GoBack}" VerticalAlignment="Center" />
                             </StackPanel>
-                            <Slider Grid.Column="1" VerticalAlignment="Center" Margin="8,0"
-                                    Minimum="{Binding Min}" Maximum="{Binding Max}"
-                                    SmallChange="{Binding Step}" LargeChange="{Binding Step}"
-                                    TickFrequency="{Binding Step}" IsSnapToTickEnabled="True"
-                                    Value="{Binding Value, Mode=TwoWay}"
-                                    AutomationProperties.Name="{Binding Name}" />
-                            <TextBlock Grid.Column="2" Text="{Binding ValueText}" VerticalAlignment="Center" />
                         </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                    </Border>
 
-            <WrapPanel Margin="0,8,0,0">
-                <Button Content="Apply" Command="{Binding Apply}" Padding="12,4" Margin="0,0,8,4" />
-                <Button Content="Use Intel Default Settings" Command="{Binding UseIntelDefaults}" Padding="12,4" Margin="0,0,8,4"
-                        Visibility="{Binding HasIntelDefaults, Converter={StaticResource Visible}}" />
-                <Button Content="Stress test (5 min)" Command="{Binding StressTest}" Padding="12,4" Margin="0,0,8,4" />
-                <Button Content="{Binding AutoApplyText}" Command="{Binding ToggleAutoApply}" Padding="12,4" Margin="0,0,8,4" />
-                <Button Content="Back to BIOS settings" Command="{Binding Reset}" Padding="12,4" Margin="0,0,8,4" />
-            </WrapPanel>
-
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
-                        Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}">
-                <TextBlock Text="{Binding Countdown}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" />
-                <Button Content="Keep" Command="{Binding Keep}" Padding="12,4" Margin="0,0,8,0" />
-                <Button Content="Go back now" Command="{Binding GoBack}" Padding="12,4" />
+                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,10,0,0" Text="{Binding Status}" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource Text.Message}" Margin="0,8,0,0" Text="{Binding Message}" />
             </StackPanel>
-
-            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,8,0,0" Opacity="0.8" />
-        </StackPanel>
-        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,4,0,0" />
+        </Border>
     </StackPanel>
 </UserControl>
