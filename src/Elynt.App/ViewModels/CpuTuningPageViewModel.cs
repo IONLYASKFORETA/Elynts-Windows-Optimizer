@@ -53,6 +53,9 @@ public sealed class CpuTuningPageViewModel : ObservableObject
 
     public bool HasNotice => !string.IsNullOrEmpty(Notice);
     public IReadOnlyList<string> Warnings => _report.Warnings;
+
+    /// <summary>The CPU's card: its name, warnings and controls. Without tuning or warnings the notice says it all.</summary>
+    public bool HasCard => Available || Warnings.Count > 0;
     public bool IsWaiting => _report.RevertsAt is not null;
     public bool HasIntelDefaults => _report.IntelDefaults is not null;
     public bool OffersUnofficial => _report.CurveOptimizerUnofficial;

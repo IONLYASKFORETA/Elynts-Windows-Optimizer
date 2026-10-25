@@ -47,7 +47,7 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,8,24">
                 <TextBlock Style="{StaticResource Text.Body}"
-                           Text="Every change the app made, newest first. Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
+                           Text="Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
 
                 <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
                 <StackPanel DataContext="{Binding Drift}">

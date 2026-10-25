@@ -15,7 +15,7 @@
             <TextBlock Style="{StaticResource Text.Body}" Text="{Binding Notice}" />
         </Border>
 
-        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+        <Border Style="{StaticResource Card}" Margin="0,12,0,0" Visibility="{Binding HasCard, Converter={StaticResource Visible}}">
             <StackPanel>
                 <TextBlock Style="{StaticResource Text.H2}" Text="{Binding CpuName}" />
 
