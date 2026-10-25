@@ -349,6 +349,45 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+    <!-- A table in a ListBox, for one long enough to need virtualising (the services): Table.Row rows, the selected one
+         a shade lighter with a short wave edge on the left. -->
+    <Style x:Key="Table.ListRow" TargetType="ListBoxItem">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <Border x:Name="Bg" Style="{StaticResource Table.Row}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                        <Border x:Name="Edge" Width="2" HorizontalAlignment="Left" Margin="0,6"
+                                Background="{DynamicResource Theme.AccentWave}" Visibility="Collapsed" />
+                        <Border x:Name="Focus" BorderThickness="1" BorderBrush="{StaticResource Theme.TextDim}" Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
+                            <Setter TargetName="Edge" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- Its ListBox: rows wrap to the table's width rather than scrolling sideways. Put a Table.Header above it. -->
+    <Style x:Key="Table.List" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource Table.ListRow}" />
+    </Style>
 
     <!-- A sidebar entry: a soft highlight, and a short wave bar on the left when selected. -->
     <Style x:Key="NavItem" TargetType="ListBoxItem">

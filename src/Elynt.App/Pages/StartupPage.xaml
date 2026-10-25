@@ -3,7 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="Visible" />
         <CollectionViewSource x:Key="ItemsByGroup" Source="{Binding Items}">
             <CollectionViewSource.GroupDescriptions>
                 <PropertyGroupDescription PropertyName="Group" />
@@ -14,46 +13,56 @@
     <!-- Startup: every item that runs at sign-in, plus third-party scheduled tasks. Off is Task Manager's switch;
          delete is separate and needs its own confirmation. -->
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8">
-            <TextBlock TextWrapping="Wrap" Opacity="0.8"
-                       Text="Turning an item off uses the same switch as Task Manager, so it's reversible and Windows agrees with it. Deleting is separate and can't be undone." />
-            <DockPanel Margin="0,8,0,0">
-                <Button DockPanel.Dock="Right" Content="Refresh" Padding="12,2" Click="Refresh" />
-                <CheckBox Content="Tell me in the tray when an app adds itself to startup"
-                          IsChecked="{Binding NotifyNewStartupItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                          VerticalAlignment="Center" />
+        <StackPanel DockPanel.Dock="Top">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Refresh" VerticalAlignment="Top" Margin="16,0,0,0" Click="Refresh" />
+                <TextBlock Style="{StaticResource Text.Dim}"
+                           Text="Turning an item off uses the same switch as Task Manager, so it's reversible and Windows agrees with it. Deleting is separate and can't be undone." />
             </DockPanel>
-            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <!-- The tray note: a switch, with what it does beside it. -->
+            <DockPanel Margin="0,12,0,0">
+                <CheckBox DockPanel.Dock="Left" Style="{StaticResource Switch}" VerticalAlignment="Top"
+                          IsChecked="{Binding NotifyNewStartupItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          AutomationProperties.Name="Tell me in the tray when an app adds itself to startup" />
+                <TextBlock Style="{StaticResource Text.Body}" Margin="10,1,0,0"
+                           Text="Tell me in the tray when an app adds itself to startup" />
+            </DockPanel>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource Text.Message}" Margin="0,10,0,0" />
         </StackPanel>
 
-        <ListBox ItemsSource="{Binding Source={StaticResource ItemsByGroup}}" HorizontalContentAlignment="Stretch" BorderThickness="0">
+        <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
+        <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource ItemsByGroup}}"
+                 ScrollViewer.CanContentScroll="False">
             <ListBox.GroupStyle>
                 <GroupStyle>
                     <GroupStyle.HeaderTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" Margin="4,12,4,4" />
+                            <TextBlock Style="{StaticResource Text.Label}" Text="{Binding Name, Converter={StaticResource Caps}}" />
                         </DataTemplate>
                     </GroupStyle.HeaderTemplate>
                 </GroupStyle>
             </ListBox.GroupStyle>
+            <!-- A row: the name, its publisher and where it starts from, with Delete and the switch on the right. -->
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:StartupItemViewModel}">
-                    <Grid Margin="4,6" ToolTip="{Binding Command}">
+                    <Grid ToolTip="{Binding Command}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="{Binding Name}" FontSize="14" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Details}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Location}" Opacity="0.5" FontSize="11" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{StaticResource Theme.Text}" />
+                            <TextBlock Text="{Binding Details}" Style="{StaticResource Text.Dim}" Margin="0,3,0,0" />
+                            <TextBlock Text="{Binding Location}" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
+                                       Foreground="{StaticResource Theme.TextFaint}" />
+                            <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Message}" FontSize="12.5" LineHeight="18" Margin="0,6,0,0" />
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Delete…" Padding="8,2" Margin="0,0,12,0" Click="Delete"
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Button Content="Delete…" Style="{StaticResource Button.Destructive}" Padding="12,5" Margin="0,0,14,0" Click="Delete"
                                     IsEnabled="{Binding CanDelete}"
                                     AutomationProperties.Name="{Binding Name, StringFormat='Delete {0}'}" />
-                            <CheckBox IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
                                       AutomationProperties.Name="{Binding Name}" />
                         </StackPanel>
                     </Grid>

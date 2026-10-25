@@ -4,48 +4,93 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <TabControl>
+    <UserControl.Resources>
+        <!-- Body text that takes no room while it has nothing to say (a service with no description). -->
+        <Style x:Key="Optional" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!-- A header heading: no room above it, sitting on the header row's centre line. -->
+        <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource Text.Label}">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Transparent so the rows sit on the page, as on every other page. -->
+    <TabControl Background="Transparent">
         <TabItem Header="Startup">
             <!-- Startup items and third-party scheduled tasks. -->
-            <local:StartupPage DataContext="{Binding Startup}" />
+            <local:StartupPage DataContext="{Binding Startup}" Margin="0,16,0,0" />
         </TabItem>
         <TabItem Header="Services">
-            <!-- Services: every service and driver; reviewed ones editable, Advanced unlocks the rest but never protected ones. -->
-            <DockPanel DataContext="{Binding ServicesPage}">
-                <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8">
-                    <TextBlock Text="{Binding Summary}" Opacity="0.7" TextWrapping="Wrap" />
-                    <DockPanel Margin="0,6,0,0">
-                        <CheckBox DockPanel.Dock="Right" Content="Advanced" IsChecked="{Binding Advanced}" VerticalAlignment="Center" Margin="12,0,0,0"
-                                  ToolTip="Unlocks Disabled and services that aren't on the reviewed list. Anti-cheat, Windows Update and boot drivers stay locked." />
-                        <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search every service by name" />
-                    </DockPanel>
-                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="0,6,0,0" />
+            <!-- Services: every service and driver; reviewed ones editable, Advanced unlocks the rest but never protected ones.
+                 A table: one row per service under a header whose start-type column carries the Advanced switch. -->
+            <DockPanel DataContext="{Binding ServicesPage}" Margin="0,16,0,0" Grid.IsSharedSizeScope="True">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Dim}" />
+                    <TextBox Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search every service by name"
+                             VerticalContentAlignment="Center" Margin="0,10,0,0" />
+                    <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Message}" Margin="0,8,0,0" />
                 </StackPanel>
-                <ListBox ItemsSource="{Binding Services}" HorizontalContentAlignment="Stretch" BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizing="True">
+
+                <Border DockPanel.Dock="Top" Style="{StaticResource Table.Header}" Margin="0,16,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="ServiceStart" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="SERVICE" Style="{StaticResource Heading}" />
+                        <DockPanel Grid.Column="1" Margin="16,0,0,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Background="Transparent"
+                                        ToolTip="Unlocks Disabled and services that aren't on the reviewed list. Anti-cheat, Windows Update and boot drivers stay locked.">
+                                <TextBlock Text="ADVANCED" Style="{StaticResource Heading}" Margin="0,0,10,0" />
+                                <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Advanced}" AutomationProperties.Name="Advanced" />
+                            </StackPanel>
+                            <TextBlock Text="START TYPE" Style="{StaticResource Heading}" Margin="0,0,12,0" />
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <ListBox Style="{StaticResource Table.List}" ItemsSource="{Binding Services}" VirtualizingPanel.IsVirtualizing="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:ServiceItemViewModel}">
-                            <Grid Margin="4,6">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ServiceStart" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
-                                    <TextBlock Text="{Binding Title}" FontSize="14" TextWrapping="Wrap" />
-                                    <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap">
-                                        <Run Text="{Binding Badge, Mode=OneWay}" /> · <Run Text="{Binding StartText, Mode=OneWay}" />
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding View.Explanation}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                    <TextBlock Text="{Binding RecommendationText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,0"
+                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"
+                                               Foreground="{StaticResource Theme.Text}" />
+                                    <!-- The badge as a pill, then the start type (under it when the line is full). -->
+                                    <WrapPanel Margin="0,6,0,-6">
+                                        <Border Style="{StaticResource Pill}">
+                                            <TextBlock Text="{Binding Badge}" FontSize="11" Foreground="{StaticResource Theme.TextDim}" />
+                                        </Border>
+                                        <TextBlock Text="{Binding StartText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="2,0,0,6" />
+                                    </WrapPanel>
+                                    <TextBlock Text="{Binding View.Explanation}" Style="{StaticResource Optional}" FontSize="12.5" LineHeight="18" Margin="0,6,0,0" />
+                                    <TextBlock Text="{Binding RecommendationText}" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Foreground="{StaticResource Theme.Text}"
                                                Visibility="{Binding HasRecommendation, Converter={StaticResource Visible}}" />
-                                    <TextBlock Text="{Binding View.LockReason}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0"
-                                               Visibility="{Binding IsProtected, Converter={StaticResource Visible}}" />
+                                    <DockPanel Margin="0,6,0,0" Visibility="{Binding IsProtected, Converter={StaticResource Visible}}">
+                                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Icon}" Text="&#xE72E;" FontSize="12"
+                                                   Foreground="{StaticResource Theme.TextFaint}" VerticalAlignment="Top" Margin="0,2,8,0" />
+                                        <TextBlock Text="{Binding View.LockReason}" Style="{StaticResource Text.Dim}" />
+                                    </DockPanel>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                                    <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" MinWidth="100"
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                    <ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" Width="132"
                                               IsEnabled="{Binding CanChange}" />
-                                    <Button Content="Set" Click="SetServiceStart" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanChange}" />
-                                    <Button Content="Undo" Click="UndoServiceChange" Padding="10,2" Margin="6,0,0,0" IsEnabled="{Binding CanUndo}"
+                                    <Button Content="Set" Click="SetServiceStart" Padding="12,5" Margin="6,0,0,0" IsEnabled="{Binding CanChange}" />
+                                    <Button Content="Undo" Click="UndoServiceChange" Padding="12,5" Margin="6,0,0,0" IsEnabled="{Binding CanUndo}"
                                             ToolTip="Puts back the whole configuration this service had before the app changed it." />
                                 </StackPanel>
                             </Grid>
