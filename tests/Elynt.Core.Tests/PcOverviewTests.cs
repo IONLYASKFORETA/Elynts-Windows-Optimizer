@@ -31,6 +31,18 @@ public class PcOverviewTests
     }
 
     [Fact]
+    public void A_tweak_already_set_on_this_PC_counts_as_on()
+    {
+        var alreadySet = Tweak("test.already-set");
+        _registry.SetValue(new RegistryLocation(RegistryRoot.CurrentUser, @"Software\ElyntTest", alreadySet.Id), RegistryValue.DWord(1));
+        var engine = EngineFor(alreadySet, Tweak("test.off"));
+
+        var overview = engine.GetPcOverview();
+
+        Assert.Equal((1, 2), (overview.TweaksOn, overview.TweaksApplicable));
+    }
+
+    [Fact]
     public void A_tweak_that_does_not_fit_this_PC_is_left_out_even_when_its_setting_is_in_place()
     {
         var proOnly = Tweak("test.pro-only") with { Applicability = new Applicability(Editions: [WindowsEdition.Pro]) };

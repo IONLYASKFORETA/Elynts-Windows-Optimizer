@@ -1,3 +1,4 @@
+using Elynt.Core.Drift;
 using Elynt.Core.Games;
 
 namespace Elynt.Core.Tests;
@@ -14,6 +15,14 @@ public sealed class SamplePcTests : IDisposable
     public void Dispose() => Directory.Delete(_scratch, recursive: true);
 
     private Engine NewEngine() => SamplePc.NewEngine(_scratch);
+
+    [Fact]
+    public void A_tweak_Windows_set_by_itself_is_already_set_so_the_tour_draws_its_locked_switch()
+    {
+        var tweak = NewEngine().ListTweaks().Single(t => t.Id == SamplePc.SetByWindows);
+
+        Assert.Equal((TweakState.On, true), (tweak.State, tweak.AlreadySet));
+    }
 
     [Fact]
     public void Startup_and_services_have_rows()
@@ -49,6 +58,15 @@ public sealed class SamplePcTests : IDisposable
 
         var drifted = history.First(c => c.TweakId == SamplePc.Drifted && c.CanUndo);
         Assert.False(engine.UndoChange(drifted.Id).Succeeded);
+    }
+
+    [Fact]
+    public void Drift_has_two_rows_one_of_them_a_startup_item_switched_back_on()
+    {
+        var drifted = NewEngine().CheckDrift().Drifted;
+
+        Assert.True(drifted.Count >= 2);
+        Assert.Contains(drifted, d => d.Kind == DriftKind.StartupItemSwitchedBack && d.TweakId == $"startup:{SamplePc.DriftedStartupItem}");
     }
 
     [Fact]

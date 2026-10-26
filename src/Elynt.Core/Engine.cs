@@ -73,6 +73,12 @@ public sealed record TweakView(
 
     public bool Blocked => BlockedReason is not null;
 
+    /// <summary>
+    /// On because Windows, the user or another tool set it, with no change of the app's own behind it. It counts as
+    /// on, but the app has nothing of its own to undo, so it can't be switched off from the app (ADR 0002).
+    /// </summary>
+    public bool AlreadySet { get; init; }
+
     /// <summary>Warnings that fit this PC's hardware, e.g. the X3D core-parking warning.</summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 
@@ -764,6 +770,8 @@ public sealed partial class Engine(
     private TweakView Describe(TweakDefinition tweak)
     {
         var affected = AffectedGames(tweak);
+        var state = SafeDetect(tweak);
+        var change = journal.LatestUndoable(tweak.Id, user);
         return new(
         tweak.Id,
         tweak.Section,
@@ -775,9 +783,11 @@ public sealed partial class Engine(
         tweak.Steps.Select(step => step.DescribeChange()).ToList(),
         tweak.Undo,
         tweak.Refresh,
-        SafeDetect(tweak),
-        journal.LatestUndoable(tweak.Id, user) is not null)
+        state,
+        change is not null)
     {
+        // Read from the journal, not from CanUndo: what matters is whether the app made a change of its own here.
+        AlreadySet = state == TweakState.On && change is null,
         Reversibility = tweak.Reversibility,
         DestructiveWarning = tweak.DestructiveWarning,
         ApplyWarning = tweak.ApplyWarning,

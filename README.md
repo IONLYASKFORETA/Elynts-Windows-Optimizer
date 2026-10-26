@@ -68,13 +68,15 @@ Restore point (at most once a day; Windows skips more anyway) and tells you when
 
 Logs roll daily and keep 14 days.
 
-## Drift after Windows updates
+## Drift after updates
 
 At each service start the app quickly checks that every change it made is still in place; the first check, and the
 first after the Windows build changes, is a full check that also re-checks every change still fits this build and PC.
-Changes Windows undid are listed for re-apply (all, or pick). Automatic re-apply is off by default, and even when on
-it never re-applies destructive changes, changes that need a restart, or changes with a must-read warning (a tweak
-with an apply warning): those always wait for you. The update pause is not drift when it ends.
+Changes something else undid are listed for re-apply (all, or pick): settings a Windows update put back, removed apps
+that came back, and startup items switched back on (usually by the app's own update; one whose app was uninstalled is
+dropped quietly). Automatic re-apply is off by default, and even when on it never re-applies destructive changes,
+changes that need a restart, or changes with a must-read warning (a tweak with an apply warning): those always wait
+for you. Startup switches are instant, so it covers them. The update pause is not drift when it ends.
 
 ## Security model and accepted risks
 
