@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Other branches get their run from their pull request: a push to a branch with a PR open would run everything twice.
   push:
+    branches: [main]
   pull_request:
   # Lets a beta be re-published from main without a new commit (e.g. after fixing the releases repo).
   workflow_dispatch:
@@ -16,6 +18,7 @@ jobs:
   checks:
     # Rules that need no build, so they fail in seconds. docs/ui.md and CODING_STANDARDS.md say why each exists.
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +36,8 @@ jobs:
   windows:
     # Builds everything and runs the logic tests plus the real-registry round trips on a real Windows machine.
     runs-on: windows-latest
+    # A green run takes about 4 minutes. Without a limit, a test that hangs holds the runner for 6 hours.
+    timeout-minutes: 20
     permissions:
       contents: write # to tag the commit each beta was built from, so it can be promoted to stable later
     steps:
@@ -46,7 +51,16 @@ jobs:
         run: dotnet build ElyntOptimizer.slnx --configuration Release
 
       - name: Test
-        run: dotnet test --solution ElyntOptimizer.slnx --configuration Release --no-build
+        # A test that stops moving for 5 minutes is named in a hang log and its tests are stopped, inside the step's 10.
+        timeout-minutes: 10
+        run: >-
+          dotnet test --solution ElyntOptimizer.slnx --configuration Release --no-build --results-directory TestResults
+          --report-xunit-ctrf --hangdump --hangdump-timeout 5m --hangdump-type None
+
+      # Hung, failed and skipped tests as annotations, which a cloud session can read where it can't read this log.
+      - name: Report tests
+        if: ${{ !cancelled() }}
+        run: python build/report_tests.py TestResults
 
       - name: Install Velopack
         run: dotnet tool install --global vpk --version $env:VPK_VERSION

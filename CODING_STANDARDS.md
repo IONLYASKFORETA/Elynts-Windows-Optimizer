@@ -7,8 +7,12 @@ warnings (TreatWarningsAsErrors) and nullable references; this file holds what i
 
 - **Every change to Windows goes through the Engine** (`IEngine`), which journals what was there first so undo puts it
   back exactly. Pages and the service only send Engine commands.
-- **Tests drive the Engine's commands against the fakes** in `tests/Elynt.Core.Tests`, the single test seam (README).
-  A new command or behaviour comes with one. Windows-only adapters get a round trip in `tests/Elynt.Windows.Tests`.
+- **Each behaviour is tested at its own seam**, and a new command or behaviour comes with a test there. Engine commands
+  run against the fakes in `tests/Elynt.Core.Tests`. Window logic that needs no WPF (a view model's state and words)
+  runs in `tests/Elynt.App.Tests`, its source file linked in. Windows-only adapters get a round trip in
+  `tests/Elynt.Windows.Tests`, and the screenshot tour covers what only shows on screen.
+- **A test that waits on a pipe, a socket or another thread has a `Timeout`**, so a hang fails that test in seconds.
+  Windows-only tests skip on Linux, so CI is the first place they run.
 - **Destructive stays opt-in.** A change undo can't fully reverse is labelled destructive and needs its own
   confirmation, enforced in the Engine, not just in the page.
 

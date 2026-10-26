@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <!-- Lets CI name a test that hangs (the Test step in ci.yml turns it on). -->
+    <PackageReference Include="Microsoft.Testing.Extensions.HangDump" Version="2.5.1" />
   </ItemGroup>
 
   <ItemGroup>

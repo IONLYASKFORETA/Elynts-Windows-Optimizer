@@ -15,9 +15,11 @@ a described tweak with its own switch, and every tweak can be undone exactly. Th
 | `src/Elynt.App` | The WPF window. Runs without admin rights and sends every change to the service over a named pipe. |
 | `tests/Elynt.Core.Tests` | Logic tests: Engine commands against fake adapters, and the pipe contract. |
 | `tests/Elynt.Windows.Tests` | The same round trip against the real registry. Runs on GitHub's Windows runners; skipped elsewhere. |
+| `tests/Elynt.App.Tests` | The window's logic that needs no WPF (a view model's state and words), its source files linked in so it runs anywhere. |
+| `tests/Elynt.App.Screenshots` | The screenshot tour: opens the real window on a made-up PC and shoots every page (`docs/ui.md`). |
 
-The Engine command surface (`IEngine`) is the single test seam. Tests drive the app through the same commands the
-window sends.
+Each behaviour is tested at its own seam. Most tests drive the Engine command surface (`IEngine`), the same commands
+the window sends; the window's own logic and looks are tested by the last two projects.
 
 ## Build and test
 
