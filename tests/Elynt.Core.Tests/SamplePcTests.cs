@@ -70,6 +70,18 @@ public sealed class SamplePcTests : IDisposable
     }
 
     [Fact]
+    public void Overclocking_has_sliders_for_the_gpu_and_the_cpu()
+    {
+        var engine = NewEngine();
+
+        var gpu = Assert.Single(engine.GetGpuTuning().Gpus);
+        Assert.True(gpu.Controls.Count >= 2);
+        var cpu = engine.GetCpuTuning(advanced: false);
+        Assert.True(cpu.Available, cpu.Notice);
+        Assert.True(cpu.Controls.Count >= 2);
+    }
+
+    [Fact]
     public void Apps_have_installed_apps_with_updates_and_search_results()
     {
         var engine = NewEngine();

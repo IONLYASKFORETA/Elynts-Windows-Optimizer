@@ -9,6 +9,8 @@ using Elynt.Core.Services;
 using Elynt.Core.Startup;
 using Elynt.Core.Tests.Services;
 using Elynt.Core.Tests.Startup;
+using Elynt.Core.Tuning;
+using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -56,6 +58,7 @@ public static class SamplePc
     public static Engine NewEngine(string scratch)
     {
         var registry = new FakeRegistry();
+        var (gpuTuning, cpuTuning) = Tuning();
         var engine = new Engine(
             Catalogue.Default,
             new SystemAdapters(
@@ -92,7 +95,9 @@ public static class SamplePc
                 ],
             },
             new ChangeJournal(new InMemoryJournalStore()),
-            User);
+            User,
+            gpuTuning: gpuTuning,
+            cpuTuning: cpuTuning);
 
         foreach (var id in AlreadyOn)
             Check(engine.Apply(id).Succeeded, $"turning on {id}");
@@ -117,6 +122,28 @@ public static class SamplePc
     {
         if (!succeeded)
             throw new InvalidOperationException($"The sample PC failed at {what}.");
+    }
+
+    /// <summary>
+    /// The RTX 3080 through NVML and the 7800X3D, both on defaults. The real app reaches the CPU only through PawnIO,
+    /// which this PC hasn't turned on (for Home's hint); here the CPU answers anyway, so Overclocking draws both
+    /// panels' sliders. Nothing disposes these services: the tour never changes a setting, so no countdown ever runs.
+    /// </summary>
+    private static (GpuTuning Gpu, CpuTuning Cpu) Tuning()
+    {
+        var safety = new TuningSafety(new InMemoryTuningStore());
+        var session = safety.BeginSession();
+
+        var nvml = new FakeNvml();
+        nvml.Add("NVIDIA GeForce RTX 3080").Readings = new NvmlReadings(
+            TemperatureC: 47, GraphicsClockMHz: 1710, MemoryClockMHz: 9501, PowerMilliwatts: 38_500, UtilizationPercent: 4, FanPercent: 30);
+        var gpu = new GpuTuning([new NvidiaGpuTuning(nvml)], safety);
+        gpu.RecoverAtStartup(session);
+
+        var processor = FakeCpu.Raphael7800X3D();
+        var cpu = new CpuTuning(processor, safety, new InMemoryCpuProfileStore(), processor, processor);
+        cpu.RecoverAtStartup(session);
+        return (gpu, cpu);
     }
 
     private static readonly HardwareSnapshot Hardware = new(
