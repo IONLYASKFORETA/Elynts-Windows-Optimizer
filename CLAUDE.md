@@ -19,13 +19,10 @@ fails on binding errors. `CODING_STANDARDS.md` is what reviews check.
   (REST works in cloud sessions), then read the PR back. The GitHub MCP's `update_pull_request` turned image links into
   code in long bodies.
 
-## Implementer agents in worktrees
+## Building tickets with implementer agents
 
-When a spec is built by implementer subagents, each in `.claude/worktrees/agent-<id>`:
-
-- Their worktree starts from `main`, so their first command is `git reset --hard <integration branch>`.
-- They change files with Edit and Write and run one plain git command per Bash call: the worktree guard refuses
-  heredoc scripts, shell loops and `git -C`.
+Read `docs/agents/implementers.md` before running `implement-spec`, and as an implementer before building a ticket
+in `.claude/worktrees/`.
 
 ## Agent skills
 
