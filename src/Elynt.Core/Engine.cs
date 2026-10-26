@@ -601,8 +601,8 @@ public sealed partial class Engine(
         var leftAlone = left.Count switch
         {
             0 => "",
-            1 => $" 1 change can't be undone, so it was left as it is: {left[0]}.",
-            _ => $" {left.Count} changes can't be undone, so they were left as they are: {string.Join(", ", left)}.",
+            1 => $" 1 change was left as it is, because it can never be undone: {left[0]}.",
+            _ => $" {left.Count} changes were left as they are, because they can never be undone: {string.Join(", ", left)}.",
         };
         if (results.Count == 0)
             return new RestoreResult(true, left.Count == 0
