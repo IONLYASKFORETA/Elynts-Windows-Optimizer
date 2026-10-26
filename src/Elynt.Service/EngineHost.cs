@@ -99,13 +99,17 @@ internal sealed class EngineHost(
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var server = new EnginePipeServer(CreatePipe, EngineForClient, loggers.CreateLogger<EnginePipeServer>(), commandLane);
+        var server = new EnginePipeServer(
+            CreatePipe, EngineForClient, new WindowsAdministratorCheck(), loggers.CreateLogger<EnginePipeServer>(), commandLane);
         return server.RunAsync(stoppingToken);
     }
 
     /// <summary>
     /// Only interactively signed-in users may connect; network logons are denied outright. The app window runs
-    /// without admin rights, so this is what lets it talk to the elevated service, and nothing else can.
+    /// without admin rights, so this is what lets it talk to the elevated service, and nothing else can. Connecting
+    /// isn't enough to be served: the server answers only administrator accounts (ADR 0007). The pipe's own rules
+    /// can't sort them: an administrator's unelevated window has Administrators only as a deny-only group, which an
+    /// allow rule doesn't match, and a standard account turned away here would never learn why.
     /// </summary>
     private NamedPipeServerStream CreatePipe()
     {
@@ -135,7 +139,10 @@ internal sealed class EngineHost(
             security);
     }
 
-    /// <summary>Commands act on the settings of the user who sent them, identified by impersonating the pipe client.</summary>
+    /// <summary>
+    /// Commands act on the settings of the user who sent them, identified by impersonating the pipe client. Only
+    /// called once the server has found the account is an administrator account.
+    /// </summary>
     private Engine EngineForClient(NamedPipeServerStream pipe)
     {
         // The identity is kept for the connection's life: per-user app installs run winget with it.

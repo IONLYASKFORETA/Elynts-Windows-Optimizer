@@ -24,6 +24,8 @@ public sealed class PipeContractTests : IAsyncLifetime
 {
     private readonly string _pipeName = $"elynt-test-{Guid.NewGuid():N}";
     private readonly StubEngine _engine = new();
+    private readonly FakeAdministratorCheck _administrators = new();
+    private int _enginesBuilt;
     private readonly CancellationTokenSource _stop = new();
     private Task _server = Task.CompletedTask;
     private EnginePipeClient _client = null!;
@@ -32,7 +34,12 @@ public sealed class PipeContractTests : IAsyncLifetime
     {
         var server = new EnginePipeServer(
             () => new NamedPipeServerStream(_pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous),
-            _ => _engine);
+            _ =>
+            {
+                Interlocked.Increment(ref _enginesBuilt);
+                return _engine;
+            },
+            _administrators);
         _server = server.RunAsync(_stop.Token);
         _client = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
     }
@@ -618,6 +625,34 @@ public sealed class PipeContractTests : IAsyncLifetime
         AssertSameJson(_engine.DeleteProfile(@"C:\Steam\cs2.exe"), deleted);
 
         AssertSameJson(_engine.TakeProfileNotes(), await _client.TakeProfileNotesAsync(cancellation));
+    }
+
+    [Fact]
+    public async Task A_standard_account_is_refused_with_a_plain_message_and_no_command_runs()
+    {
+        _administrators.ConnectingAccountIsAdministrator = false;
+        var cancellation = TestContext.Current.CancellationToken;
+
+        var refused = await Assert.ThrowsAsync<AccountRefusedException>(() => _client.ListTweaksAsync(cancellation));
+        // Asking again on the same connection gets no further.
+        await Assert.ThrowsAsync<AccountRefusedException>(() => _client.ApplyAsync("some.tweak", cancellation: cancellation));
+
+        Assert.Equal(
+            "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC.",
+            refused.Message);
+        Assert.Null(_engine.LastCall);
+        Assert.Equal(0, _enginesBuilt);
+    }
+
+    [Fact]
+    public async Task An_administrator_account_is_served_as_before()
+    {
+        _administrators.ConnectingAccountIsAdministrator = true;
+
+        var result = await _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("Apply some.tweak", _engine.LastCall);
     }
 
     [Fact]

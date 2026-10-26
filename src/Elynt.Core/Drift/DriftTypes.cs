@@ -1,12 +1,14 @@
 namespace Elynt.Core.Drift;
 
-/// <summary>What something else (usually a Windows update) did to a change the app made.</summary>
+/// <summary>What something else (usually a Windows update, or an app's own update) did to a change the app made.</summary>
 public enum DriftKind
 {
     /// <summary>A setting the app changed was put back to another value.</summary>
     SettingChanged,
     /// <summary>An app the app removed is installed again.</summary>
     AppReturned,
+    /// <summary>A startup item the app switched off (or on) was switched back, usually by its own app's update.</summary>
+    StartupItemSwitchedBack,
 }
 
 /// <summary>
@@ -35,7 +37,7 @@ public sealed record DriftItem(
 public sealed record UnsupportedChange(string TweakId, string Name, string Reason);
 
 /// <summary>What a drift check found.</summary>
-/// <param name="Drifted">Changes Windows undid that wait for the user: re-apply all, or pick.</param>
+/// <param name="Drifted">Changes something else undid that wait for the user: re-apply all, or pick.</param>
 /// <param name="Reapplied">Changes automatic re-apply put back during this check.</param>
 /// <param name="NewlyUnsupported">Changes found not supported on this build in this check. Each is reported once.</param>
 public sealed record DriftReport(

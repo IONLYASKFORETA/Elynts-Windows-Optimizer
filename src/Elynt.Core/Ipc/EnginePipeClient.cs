@@ -1,6 +1,7 @@
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Games;
 using System.IO.Pipes;
+using System.Security.Principal;
 using Elynt.Core.Apps;
 using Elynt.Core.Repair;
 using Elynt.Core.Bios;
@@ -36,7 +37,7 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
         TimeSpan? timeout = null,
         CancellationToken cancellation = default)
     {
-        var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        var pipe = NewPipe(pipeName);
         try
         {
             await pipe.ConnectAsync(timeout ?? TimeSpan.FromSeconds(5), cancellation);
@@ -48,6 +49,15 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// The window's end of the service's pipe, not yet connected. It asks Windows to give the service a copy of the
+    /// window's token as it was when the pipe opened, with every group in it. The service's administrator check needs
+    /// that: an administrator account's unelevated window has Administrators only as a deny-only group, and Windows'
+    /// default (the token tracked as it changes, and possibly cut down to its enabled groups) doesn't promise to keep it.
+    /// </summary>
+    public static NamedPipeClientStream NewPipe(string pipeName = EngineProtocol.PipeName) =>
+        new(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Impersonation);
 
     public async Task<IReadOnlyList<TweakView>> ListTweaksAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListTweaksRequest(), cancellation)).Tweaks ?? throw Missing("tweaks");
@@ -290,6 +300,8 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
                     break;
                 onEvent?.Invoke(response.Event!);
             }
+            if (response.Refused is not null)
+                throw new AccountRefusedException(response.Refused);
             if (response.Error is not null)
                 throw new EngineServiceException(response.Error);
             return response;
@@ -307,3 +319,9 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
 }
 
 public sealed class EngineServiceException(string message) : Exception(message);
+
+/// <summary>
+/// The service won't serve this Windows account, because it isn't an administrator account (ADR 0007). Nothing was
+/// run for it. The message says so in the user's words, for the window to show in place of the sections.
+/// </summary>
+public sealed class AccountRefusedException(string message) : Exception(message);

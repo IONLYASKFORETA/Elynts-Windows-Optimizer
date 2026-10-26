@@ -1,9 +1,15 @@
+using Elynt.Core.Drift;
 using Elynt.Core.Journal;
 using Elynt.Core.Safety;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
 
 namespace Elynt.Core.Startup;
+
+/// <summary>A startup item switched back since the app switched it, with how the app had set it.</summary>
+/// <param name="Item">The item as the drift list shows it.</param>
+/// <param name="Enabled">What the app set: on (true) or off (false).</param>
+internal sealed record StartupDrift(DriftItem Item, string ItemId, bool Enabled);
 
 /// <summary>
 /// The Startup page's commands for one user: every startup item with publisher, signature and impact; turning one
@@ -49,17 +55,22 @@ internal sealed class StartupManager(
             if (item.Switch.IsEnabled(system) == enabled)
                 return Done(item, enabled ? "Already on. Nothing was changed." : "Already off. Nothing was changed.");
 
-            // Every flip is journaled, so flipping back is undoing the last flip: that puts back exactly what was
-            // there, including a value Task Manager wrote. If something else changed it since, take a fresh change.
-            if (journal.LatestUndoable(JournalId(item), user) is { } last && Conflicts(last).Count == 0)
+            // Every flip is journaled, so flipping back is undoing the last flip while it is still in place: that puts
+            // back exactly what was there, including a value Task Manager wrote. If something else switched it back
+            // or changed it since, take a fresh change, which replaces the last one.
+            var last = journal.LatestUndoable(JournalId(item), user);
+            if (last is not null && SetBy(item, last) == item.Switch.IsEnabled(system) && Conflicts(last).Count == 0)
             {
                 Revert(last);
                 return Done(item, enabled ? "Turned on. It starts at sign-in again." : "Turned off. The previous setting is back.");
             }
 
-            return Change(item, item.Switch.StepFor(enabled, clock.GetUtcNow()), enabled
+            var result = Change(item, item.Switch.StepFor(enabled, clock.GetUtcNow()), enabled
                 ? "Turned on. It starts at sign-in again."
                 : "Turned off. It won't start at sign-in; switch it back on any time.");
+            if (result.Succeeded && last is not null)
+                journal.Supersede(last, clock.GetUtcNow());
+            return result;
         }
         catch (Exception ex)
         {
@@ -122,6 +133,55 @@ internal sealed class StartupManager(
         return added;
     }
 
+    /// <summary>
+    /// The startup switches the app made that something else has switched back since, usually the item's own app as
+    /// it updates. An item that is gone (its app was uninstalled) isn't drift and is left out quietly. When the items
+    /// can't be read, none are listed, so the rest of the drift check still reports.
+    /// </summary>
+    public IReadOnlyList<StartupDrift> Drifted()
+    {
+        var switched = journal.UndoableTweakIds(user).Where(Owns).ToList();
+        if (switched.Count == 0 || system.Startup is not { } startup)
+            return [];
+
+        try
+        {
+            var items = Read(startup).ToList();
+            var drifted = new List<StartupDrift>();
+            foreach (var journalId in switched)
+            {
+                var item = items.FirstOrDefault(i => JournalId(i).Equals(journalId, StringComparison.OrdinalIgnoreCase));
+                if (item is null || journal.LatestUndoable(journalId, user) is not { Status: EntryStatus.Applied } entry)
+                    continue;
+                if (SetBy(item, entry) is not { } enabled || enabled == item.Switch.IsEnabled(system))
+                    continue;
+                drifted.Add(new StartupDrift(
+                    new DriftItem(journalId, Named(item.Name), DriftKind.StartupItemSwitchedBack,
+                        [enabled ? "It no longer starts at sign-in" : "It starts at sign-in again"], NeedsConfirmation: false, NeedsReboot: false),
+                    item.Id,
+                    enabled));
+            }
+            return drifted;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Couldn't read the startup items while checking for drift");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Switches a drifted item back to how the app set it, through the same switch the Startup page uses, so it is
+    /// journaled like any startup change and undo returns to what the other app set.
+    /// </summary>
+    public ReapplyOutcome Reapply(StartupDrift drift)
+    {
+        var result = SetEnabled(drift.ItemId, drift.Enabled);
+        if (result.Succeeded)
+            _log.LogInformation("Re-applied drifted startup item {Item} for {User}", drift.ItemId, user);
+        return new ReapplyOutcome(drift.Item.TweakId, drift.Item.Name, result.Succeeded, result.Succeeded ? "Re-applied." : result.Message);
+    }
+
     /// <summary>Undoes one journaled startup switch from the Undo history.</summary>
     public (bool Succeeded, string Message) Undo(JournalEntry entry)
     {
@@ -144,9 +204,14 @@ internal sealed class StartupManager(
     public string NameOf(string journalId)
     {
         var itemId = journalId[JournalPrefix.Length..];
-        var name = Find(itemId)?.Name ?? StartupItems.NameFromId(itemId);
-        return $"Startup item: {name}";
+        return Named(Find(itemId)?.Name ?? StartupItems.NameFromId(itemId));
     }
+
+    private static string Named(string itemName) => $"Startup item: {itemName}";
+
+    /// <summary>Whether this journaled switch turned the item on or off, or null when that can't be told.</summary>
+    private static bool? SetBy(StartupItem item, JournalEntry entry) =>
+        entry.Steps is [var record] ? item.Switch.EnabledBy(record) : null;
 
     /// <summary>Makes the switch through the Engine's apply, worded for the Startup page.</summary>
     private StartupCommandResult Change(StartupItem item, TweakStep step, string message)

@@ -100,7 +100,7 @@
                         </DockPanel>
                         <!-- Folded, the buttons show an icon and name themselves on hover. -->
                         <Button Click="Retry" Margin="0,10,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="Retry"
-                                Visibility="{Binding IsDisconnected, Converter={StaticResource Visible}}" ToolTip="Retry"
+                                Visibility="{Binding CanRetry, Converter={StaticResource Visible}}" ToolTip="Retry"
                                 ToolTipService.IsEnabled="{Binding IsCompact, RelativeSource={RelativeSource AncestorType=Window}}">
                             <Grid>
                                 <TextBlock Text="Retry" Style="{StaticResource WideOnly}" />
@@ -128,7 +128,7 @@
 
                 <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}" Background="Transparent" BorderThickness="0"
                          ItemContainerStyle="{StaticResource NavItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         AutomationProperties.Name="Pages">
+                         AutomationProperties.Name="Pages" Visibility="{Binding ShowsPages, Converter={StaticResource Visible}}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <!-- Folded, only the icon shows, and the page's name shows on hover. -->
@@ -180,6 +180,14 @@
                 <pages:SettingsPage Visibility="{Binding IsSettingsPage, Converter={StaticResource Visible}}" />
             </Grid>
         </DockPanel>
+
+        <!-- In place of the sections when the service refused this account, which isn't an administrator account:
+             the service's own words, held to a reading width. -->
+        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="32,26,24,0" MaxWidth="760" HorizontalAlignment="Left"
+                    Visibility="{Binding IsRefused, Converter={StaticResource Visible}}">
+            <TextBlock Style="{StaticResource Text.H1}" Text="Administrator accounts only" />
+            <TextBlock Style="{StaticResource Text.Body}" Margin="0,12,0,0" Text="{Binding Refusal}" />
+        </StackPanel>
 
         <!-- The Undo history draws its own title and summary, in the same place, with Restore everything beside them. -->
         <pages:HistoryPage Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="32,26,24,0"
