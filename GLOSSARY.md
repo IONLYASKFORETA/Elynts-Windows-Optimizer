@@ -9,7 +9,7 @@ _Avoid_: global setting, journal entry
 **Undo**: putting back exactly what was there before a change. The app only undoes its own changes, and refuses when something else has changed the same setting since.
 _Avoid_: revert, which is kept for tuning
 
-**Whole-PC change**: a change that affects every account on the PC (machine-wide settings, services, boot settings, power plans). It belongs to the PC, not to the account that made it, so any administrator account can see and undo it.
+**Whole-PC change**: a change whose every part affects every account on the PC (machine-wide settings, services, boot settings, power plans); a change that also touches one account's own settings is an account change. It belongs to the PC, not to the account that made it, so any administrator account can see and undo it.
 
 **Account change**: a change to one Windows account's own settings. Only that account sees and undoes it.
 _Avoid_: user setting, per-user change
@@ -23,6 +23,8 @@ _Avoid_: user setting, per-user change
 **Instant change**: a change that takes effect at once, with no restart or sign-out. Only tweaks that make instant changes can go in a per-game profile, and never destructive or Security ones.
 
 **Per-game profile**: what the user sets for one game, all of it instant: tweaks, background apps to close, the game's priority, the timer resolution and a tuning profile. It goes on when the game starts and comes off 15 seconds after it closes. One runs at a time across the PC: the first game started stays in charge, and another game's profile is skipped meanwhile. Not a preset; presets don't exist.
+
+**Per-game tweak**: a tweak set for one game's .exe or folder (fullscreen optimizations off, a Defender scan exclusion) that stays until it is undone, whether the game is running or not. A separate thing from a per-game profile.
 
 **Temporary change**: a change made by a per-game profile. It is undone when the game closes, or at the next start after a crash or reboot. Switching the same tweak on yourself while the game runs keeps it, so it stays on after the game.
 
