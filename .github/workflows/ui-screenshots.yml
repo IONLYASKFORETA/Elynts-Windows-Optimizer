@@ -9,6 +9,9 @@ on:
     paths:
       - 'src/Elynt.App/**'
       - 'tests/Elynt.App.Screenshots/**'
+      # The made-up PC and the fakes it runs on, which the tour compiles in.
+      - 'tests/Elynt.Core.Tests/SamplePc.cs'
+      - 'tests/Elynt.Core.Tests/**/Fake*.cs'
       - '.github/workflows/ui-screenshots.yml'
   workflow_dispatch:
 

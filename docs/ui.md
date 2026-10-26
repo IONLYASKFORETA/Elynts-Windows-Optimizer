@@ -53,7 +53,8 @@ sidebar folds to its icons and the detail pane narrows from 400 to 320.
 ## Checking a change: the screenshot tour
 
 WPF can't run on Linux, so a cloud session can only compile the XAML. The real check is CI's screenshot tour
-(`tests/Elynt.App.Screenshots`, workflow `ui-screenshots.yml`), which runs on every push that touches the app:
+(`tests/Elynt.App.Screenshots`, workflow `ui-screenshots.yml`), which runs on every push that touches the app, the
+sample PC or the fakes:
 
 - It opens the real window against a made-up PC (`tests/Elynt.Core.Tests/SamplePc.cs`) and shoots every page, every
   other tab, every fold opened and the detail pane at its fullest, at 1600×1000, 900×520 and 2560×1400.
