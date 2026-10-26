@@ -235,7 +235,7 @@ internal sealed class StartupManager(
     {
         for (var i = entry.Steps.Count - 1; i >= 0; i--)
             entry.Steps[i].Revert(system);
-        journal.CloseReverted(entry, clock.GetUtcNow());
+        journal.CloseReverted(entry, user, clock.GetUtcNow());
     }
 
     /// <summary>The safety net works on tweaks, so a switch is described as a one-step tweak.</summary>

@@ -78,6 +78,9 @@ public sealed record ServiceStartStep(string ServiceName, ServiceStart Start) : 
 /// <summary>A service's whole configuration before the app changed it, and what the app wrote.</summary>
 public sealed record ServiceConfigRecord(string ServiceName, ServiceConfig Before, ServiceConfig After) : StepRecord
 {
+    /// <summary>A service runs for the whole PC.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var now = ServiceStartStep.Manager(system).Find(ServiceName);

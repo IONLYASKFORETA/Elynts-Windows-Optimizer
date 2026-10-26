@@ -113,6 +113,8 @@ public sealed record RegistryEachKeyStep(
 /// <summary>The exact prior state of each value a <see cref="RegistryEachKeyStep"/> changed.</summary>
 public sealed record RegistryEachKeyRecord(IReadOnlyList<RegistryValueRecord> Values) : StepRecord
 {
+    public override bool AffectsEveryAccount() => Values.All(value => value.AffectsEveryAccount());
+
     public override string? FindConflict(SystemAdapters system) =>
         Values.Select(value => value.FindConflict(system)).FirstOrDefault(conflict => conflict is not null);
 

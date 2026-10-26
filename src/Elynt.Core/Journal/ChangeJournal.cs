@@ -28,6 +28,13 @@ public abstract record StepRecord
     public abstract string? FindConflict(SystemAdapters system);
 
     public abstract void Revert(SystemAdapters system);
+
+    /// <summary>
+    /// True when this part affects every account on the PC (a machine-wide setting, a service, a boot setting, a power
+    /// plan); false when it is one account's own settings, which undo has to write back to. A method, not a property,
+    /// so it is never saved in the journal: it is read from what each part changed, in old entries too.
+    /// </summary>
+    public abstract bool AffectsEveryAccount();
 }
 
 public enum EntryStatus
@@ -42,13 +49,16 @@ public enum EntryStatus
     Superseded,
 }
 
-/// <summary>One apply of one tweak for one user.</summary>
+/// <summary>One apply of one tweak, from one account.</summary>
 public sealed class JournalEntry
 {
     public required Guid Id { get; init; }
     public required string TweakId { get; init; }
 
-    /// <summary>The SID of the user whose settings were changed.</summary>
+    /// <summary>
+    /// The SID of the account the change was made from. An account change belongs to this account alone; a
+    /// <see cref="WholePc"/> change belongs to the PC.
+    /// </summary>
     public required string User { get; init; }
 
     public required string OsBuild { get; init; }
@@ -62,6 +72,17 @@ public sealed class JournalEntry
     /// place after a crash or reboot.
     /// </summary>
     public bool Temporary { get; set; }
+
+    /// <summary>
+    /// A whole-PC change: every part of it affects every account (ADR 0007), so it belongs to the PC and is in every
+    /// administrator account's Undo history. Read from the saved parts rather than saved itself, so entries written by
+    /// earlier versions classify the same way. A temporary change stays with the account whose game profile made it.
+    /// </summary>
+    [JsonIgnore]
+    public bool WholePc => !Temporary && Steps.All(step => step.AffectsEveryAccount());
+
+    /// <summary>Whether this change is in the account's Undo history: the account's own changes and every whole-PC change.</summary>
+    public bool SeenBy(string user) => User == user || WholePc;
 }
 
 /// <summary>
@@ -118,15 +139,16 @@ public sealed class ChangeJournal
         });
 
     /// <summary>
-    /// Marks the newest open change to this tweak as reverted and any older open ones as superseded, so a second
-    /// undo can never write back an older, stale snapshot.
+    /// Marks the newest open change to this tweak as reverted and any older open ones in the undoing account's Undo
+    /// history (whole-PC changes from other accounts among them) as superseded, so a second undo can never write back
+    /// an older, stale snapshot.
     /// </summary>
-    public void CloseReverted(JournalEntry newest, DateTimeOffset at)
+    public void CloseReverted(JournalEntry newest, string user, DateTimeOffset at)
     {
         lock (_gate)
         {
             var open = _entries.Where(e =>
-                e.TweakId == newest.TweakId && e.User == newest.User && e.Status is EntryStatus.Applying or EntryStatus.Applied).ToList();
+                e.TweakId == newest.TweakId && e.SeenBy(user) && e.Status is EntryStatus.Applying or EntryStatus.Applied).ToList();
             Change(open, entry =>
             {
                 entry.Status = entry == newest ? EntryStatus.Reverted : EntryStatus.Superseded;
@@ -207,12 +229,12 @@ public sealed class ChangeJournal
         }
     }
 
-    /// <summary>Every change made for this user, oldest first.</summary>
+    /// <summary>This account's Undo history, oldest first: its own changes and every whole-PC change, from any account.</summary>
     public IReadOnlyList<JournalEntry> EntriesFor(string user)
     {
         lock (_gate)
         {
-            return _entries.Where(e => e.User == user).ToList();
+            return _entries.Where(e => e.SeenBy(user)).ToList();
         }
     }
 
@@ -234,13 +256,16 @@ public sealed class ChangeJournal
         }
     }
 
-    /// <summary>The newest change to this tweak for this user that has not been undone.</summary>
+    /// <summary>
+    /// The newest change to this tweak in this account's Undo history that has not been undone: the account's own, or
+    /// a whole-PC change from any account.
+    /// </summary>
     public JournalEntry? LatestUndoable(string tweakId, string user)
     {
         lock (_gate)
         {
             return _entries.LastOrDefault(e =>
-                e.TweakId == tweakId && e.User == user && e.Status is EntryStatus.Applying or EntryStatus.Applied);
+                e.TweakId == tweakId && e.SeenBy(user) && e.Status is EntryStatus.Applying or EntryStatus.Applied);
         }
     }
 }

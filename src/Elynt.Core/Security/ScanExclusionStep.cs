@@ -37,6 +37,9 @@ public sealed record ScanExclusionStep(string Folder) : TweakStep
 /// <summary>Whether the folder was already excluded before the app added it.</summary>
 public sealed record ScanExclusionRecord(string Folder, bool WasExcluded) : StepRecord
 {
+    /// <summary>Microsoft Defender's exclusions hold for the whole PC.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     /// <summary>
     /// An exclusion is either there or not, and either is what the app wrote or what was there before, so undo never
     /// overwrites someone else's change.
