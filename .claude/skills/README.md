@@ -5,3 +5,8 @@ These Claude Code skills are copied from [mattpocock/skills](https://github.com/
 Skills from the upstream `in-progress/` folder are included too; upstream marks them as unfinished. The Codex-only `agents/openai.yaml` files were left out.
 
 To update, re-copy each `skills/<category>/<name>/` folder from upstream into `.claude/skills/<name>/`.
+
+Local changes to keep when updating:
+
+- `code-review` is renamed `review-against-spec` (folder, `name:`, and every skill that calls it), because Claude Code
+  has a built-in `code-review` that silently answered to the name instead.

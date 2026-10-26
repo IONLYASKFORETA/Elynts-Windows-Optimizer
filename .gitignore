@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Claude Code agent worktrees (one per ticket while a spec is being built)
+.claude/worktrees/

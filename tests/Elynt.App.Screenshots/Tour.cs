@@ -1,11 +1,16 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Elynt.App.Theme;
 using Elynt.App.ViewModels;
+using Elynt.Core.Tests;
+using Elynt.Core.Tweaks;
 
 namespace Elynt.App.Screenshots;
 
@@ -16,7 +21,7 @@ internal static partial class Tour
     [
         ("default", 1600, 1000), // the size the window opens at, where the screen has room
         ("smallest", 900, 520), // its minimum size
-        ("wide", 2560, 1400), // a 1440p screen, maximised
+        ("wide", 2560, 1400), // a 1440p screen, maximised (larger than CI's screen: see AllowLargerThanScreen)
     ];
 
     public static async Task RunAsync(Application app, string output)
@@ -24,8 +29,10 @@ internal static partial class Tour
         await WaitUntilAsync(() => app.MainWindow is MainWindow { IsLoaded: true }, TimeSpan.FromSeconds(30), () => "the window to open");
         var window = (MainWindow)app.MainWindow;
         (window.Left, window.Top) = (0, 0);
+        AllowLargerThanScreen(window);
         var model = (MainViewModel)window.DataContext;
         await WaitUntilAsync(() => model.IsConnected, TimeSpan.FromSeconds(30), () => $"the window to connect (status: {model.Status})");
+        await FillListsAsync(model);
 
         Console.WriteLine($"Opened at {window.Width}x{window.Height} on a {SystemParameters.WorkArea.Width}x{SystemParameters.WorkArea.Height} work area, theme {Application.Current.ThemeMode.Value}");
 
@@ -36,6 +43,8 @@ internal static partial class Tour
             window.Height = size.Height;
             await SettleAsync();
             Console.WriteLine($"{size.Name}: {window.ActualWidth}x{window.ActualHeight}, sidebar {(window.IsCompact ? "folded to icons" : "full")}");
+            if (window.ActualWidth < size.Width || window.ActualHeight < size.Height)
+                throw new InvalidOperationException($"The window didn't reach {size.Width}x{size.Height}, so these wouldn't be {size.Name} shots.");
             var folder = Path.Combine(output, size.Name);
             Directory.CreateDirectory(folder);
             // Real screen pixels too (title bar, backdrop, leftover drawing), once per page.
@@ -54,8 +63,10 @@ internal static partial class Tour
             var page = model.Pages[i];
             model.SelectedPage = page;
             await SettleAsync();
+            await ShowEveryStateAsync(model, page);
             var name = $"{i + 1:00}-{Slug(page)}";
             Shoot(window, folder, name, screen);
+            await ShootTabsAndFoldsAsync(window, folder, name);
 
             // The detail pane at its fullest: the tweak, then the repair tool, with the most to say.
             if (model.HasSelection && model.Tweaks.Count > 1)
@@ -71,6 +82,129 @@ internal static partial class Tour
                 Shoot(window, folder, $"{name}-fullest-repair-tool", screen);
             }
         }
+    }
+
+    /// <summary>
+    /// Fills what the window only loads when asked: Apps' winget search and installed list, and a cleanup scan. Each
+    /// is a list whose rows are never drawn otherwise.
+    /// </summary>
+    private static async Task FillListsAsync(MainViewModel model)
+    {
+        var apps = model.AppsManager ?? throw new InvalidOperationException("The Apps page has no winget manager.");
+        apps.Query = SamplePc.AppSearch;
+        await apps.SearchAsync();
+        await apps.RefreshInstalledAsync();
+        await model.Cleanup.ScanAsync();
+    }
+
+    /// <summary>Puts a page into the state with the most to draw, where it needs more than being opened.</summary>
+    private static async Task ShowEveryStateAsync(MainViewModel model, string page)
+    {
+        switch (page)
+        {
+            case Sections.StartupAndServices:
+                // Advanced on, so the Services tab also lists the advanced-only services, the drivers and the
+                // protected services that stay locked.
+                (model.ServicesPage ?? throw new InvalidOperationException("The Services page didn't load.")).Advanced = true;
+                await SettleAsync();
+                break;
+            case MainViewModel.PerGameProfiles:
+                // The game with a profile, so the editor shows its apps to close and its settings.
+                model.Profiles.SelectedGame = model.Profiles.Games.FirstOrDefault(g => g.HasProfile)
+                    ?? throw new InvalidOperationException("The sample PC's game profile didn't load.");
+                await SettleAsync();
+                break;
+            case MainViewModel.UndoHistory:
+                // Undo the change Windows set back, which is refused, so a row shows why.
+                var drifted = model.History.FirstOrDefault(h => h.Change.TweakId == SamplePc.Drifted && h.CanUndo)
+                    ?? throw new InvalidOperationException("The sample PC's drifted change isn't in the Undo history.");
+                await model.UndoAsync(drifted);
+                if (drifted.Message is null)
+                    throw new InvalidOperationException("Undoing the drifted change wasn't refused.");
+                await SettleAsync();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Every other tab of the page's tab controls, then the page with every fold open, each shot on its own. Only the
+    /// first tab and closed folds are drawn otherwise.
+    /// </summary>
+    private static async Task ShootTabsAndFoldsAsync(MainWindow window, string folder, string name)
+    {
+        foreach (var tabs in Visible<TabControl>(window).ToList())
+        {
+            for (var i = 1; i < tabs.Items.Count; i++)
+            {
+                tabs.SelectedIndex = i;
+                await SettleAsync();
+                Shoot(window, folder, $"{name}-{Slug(((TabItem)tabs.Items[i]).Header.ToString()!)}", screen: false);
+            }
+            tabs.SelectedIndex = 0;
+            await SettleAsync();
+        }
+
+        var folds = Visible<Expander>(window).Where(e => !e.IsExpanded).ToList();
+        if (folds.Count == 0)
+            return;
+        folds.ForEach(f => f.IsExpanded = true);
+        await SettleAsync();
+        Shoot(window, folder, $"{name}-open", screen: false);
+        folds.ForEach(f => f.IsExpanded = false);
+        await SettleAsync();
+    }
+
+    /// <summary>Every element of this type on screen, skipping the window's hidden pages.</summary>
+    private static IEnumerable<T> Visible<T>(DependencyObject parent) where T : FrameworkElement
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            if (VisualTreeHelper.GetChild(parent, i) is not UIElement { IsVisible: true } child)
+                continue;
+            if (child is T match)
+                yield return match;
+            foreach (var nested in Visible<T>(child))
+                yield return nested;
+        }
+    }
+
+    /// <summary>
+    /// Lets the window grow past the screen. Windows caps a window at about the screen's size, and CI's screen tops
+    /// out at 1080p, so without this the 1440p shots were really 1080p ones. Raises the cap in WM_GETMINMAXINFO and
+    /// leaves the message to the Window's own handler (hooks added later run first), which keeps the cap it is given
+    /// and adds the window's minimum size. Takes effect from the next resize.
+    /// </summary>
+    private static void AllowLargerThanScreen(Window window)
+    {
+        const int WmGetMinMaxInfo = 0x0024;
+        HwndSource.FromHwnd(new WindowInteropHelper(window).Handle).AddHook((IntPtr _, int message, IntPtr _, IntPtr info, ref bool _) =>
+        {
+            if (message == WmGetMinMaxInfo)
+            {
+                var sizes = Marshal.PtrToStructure<MinMaxInfo>(info);
+                sizes.MaxTrackSize = new(8192, 8192);
+                Marshal.StructureToPtr(sizes, info, fDeleteOld: false);
+            }
+            return IntPtr.Zero;
+        });
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DevicePoint(int x, int y)
+    {
+        public int X = x;
+        public int Y = y;
+    }
+
+    /// <summary>Win32's MINMAXINFO.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public DevicePoint Reserved;
+        public DevicePoint MaxSize;
+        public DevicePoint MaxPosition;
+        public DevicePoint MinTrackSize;
+        public DevicePoint MaxTrackSize;
     }
 
     /// <summary>

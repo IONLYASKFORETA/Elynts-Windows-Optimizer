@@ -13,6 +13,23 @@ env:
   VPK_VERSION: 1.2.161
 
 jobs:
+  checks:
+    # Rules that need no build, so they fail in seconds. docs/ui.md and CODING_STANDARDS.md say why each exists.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Colours only in Theme/
+        run: |
+          # Every colour lives in src/Elynt.App/Theme/, so the look changes in one place. Pages use the Theme.* tokens.
+          hits=$(grep -rnE '"#[0-9A-Fa-f]{3,8}"|Color\.From(A?Rgb)' src/Elynt.App --include='*.xaml' --include='*.cs' \
+            --exclude-dir=bin --exclude-dir=obj | grep -v '^src/Elynt.App/Theme/' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::Colours outside src/Elynt.App/Theme/ (listed above). Use a Theme.* token, or add one in Theme.xaml."
+            exit 1
+          fi
+
   windows:
     # Builds everything and runs the logic tests plus the real-registry round trips on a real Windows machine.
     runs-on: windows-latest

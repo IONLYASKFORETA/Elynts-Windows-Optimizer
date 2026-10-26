@@ -1,2 +1,5 @@
 *.cmd text eol=crlf
 build/test-install/README.txt text eol=crlf
+
+# Written by build/gen_fluent.py; GitHub folds its diff so reviews skip it.
+src/Elynt.App/Theme/FluentColors.xaml linguist-generated=true
