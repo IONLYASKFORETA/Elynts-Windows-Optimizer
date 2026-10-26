@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using Elynt.App.Theme;
 using Elynt.App.ViewModels;
 using Elynt.Core.Tests;
+using Elynt.Core.Tweaks;
 
 namespace Elynt.App.Screenshots;
 
@@ -101,6 +102,12 @@ internal static partial class Tour
     {
         switch (page)
         {
+            case Sections.StartupAndServices:
+                // Advanced on, so the Services tab also lists the advanced-only services, the drivers and the
+                // protected services that stay locked.
+                (model.ServicesPage ?? throw new InvalidOperationException("The Services page didn't load.")).Advanced = true;
+                await SettleAsync();
+                break;
             case MainViewModel.PerGameProfiles:
                 // The game with a profile, so the editor shows its apps to close and its settings.
                 model.Profiles.SelectedGame = model.Profiles.Games.FirstOrDefault(g => g.HasProfile)
