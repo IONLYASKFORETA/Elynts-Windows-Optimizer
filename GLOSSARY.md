@@ -9,7 +9,14 @@ _Avoid_: global setting, journal entry
 **Undo**: putting back exactly what was there before a change. The app only undoes its own changes, and refuses when something else has changed the same setting since.
 _Avoid_: revert, which is kept for tuning
 
-**Undo history**: every change the app made for this Windows account, newest first, each with its own Undo. **Restore everything** undoes every change that can be undone, newest first.
+**Whole-PC change**: a change that affects every account on the PC (machine-wide settings, services, boot settings, power plans). It belongs to the PC, not to the account that made it, so any administrator account can see and undo it.
+
+**Account change**: a change to one Windows account's own settings. Only that account sees and undoes it.
+_Avoid_: user setting, per-user change
+
+**Undo history**: this account's changes plus every whole-PC change, newest first, each with its own Undo. **Restore everything** undoes every change in it that can be undone, newest first.
+
+**Administrator account**: a Windows account in the Administrators group. Only administrator accounts can use the app; anyone else is told to ask one.
 
 **Already set**: a tweak that is on because something other than the app set it (Windows, the user or another tool). It counts as on, but the app has no change of its own to undo, so it can't be switched off from the app.
 
@@ -29,9 +36,18 @@ _Avoid_: revert, which is kept for tuning
 
 **Startup item**: anything that launches at sign-in (Run keys, Startup folders, sign-in tasks, Store app startup). Turning one off is reversible; deleting it is destructive.
 
+**Reviewed service**: a service on the app's list of ones that are safe to change. It can be set to Automatic or Manual; Disabled, and any service off the list, need Advanced.
+
 **Protected service**: a service the app never changes, even in Advanced (anti-cheat, Windows Update core, boot drivers).
 
-**Drift**: a change the app made that something else (usually a Windows update) has since undone, or a removed app that came back.
+**Advanced**: a switch on one page that unlocks that page's riskier choices (on Startup & Services, Disabled and services off the reviewed list; in CPU tuning, Curve Optimizer down to -30). Each page has its own, it starts off every time the app opens, and it never unlocks a never-touch rule.
+_Avoid_: Advanced mode, expert mode
+
+**Drift**: a change the app made that something else (usually a Windows update or an app's own update) has since undone, including a removed app that came back and a startup item switched back on. A change that ends on its own, like the 35-day update pause, never drifts.
+
+**Drift check**: looking for drift: quick each time the app starts, and full when the Windows build has changed, which also re-checks that every change still fits this build and PC.
+
+**Unsupported change**: a change whose target this Windows build no longer has. Drift skips it quietly, after saying so once, until the build or the app changes.
 
 **Evidence tier**: how well a tweak's benefit is backed: proven, situational or possible placebo.
 
