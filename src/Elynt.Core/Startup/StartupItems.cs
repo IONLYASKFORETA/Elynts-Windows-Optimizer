@@ -47,6 +47,13 @@ internal abstract record StartupSwitch
     /// when the record isn't one of this switch's.
     /// </summary>
     public abstract bool? EnabledBy(StepRecord record);
+
+    /// <summary>
+    /// <see cref="EnabledBy"/> for a switch that is one registry value: what <paramref name="record"/> wrote to
+    /// <paramref name="value"/>, read with <paramref name="isOn"/>, or null when it wrote somewhere else.
+    /// </summary>
+    protected static bool? EnabledByValue(StepRecord record, RegistryLocation value, Func<RegistryValue?, bool> isOn) =>
+        record is RegistryValueRecord set && set.Location == value ? isOn(set.After) : null;
 }
 
 internal static class StartupItems
@@ -177,8 +184,7 @@ internal sealed record StoreTaskSwitch(RegistryLocation State, bool EnabledByDef
     public override TweakStep StepFor(bool enabled, DateTimeOffset now) =>
         new RegistryValueStep(State, RegistryValue.DWord(enabled ? 2u : 1u));
 
-    public override bool? EnabledBy(StepRecord record) =>
-        record is RegistryValueRecord set && set.Location == State ? IsOn(set.After) : null;
+    public override bool? EnabledBy(StepRecord record) => EnabledByValue(record, State, IsOn);
 }
 
 /// <summary>A scheduled task's own Enabled setting, as Task Scheduler's Disable and Enable set it.</summary>
@@ -217,6 +223,5 @@ internal sealed record StartupApprovedSwitch(RegistryLocation Approved) : Startu
     public override TweakStep StepFor(bool enabled, DateTimeOffset now) =>
         new RegistryValueStep(Approved, enabled ? On : Off(now));
 
-    public override bool? EnabledBy(StepRecord record) =>
-        record is RegistryValueRecord set && set.Location == Approved ? IsOn(set.After) : null;
+    public override bool? EnabledBy(StepRecord record) => EnabledByValue(record, Approved, IsOn);
 }

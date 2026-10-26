@@ -18,6 +18,13 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\Elynt.App\Confirmation.cs" Link="App\Confirmation.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\ObservableObject.cs" Link="App\ViewModels\ObservableObject.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\TweakItemViewModel.cs" Link="App\ViewModels\TweakItemViewModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tweak as the service sends it, which a tweak row reads. Core has no WPF either. -->
+    <ProjectReference Include="..\..\src\Elynt.Core\Elynt.Core.csproj" />
   </ItemGroup>
 
 </Project>

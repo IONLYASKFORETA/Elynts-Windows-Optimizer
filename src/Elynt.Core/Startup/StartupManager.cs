@@ -8,6 +8,10 @@ namespace Elynt.Core.Startup;
 
 /// <summary>A startup item switched back since the app switched it, with how the app had set it.</summary>
 /// <param name="Item">The item as the drift list shows it.</param>
+/// <param name="ItemId">
+/// The startup item's own id, as the Startup page switches it. <c>Item.TweakId</c> is the journal's id for the switch
+/// instead: this id with <see cref="StartupManager.JournalPrefix"/> in front.
+/// </param>
 /// <param name="Enabled">What the app set: on (true) or off (false).</param>
 internal sealed record StartupDrift(DriftItem Item, string ItemId, bool Enabled);
 

@@ -78,6 +78,9 @@ public sealed record RegistryValue(RegistryValueKind Kind, byte[] Data)
 /// <summary>One named value under a key. An empty <see cref="ValueName"/> is the key's default value.</summary>
 public sealed record RegistryLocation(RegistryRoot Root, string KeyPath, string ValueName)
 {
+    /// <summary>Under HKLM, the PC's own, which every account shares; HKCU is the account's alone.</summary>
+    public bool IsMachineWide => Root == RegistryRoot.LocalMachine;
+
     public override string ToString()
     {
         var root = Root == RegistryRoot.CurrentUser ? "HKCU" : "HKLM";

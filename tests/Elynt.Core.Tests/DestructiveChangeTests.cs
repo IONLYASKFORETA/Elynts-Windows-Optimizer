@@ -86,7 +86,7 @@ public class DestructiveChangeTests
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Equal(
-            "Put back the 1 change that can be undone. 1 change can't be undone, so it was left as it is: Delete the old files.",
+            "Put back the 1 change that can be undone. 1 change was left as it is, because it can never be undone: Delete the old files.",
             result.Message);
         Assert.Equal([Plain.Name], result.Changes.Select(c => c.TweakName));
         Assert.Equal(plainBefore, RegistrySnapshot.Take(_registry, Plain));
@@ -107,7 +107,7 @@ public class DestructiveChangeTests
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Empty(result.Changes);
-        Assert.Equal("Nothing to undo. 1 change can't be undone, so it was left as it is: Delete the old files.", result.Message);
+        Assert.Equal("Nothing to undo. 1 change was left as it is, because it can never be undone: Delete the old files.", result.Message);
     }
 
     // ---- helpers ----

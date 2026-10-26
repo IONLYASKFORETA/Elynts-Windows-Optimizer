@@ -285,7 +285,7 @@ public class DriftTests
         var report = NewEngine().CheckDrift();
 
         Assert.Equal(2, report.Drifted.Count);
-        Assert.StartsWith("2 changes the app made were undone since, usually by an update:", report.Message);
+        Assert.StartsWith("2 changes were undone outside the app, usually by an update:", report.Message);
         Assert.EndsWith("Re-apply them all, or pick which.", report.Message);
     }
 

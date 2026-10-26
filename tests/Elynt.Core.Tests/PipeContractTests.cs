@@ -638,7 +638,7 @@ public sealed class PipeContractTests : IAsyncLifetime
         await Assert.ThrowsAsync<AccountRefusedException>(() => _client.ApplyAsync("some.tweak", cancellation: cancellation));
 
         Assert.Equal(
-            "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC.",
+            "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC. Nothing was changed.",
             refused.Message);
         Assert.Null(_engine.LastCall);
         Assert.Equal(0, _enginesBuilt);

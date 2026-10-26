@@ -46,7 +46,7 @@ public sealed record RegistryValueRecord(
     IReadOnlyList<string> CreatedKeys) : StepRecord
 {
     /// <summary>HKLM is the PC's; HKCU is the account's own.</summary>
-    public override bool AffectsEveryAccount() => Location.Root == RegistryRoot.LocalMachine;
+    public override bool AffectsEveryAccount() => Location.IsMachineWide;
 
     public override string? FindConflict(SystemAdapters system)
     {

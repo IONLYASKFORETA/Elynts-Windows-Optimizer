@@ -308,8 +308,8 @@ public sealed partial class Engine
             var names = string.Join(", ", drifted.Select(d => d.Name));
             // A Windows update, an app's own update or another tool: the words cover all of them.
             parts.Add(drifted.Count == 1
-                ? $"1 change the app made was undone since, usually by an update: {names}. Re-apply it?"
-                : $"{drifted.Count} changes the app made were undone since, usually by an update: {names}. Re-apply them all, or pick which.");
+                ? $"1 change was undone outside the app, usually by an update: {names}. Re-apply it?"
+                : $"{drifted.Count} changes were undone outside the app, usually by an update: {names}. Re-apply them all, or pick which.");
         }
         if (reapplied.Count > 0)
             parts.Add($"Put back automatically: {string.Join(", ", reapplied.Select(d => d.Name))}.");

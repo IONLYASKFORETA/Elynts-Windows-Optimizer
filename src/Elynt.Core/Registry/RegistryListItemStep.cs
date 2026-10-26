@@ -64,7 +64,7 @@ public sealed record RegistryListItemRecord(
     IReadOnlyList<string> CreatedKeys) : StepRecord
 {
     /// <summary>HKLM is the PC's; HKCU is the account's own.</summary>
-    public override bool AffectsEveryAccount() => Location.Root == RegistryRoot.LocalMachine;
+    public override bool AffectsEveryAccount() => Location.IsMachineWide;
 
     /// <summary>
     /// Only the app's own item counts: other items in the list (usually changed in Windows Settings) are kept on undo,

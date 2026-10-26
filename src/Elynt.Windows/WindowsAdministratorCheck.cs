@@ -37,7 +37,7 @@ public sealed class WindowsAdministratorCheck : IAdministratorCheck
     }
 
     /// <summary>Whether the account's token lists Administrators among its groups, enabled or deny-only.</summary>
-    public static bool IsMember(WindowsIdentity account) => Groups(account.AccessToken).Contains(Administrators);
+    private static bool IsMember(WindowsIdentity account) => Groups(account.AccessToken).Contains(Administrators);
 
     private static List<SecurityIdentifier> Groups(SafeAccessTokenHandle token)
     {

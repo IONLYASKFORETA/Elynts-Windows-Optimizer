@@ -122,8 +122,8 @@
                                         <!-- Why the row has no Undo button (a destructive change), as the tweak's locked switch says it;
                                              its words come from the view model. -->
                                         <Border Style="{StaticResource Pill}" Margin="0,6,0,0" HorizontalAlignment="Left"
-                                                Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="{Binding LockText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                                                Visibility="{Binding CantBeUndone, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="{Binding CantBeUndoneText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
                                         </Border>
                                         <!-- Why the last undo of this row didn't happen. -->
                                         <Border Margin="0,6,0,0">

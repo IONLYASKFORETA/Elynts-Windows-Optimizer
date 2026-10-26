@@ -28,16 +28,16 @@ public sealed class HistoryItemViewModel(ChangeView change) : ObservableObject
     };
 
     /// <summary>
-    /// Why this row has no Undo button, in the same words as the tweak's locked switch, or null when it has one. Only a
-    /// destructive change still in place has nothing to put back (ADR 0002).
+    /// A destructive change still in place: it has nothing to put back (ADR 0002), so the row has no Undo button and
+    /// shows <see cref="CantBeUndoneText"/> instead.
     /// </summary>
-    public string? LockText =>
-        Change is { Destructive: true, State: ChangeState.Applied or ChangeState.Interrupted } ? TweakItemViewModel.CantBeUndone : null;
+    public bool CantBeUndone => Change is { Destructive: true, State: ChangeState.Applied or ChangeState.Interrupted };
 
-    public bool IsLocked => LockText is not null;
+    /// <summary>The label a row that <see cref="CantBeUndone"/> shows: the same words as the tweak's own locked switch.</summary>
+    public string CantBeUndoneText => TweakItemViewModel.CantBeUndoneText;
 
-    /// <summary>The row shows an Undo button; a locked one shows <see cref="LockText"/> instead.</summary>
-    public bool HasUndoButton => !IsLocked;
+    /// <summary>The row shows an Undo button unless it <see cref="CantBeUndone"/>.</summary>
+    public bool HasUndoButton => !CantBeUndone;
 
     public bool CanUndo => Change.CanUndo && !IsBusy;
 

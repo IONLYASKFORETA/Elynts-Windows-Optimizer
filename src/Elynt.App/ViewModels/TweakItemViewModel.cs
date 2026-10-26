@@ -111,12 +111,12 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
         // On because something other than the app set it: the app has nothing of its own to undo.
         { AlreadySet: true } => "Already set on this PC",
         // On by the app's own destructive change, which has nothing to put back, so it stays on (ADR 0002).
-        { Reversibility: Reversibility.Destructive, State: TweakState.On } => CantBeUndone,
+        { Reversibility: Reversibility.Destructive, State: TweakState.On } => CantBeUndoneText,
         _ => null,
     };
 
     /// <summary>The words for a destructive change that is in place, on its switch and on its Undo history row alike.</summary>
-    public const string CantBeUndone = "Can't be undone";
+    public const string CantBeUndoneText = "Can't be undone";
 
     /// <summary>The switch can't be flipped either way; <see cref="LockText"/> says why.</summary>
     public bool IsLocked => LockText is not null;
