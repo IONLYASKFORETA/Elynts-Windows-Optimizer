@@ -163,22 +163,21 @@ internal static partial class Tour
 
     /// <summary>
     /// Lets the window grow past the screen. Windows caps a window at about the screen's size, and CI's screen tops
-    /// out at 1080p, so without this the 1440p shots were really 1080p ones. Keeps the window's own minimum size.
+    /// out at 1080p, so without this the 1440p shots were really 1080p ones. Raises the cap in WM_GETMINMAXINFO and
+    /// leaves the message to the Window's own handler (hooks added later run first), which keeps the cap it is given
+    /// and adds the window's minimum size. Takes effect from the next resize.
     /// </summary>
     private static void AllowLargerThanScreen(Window window)
     {
         const int WmGetMinMaxInfo = 0x0024;
-        var dpi = VisualTreeHelper.GetDpi(window);
-        HwndSource.FromHwnd(new WindowInteropHelper(window).Handle).AddHook((IntPtr _, int message, IntPtr _, IntPtr info, ref bool handled) =>
+        HwndSource.FromHwnd(new WindowInteropHelper(window).Handle).AddHook((IntPtr _, int message, IntPtr _, IntPtr info, ref bool _) =>
         {
-            if (message != WmGetMinMaxInfo)
-                return IntPtr.Zero;
-            var sizes = Marshal.PtrToStructure<MinMaxInfo>(info);
-            sizes.MinTrackSize = new(
-                (int)Math.Ceiling(window.MinWidth * dpi.DpiScaleX), (int)Math.Ceiling(window.MinHeight * dpi.DpiScaleY));
-            sizes.MaxTrackSize = new(8192, 8192);
-            Marshal.StructureToPtr(sizes, info, fDeleteOld: false);
-            handled = true;
+            if (message == WmGetMinMaxInfo)
+            {
+                var sizes = Marshal.PtrToStructure<MinMaxInfo>(info);
+                sizes.MaxTrackSize = new(8192, 8192);
+                Marshal.StructureToPtr(sizes, info, fDeleteOld: false);
+            }
             return IntPtr.Zero;
         });
     }

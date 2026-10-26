@@ -28,8 +28,9 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The runner's screen is 1024x768, too small for the larger window sizes the tour tries. 1440p if the runner's
-      # display offers it (the wide shots are a maximised 1440p window), else 1080p.
+      # The runner's screen is 1024x768, too small for the default 1600x1000 window and its screen capture. 1440p if the
+      # runner's display offers it, else 1080p. The 2560x1400 shots don't need it: the tour lets the window grow past
+      # the screen.
       - name: Enlarge the screen
         continue-on-error: true
         shell: pwsh
