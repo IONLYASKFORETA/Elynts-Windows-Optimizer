@@ -1104,6 +1104,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         [
             new(Change, "some.tweak", "Some tweak", new DateTimeOffset(2026, 10, 16, 9, 0, 0, TimeSpan.FromHours(2)),
                 ChangeState.Undone, new DateTimeOffset(2026, 10, 16, 9, 5, 0, TimeSpan.FromHours(2)), CanUndo: false),
+            new(Guid.Parse("7d4f8a2e-55b1-4c3e-9a0d-2f6e1b8c9d04"), "some.destructive", "Some destructive tweak",
+                new DateTimeOffset(2026, 10, 16, 9, 10, 0, TimeSpan.FromHours(2)), ChangeState.Applied, null, CanUndo: false)
+            {
+                Destructive = true,
+            },
         ];
 
         public TaskCompletionSource? HoldRepair { get; set; }
