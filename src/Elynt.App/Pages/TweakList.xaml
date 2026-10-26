@@ -104,7 +104,8 @@
                 </GroupStyle.ContainerStyle>
             </GroupStyle>
         </ListBox.GroupStyle>
-        <!-- A row: the name, then the labels as pills and the state, with the switch on the right. The state sits with
+        <!-- A row: the name, then the labels as pills (the last says why the switch is locked, when it is) and the state,
+             with the switch on the right. The state sits with
              the labels rather than beside the switch, so the switch stays in view at the narrowest window. -->
         <ListBox.ItemTemplate>
             <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
@@ -148,6 +149,10 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <!-- Why the switch is locked, e.g. already set on this PC; its words come from the view model. -->
+                            <Border Style="{StaticResource Pill}" Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
+                                <TextBlock Text="{Binding LockText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                            </Border>
                             <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="4,0,0,6" />
                         </WrapPanel>
                         <!-- Under the labels rather than on the right, where it would squeeze the name at the narrowest window. -->

@@ -16,6 +16,14 @@ public sealed class SamplePcTests : IDisposable
     private Engine NewEngine() => SamplePc.NewEngine(_scratch);
 
     [Fact]
+    public void A_tweak_Windows_set_by_itself_is_already_set_so_the_tour_draws_its_locked_switch()
+    {
+        var tweak = NewEngine().ListTweaks().Single(t => t.Id == SamplePc.SetByWindows);
+
+        Assert.Equal((TweakState.On, true), (tweak.State, tweak.AlreadySet));
+    }
+
+    [Fact]
     public void Startup_and_services_have_rows()
     {
         var engine = NewEngine();
