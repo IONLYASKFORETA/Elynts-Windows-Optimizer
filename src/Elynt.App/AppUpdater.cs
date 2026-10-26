@@ -1,5 +1,3 @@
-using System.IO;
-using System.Text.Json;
 using Elynt.Core.Updates;
 using Serilog;
 using Velopack;
@@ -14,9 +12,6 @@ namespace Elynt.App;
 /// </summary>
 public sealed class AppUpdater
 {
-    private static readonly string SettingsFile = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ElyntOptimizer", "settings.json");
-
     private UpdateManager? _manager;
     private UpdateInfo? _ready;
 
@@ -24,7 +19,7 @@ public sealed class AppUpdater
     public static string? InstalledChannel =>
         VelopackLocator.IsCurrentSet ? VelopackLocator.Current.Channel : null;
 
-    public ReleaseChannel Channel { get; private set; } = UpdateFeed.Choose(LoadSavedChannel(), InstalledChannel);
+    public ReleaseChannel Channel { get; private set; } = UpdateFeed.Choose(UserSettings.Load().UpdateChannel, InstalledChannel);
 
     public string? ReadyVersion => _ready?.TargetFullRelease.Version.ToString();
 
@@ -32,7 +27,7 @@ public sealed class AppUpdater
     {
         Channel = channel;
         _ready = null;
-        SaveChannel(channel);
+        UserSettings.Update(s => s with { UpdateChannel = channel });
     }
 
     /// <summary>Checks the chosen channel and downloads any newer build. Returns its version, or null.</summary>
@@ -62,34 +57,4 @@ public sealed class AppUpdater
             return;
         _manager.ApplyUpdatesAndRestart(_ready.TargetFullRelease);
     }
-
-    private static ReleaseChannel? LoadSavedChannel()
-    {
-        try
-        {
-            if (!File.Exists(SettingsFile))
-                return null;
-            return JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsFile))?.UpdateChannel;
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Couldn't read {File}", SettingsFile);
-            return null;
-        }
-    }
-
-    private static void SaveChannel(ReleaseChannel channel)
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!);
-            File.WriteAllText(SettingsFile, JsonSerializer.Serialize(new Settings(channel)));
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Couldn't save {File}", SettingsFile);
-        }
-    }
-
-    private sealed record Settings(ReleaseChannel? UpdateChannel);
 }

@@ -19,8 +19,7 @@ public static class BiosAdvisor
 
     private static string Describe(HardwareSnapshot hardware)
     {
-        var board = $"{hardware.BoardManufacturer} {hardware.BoardProduct}".Trim();
-        var parts = new[] { board, hardware.CpuName.Trim() }.Where(p => p.Length > 0).ToList();
+        var parts = new[] { hardware.BoardName, hardware.CpuName.Trim() }.Where(p => p.Length > 0).ToList();
         return parts.Count == 0 ? "Couldn't read this PC's board and CPU." : string.Join(", ", parts);
     }
 

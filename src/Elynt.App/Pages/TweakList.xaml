@@ -1,0 +1,165 @@
+<!-- Tweak list: one card per tweak with its labels and its switch; flipping the switch applies straight away. -->
+<UserControl x:Class="Elynt.App.Pages.TweakList"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <CollectionViewSource x:Key="TweaksByGroup" Source="{Binding Tweaks}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+
+        <!-- The possible-placebo fold: a header with a chevron, and the folded rows underneath it once opened. -->
+        <Style x:Key="PlaceboFold" TargetType="Expander">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <StackPanel>
+                            <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Content="{TemplateBinding Header}" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                          AutomationProperties.Name="Possible placebo">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Bg" Padding="16,12" CornerRadius="8" BorderThickness="1"
+                                                Background="Transparent" BorderBrush="{StaticResource Theme.Stroke}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter />
+                                                <TextBlock x:Name="Chevron" Grid.Column="1" Style="{StaticResource Text.Icon}" FontSize="12"
+                                                           Margin="12,0,0,0" Foreground="{StaticResource Theme.TextDim}" Text="&#xE70D;" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Theme.TextDim}" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Chevron" Property="Text" Value="&#xE70E;" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="Body" Margin="0,8,0,0" Visibility="Collapsed" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="Body" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
+    <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource TweaksByGroup}}"
+             SelectedItem="{Binding SelectedTweak}" ScrollViewer.CanContentScroll="False">
+        <!-- The main tweaks are listed plainly; the possible-placebo group is folded away underneath. -->
+        <ListBox.GroupStyle>
+            <GroupStyle>
+                <GroupStyle.ContainerStyle>
+                    <Style TargetType="GroupItem">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="GroupItem">
+                                    <ItemsPresenter />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Name}" Value="Possible placebo">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <Expander Style="{StaticResource PlaceboFold}" IsExpanded="False" Margin="0,12,0,6">
+                                                <Expander.Header>
+                                                    <StackPanel>
+                                                        <TextBlock Style="{StaticResource Text.H2}" FontSize="14">
+                                                            <Run Text="Possible placebo" />
+                                                            <Run Text="{Binding ItemCount, Mode=OneWay, StringFormat=({0})}" />
+                                                        </TextBlock>
+                                                        <TextBlock Style="{StaticResource Text.Dim}" Margin="0,2,0,0"
+                                                                   Text="Popular tweaks with no reliable evidence they help games. Each one says why." />
+                                                    </StackPanel>
+                                                </Expander.Header>
+                                                <ItemsPresenter />
+                                            </Expander>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </GroupStyle.ContainerStyle>
+            </GroupStyle>
+        </ListBox.GroupStyle>
+        <!-- A row: the name, then the labels as pills and the state, with the switch on the right. The state sits with
+             the labels rather than beside the switch, so the switch stays in view at the narrowest window. -->
+        <ListBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <!-- A tweak that doesn't fit this PC is greyed out. -->
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsNotApplicable}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <WrapPanel Margin="0,8,0,-6">
+                            <Border Style="{StaticResource Pill}">
+                                <TextBlock Text="{Binding TierText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                            </Border>
+                            <Border Style="{StaticResource Pill}">
+                                <TextBlock Text="{Binding ReversibilityText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.TextDim}" />
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding RiskBadges}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource Pill.Warning}">
+                                            <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Orange}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="4,0,0,6" />
+                        </WrapPanel>
+                        <!-- Under the labels rather than on the right, where it would squeeze the name at the narrowest window. -->
+                        <Button Content="Choose a game…" Click="ApplyForGame" Padding="12,4" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                IsEnabled="{Binding IsEnabled}" Visibility="{Binding IsPerGame, Converter={StaticResource Visible}}" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" Style="{StaticResource Switch}" Margin="12,0,0,0"
+                              IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
+                              AutomationProperties.Name="{Binding Name}"
+                              Visibility="{Binding HasSwitch, Converter={StaticResource Visible}}" />
+                </Grid>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
+</UserControl>

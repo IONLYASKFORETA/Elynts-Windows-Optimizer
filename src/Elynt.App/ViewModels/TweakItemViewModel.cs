@@ -47,9 +47,6 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
         _ => "Destructive",
     };
 
-    /// <summary>The list row's label line, e.g. "Proven · Reversible · Needs reboot".</summary>
-    public string LabelLine => string.Join(" · ", new[] { TierText, ReversibilityText }.Concat(RiskBadges));
-
     /// <summary>Every risk flag, plus one badge per anti-cheat that objects.</summary>
     public IReadOnlyList<string> RiskBadges
     {
@@ -63,8 +60,6 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
             return badges;
         }
     }
-
-    public string RiskText => RiskBadges.Count == 0 ? "None" : string.Join(", ", RiskBadges);
 
     /// <summary>One line per objecting anti-cheat for the detail pane. Warns; never blocks.</summary>
     public IReadOnlyList<string> AntiCheatWarnings => View.AntiCheat

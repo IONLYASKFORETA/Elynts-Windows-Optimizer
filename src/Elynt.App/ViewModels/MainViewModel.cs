@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Elynt.App.Theme;
 using Elynt.Core;
 using Elynt.Core.Apps;
 using Elynt.Core.Drivers;
@@ -27,8 +28,10 @@ public sealed class MainViewModel(
 {
     private StartupPageViewModel? _startup;
 
+    public const string Home = "Home";
     public const string PerGameProfiles = "Per-game profiles";
     public const string UndoHistory = "Undo history";
+    public const string Settings = "Settings";
 
     private EnginePipeClient? _client;
     // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
@@ -36,7 +39,7 @@ public sealed class MainViewModel(
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
     private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
     private RepairToolItemViewModel? _selectedRepairTool;
-    private string _selectedPage = Sections.Gaming;
+    private string _selectedPage = Home;
     private TweakItemViewModel? _selectedTweak;
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
@@ -55,8 +58,15 @@ public sealed class MainViewModel(
     private SensorsPageViewModel? _sensors;
     private CpuTuningPageViewModel? _cpu;
 
-    /// <summary>The sidebar: the ten sections, then per-game profiles and the undo history.</summary>
-    public IReadOnlyList<string> Pages { get; } = [.. Sections.All, PerGameProfiles, UndoHistory];
+    /// <summary>The sidebar: Home (the page the app opens on), the ten sections, then per-game profiles, the undo history and Settings.</summary>
+    public IReadOnlyList<string> Pages { get; } = [Home, .. Sections.All, PerGameProfiles, UndoHistory, Settings];
+
+    private HomeViewModel? _home;
+
+    /// <summary>The Home page: the PC overview, temperatures, what is waiting and a card per section.</summary>
+    public HomeViewModel HomePage => _home ??= new HomeViewModel(this);
+
+    public bool IsHomePage => SelectedPage == Home;
 
     public ObservableCollection<TweakItemViewModel> Tweaks { get; } = [];
 
@@ -145,16 +155,21 @@ public sealed class MainViewModel(
             if (Set(ref _selectedPage, value))
             {
                 OnPropertyChanged(nameof(IsHistoryPage));
+                OnPropertyChanged(nameof(IsHomePage));
                 OnPropertyChanged(nameof(IsAppsPage));
                 OnPropertyChanged(nameof(IsStartupPage));
                 OnPropertyChanged(nameof(IsSectionPage));
                 OnPropertyChanged(nameof(IsTweakPage));
+                OnPropertyChanged(nameof(IsSettingsPage));
                 ShowPage();
             }
         }
     }
 
     public bool IsHistoryPage => SelectedPage == UndoHistory;
+
+    /// <summary>The Settings page: the update channel and Animated accents.</summary>
+    public bool IsSettingsPage => SelectedPage == Settings;
 
     /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
     public bool IsSectionPage => !IsHistoryPage;
@@ -163,10 +178,36 @@ public sealed class MainViewModel(
     public ServicesPageViewModel? ServicesPage { get; set; }
 
     /// <summary>A section page that lists tweaks.</summary>
-    public bool IsTweakPage => !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage;
+    public bool IsTweakPage => !IsHomePage && !IsHistoryPage && !IsAppsPage && !IsRepairPage && !IsPanelPage && !IsStartupPage && !IsSettingsPage;
 
     /// <summary>A page that shows its own panel (Drivers, Overclocking, Per-game profiles) instead of a tweak list.</summary>
     private bool IsPanelPage => SelectedPage is Sections.Drivers or Sections.Overclocking or PerGameProfiles;
+
+    /// <summary>
+    /// The line under the page's title: on a tweak section, how many of its tweaks that fit this PC are on; on any
+    /// other page, what the page is for. Empty when there is nothing to say yet (a tweak section before it loads).
+    /// </summary>
+    public string PageSummary => IsTweakPage ? TweakSummary() : SelectedPage switch
+    {
+        Home => "Your PC at a glance.",
+        Sections.Apps => "Install and update apps from a reviewed list, or search all of winget.",
+        Sections.StartupAndServices => "Choose what starts when you sign in, and how services start.",
+        Sections.Repair => "Windows' own repair tools, each saying up front whether it needs a restart.",
+        Sections.Drivers => "Your GPU and chipset drivers, the latest from each vendor, and a silent install.",
+        Sections.Overclocking => "GPU and CPU tuning, temperatures, and your BIOS settings with guides for this PC.",
+        PerGameProfiles => "Instant changes made while a game runs, and the games found on this PC.",
+        UndoHistory => "Every change the app made, newest first, with undo for each one.",
+        // Settings opens with its own line.
+        _ => "",
+    };
+
+    private string TweakSummary()
+    {
+        if (Tweaks.Count == 0)
+            return "";
+        var count = TweakCount.Of(Tweaks.Select(t => t.View));
+        return count.Total == 0 ? "None of these tweaks fit this PC." : count.Text;
+    }
 
     public bool IsHistoryEmpty => History.Count == 0;
 
@@ -339,6 +380,23 @@ public sealed class MainViewModel(
         }
     }
 
+    /// <summary>
+    /// The "Animated accents" switch on the Settings page: whether the accent wave may move. Applied straight away and
+    /// saved, so it is remembered between launches.
+    /// </summary>
+    public bool AnimatedAccents
+    {
+        get => AccentWave.IsEnabled;
+        set
+        {
+            if (value == AccentWave.IsEnabled)
+                return;
+            AccentWave.IsEnabled = value;
+            UserSettings.Update(s => s with { AnimatedAccents = value });
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>The version downloaded and waiting for a restart, or null.</summary>
     public string? UpdateReady
     {
@@ -395,6 +453,7 @@ public sealed class MainViewModel(
             Gpu = await LoadGpuAsync(_client);
             Sensors = await LoadSensorsAsync(_client);
             Cpu = await LoadCpuAsync(_client);
+            await HomePage.RefreshAsync();
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
@@ -510,6 +569,7 @@ public sealed class MainViewModel(
         Gpu = null;
         Sensors = null;
         Cpu = null;
+        _home?.Clear();
         var client = _client;
         _client = null;
         if (client is not null)
@@ -667,6 +727,7 @@ public sealed class MainViewModel(
             _ = Cleanup.OnShownAsync();
 
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(PageSummary));
         OnPropertyChanged(nameof(IsCleanupPage));
         OnPropertyChanged(nameof(IsRepairPage));
         OnPropertyChanged(nameof(IsTweakPage));
@@ -911,6 +972,8 @@ public sealed class MainViewModel(
         {
             item.IsBusy = false;
             item.RefreshSwitch();
+            // The title's "N of M on" follows the switch.
+            OnPropertyChanged(nameof(PageSummary));
         }
     }
 }

@@ -23,6 +23,18 @@ public sealed class DriversPageViewModel(DriverReport report, Func<EnginePipeCli
 
     public bool HasProblem => Problem is not null;
 
+    /// <summary>Whether any driver has been checked since the service connected.</summary>
+    public bool Checked => Gpus.Any(g => g.UpdateFound is not null);
+
+    /// <summary>How many drivers had a newer one at their last check, for the Home page.</summary>
+    public int UpdatesFound => Gpus.Count(g => g.UpdateFound == true);
+
+    /// <summary>
+    /// Looks up the latest driver for every GPU and the chipset, as each one's own check button does. One that is
+    /// already checking or installing is left alone, as its buttons are.
+    /// </summary>
+    public Task CheckAllAsync() => Task.WhenAll(Gpus.Where(g => g.IsIdle).Select(g => g.CheckAsync()));
+
     /// <summary>Problem-driver warnings, old-driver cleaning and its backups. Loads itself.</summary>
     public DriverCleaningViewModel Cleaning { get; } = Loaded(new DriverCleaningViewModel(client, askToReboot));
 
@@ -99,12 +111,20 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
         get => _vendorPage;
         private set
         {
-            if (Set(ref _vendorPage, value))
-                OnPropertyChanged(nameof(HasVendorPage));
+            if (!Set(ref _vendorPage, value))
+                return;
+            OnPropertyChanged(nameof(HasVendorPage));
+            OnPropertyChanged(nameof(VendorLink));
         }
     }
 
     public bool HasVendorPage => VendorPage is not null;
+
+    /// <summary>The vendor page as a link target; a Uri so the link binds without converting a missing page.</summary>
+    public Uri? VendorLink => Uri.TryCreate(VendorPage, UriKind.Absolute, out var link) ? link : null;
+
+    /// <summary>Whether the last check found a newer driver, or null before a check that found the latest driver.</summary>
+    public bool? UpdateFound { get; private set; }
 
     /// <summary>Back up and remove this vendor's old driver packages before installing (pnputil; restorable).</summary>
     public bool RemoveOldDrivers
@@ -122,6 +142,7 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
     public Task CheckAsync() => RunAsync("Looking up the latest driver…", async c =>
     {
         var check = await c.CheckDriverAsync(Request);
+        UpdateFound = check.Found ? check.UpdateAvailable : null;
         Message = check.Message;
         VendorPage = check.Found ? null : check.VendorPage;
     });

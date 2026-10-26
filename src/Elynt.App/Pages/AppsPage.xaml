@@ -1,0 +1,197 @@
+<!-- Apps: the reviewed catalogue, a search of all of winget, and installed apps with updates and uninstalls. -->
+<UserControl x:Class="Elynt.App.Pages.AppsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <CollectionViewSource x:Key="AppsByGroup" Source="{Binding Apps}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+
+        <!-- The action bar along the bottom of a tab, under a faint divider. -->
+        <Style x:Key="ActionBar" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Padding" Value="0,10,0,12" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+        <!-- A queue's progress and outcome, under the action bar's buttons; it takes no room while there is none. -->
+        <Style x:Key="QueueStatus" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Style.Triggers>
+                <Trigger Property="Text" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!-- An app's own status in its row ("Queued", "Installing… 40%", "Installed"). -->
+        <Style x:Key="RowStatus" TargetType="TextBlock" BasedOn="{StaticResource Text.Dim}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="Margin" Value="16,0,0,0" />
+        </Style>
+        <Style x:Key="RowName" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Transparent so the app rows read as cards on the page, as on every other page. -->
+    <TabControl Background="Transparent">
+        <TabItem Header="Catalogue">
+            <DockPanel>
+                <Border DockPanel.Dock="Bottom" Style="{StaticResource ActionBar}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding InstallAllRuntimes}" HorizontalAlignment="Left"
+                                  AutomationProperties.Name="Install all runtimes (Visual C++, DirectX legacy and .NET)">
+                            <TextBlock Text="Install all runtimes (Visual C++, DirectX legacy and .NET)" TextWrapping="Wrap" />
+                        </CheckBox>
+                        <!-- The app list buttons on the left, the install itself on the right; they fit on one line at the smallest window. -->
+                        <DockPanel Margin="0,8,0,0" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Content="Install ticked apps"
+                                    Padding="16,7" VerticalAlignment="Center"
+                                    Click="InstallApps" IsEnabled="{Binding CanInstall}" />
+                            <Button Content="Save ticked as app list…" Margin="0,0,8,0"
+                                    Click="SaveAppList"
+                                    ToolTip="Save the ticked apps (here and on the Search tab) to a file you can load on another PC." />
+                            <Button Content="Load app list…" Margin="0,0,8,0"
+                                    Click="LoadAppList" IsEnabled="{Binding CanInstall}"
+                                    ToolTip="Tick every app in a list saved on this or another PC, ready to install." />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding InstallStatus}" />
+                    </StackPanel>
+                </Border>
+                <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
+                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         ScrollViewer.CanContentScroll="False">
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource Text.Label}" Text="{Binding Name, Converter={StaticResource Caps}}" />
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:AppItemViewModel}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                          AutomationProperties.Name="{Binding Name}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource RowName}" Text="{Binding Name}" />
+                                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Description}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Style="{StaticResource RowStatus}" MaxWidth="220" Text="{Binding Status}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Search winget" DataContext="{Binding AppsManager}">
+            <DockPanel Margin="0,16,0,0">
+                <DockPanel DockPanel.Dock="Top">
+                    <Button DockPanel.Dock="Right" Content="Search" Margin="8,0,0,0" Click="SearchApps" />
+                    <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
+                             AutomationProperties.Name="Search winget" KeyDown="SearchBoxKeyDown" />
+                </DockPanel>
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Dim}" Margin="0,8,0,12"
+                           Text="Searches all of winget's community source. Apps marked Not reviewed aren't in the curated catalogue: install them only if you trust the publisher." />
+                <Border DockPanel.Dock="Bottom" Style="{StaticResource ActionBar}">
+                    <StackPanel>
+                        <Button Style="{StaticResource Button.Primary}" Content="Install ticked results" Padding="16,7"
+                                HorizontalAlignment="Right"
+                                Click="InstallSearchResults"
+                                IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding SearchStatus}" />
+                    </StackPanel>
+                </Border>
+                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding SearchResults}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:SearchResultViewModel}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                          AutomationProperties.Name="{Binding Name}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <!-- The name, and the Not reviewed pill beside it (under it when the name fills the line). -->
+                                    <WrapPanel>
+                                        <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
+                                        <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
+                                                Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                                        </Border>
+                                    </WrapPanel>
+                                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Style="{StaticResource RowStatus}" MaxWidth="220" Text="{Binding Status}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Installed" DataContext="{Binding AppsManager}">
+            <DockPanel Margin="0,16,0,0">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Content="Update all" Padding="16,7"
+                            VerticalAlignment="Center" Click="UpdateAllApps"
+                            IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <Button DockPanel.Dock="Right" Content="Refresh" Margin="0,0,8,0" Click="RefreshInstalledApps" />
+                    <TextBlock Style="{StaticResource Text.Body}" VerticalAlignment="Center" Margin="0,0,16,0" Text="{Binding InstalledStatus}" />
+                </DockPanel>
+                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding InstalledApps}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:InstalledAppViewModel}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <WrapPanel>
+                                        <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
+                                        <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
+                                                Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                                        </Border>
+                                    </WrapPanel>
+                                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Style="{StaticResource RowStatus}" MaxWidth="180" Text="{Binding Status}" />
+                                <Button Grid.Column="2" Content="Update" Margin="12,0,0,0" Click="UpdateApp"
+                                        Visibility="{Binding CanUpdate, Converter={StaticResource Visible}}"
+                                        IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                <!-- Plain, so a long list isn't a column of red; the confirmation draws the uninstall itself in red. -->
+                                <Button Grid.Column="3" Content="Uninstall" Margin="8,0,0,0" VerticalAlignment="Center" Click="UninstallApp"
+                                        IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </TabItem>
+    </TabControl>
+</UserControl>

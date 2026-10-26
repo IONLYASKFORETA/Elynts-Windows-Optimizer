@@ -16,6 +16,7 @@ using Elynt.Core.Sensors;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Drift;
+using Elynt.Core.Overview;
 
 namespace Elynt.Core.Ipc;
 
@@ -86,6 +87,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(ResetCpuTuningRequest), "resetCpuTuning")]
 [JsonDerivedType(typeof(RunCpuStressTestRequest), "runCpuStressTest")]
 [JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
+[JsonDerivedType(typeof(GetPcOverviewRequest), "getPcOverview")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -268,7 +270,8 @@ public sealed record EngineResponse(
     ProfileResult? ProfileResult = null,
     IReadOnlyList<ProfileNote>? ProfileNotes = null,
     CpuTuningReport? CpuTuning = null,
-    CpuTuningResult? CpuResult = null)
+    CpuTuningResult? CpuResult = null,
+    PcOverview? Overview = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -370,6 +373,7 @@ public static class EngineProtocol
         ResetCpuTuningRequest => new(CpuResult: engine.ResetCpuTuning()),
         RunCpuStressTestRequest => new(CpuResult: engine.RunCpuStressTest(cancellation)),
         SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
+        GetPcOverviewRequest => new(Overview: engine.GetPcOverview()),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 

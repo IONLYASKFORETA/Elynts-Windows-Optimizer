@@ -1,0 +1,80 @@
+<!-- Repair: one card per tool, each saying up front whether it needs a restart. -->
+<UserControl x:Class="Elynt.App.Pages.RepairPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Elynt.App.ViewModels"
+             xmlns:local="clr-namespace:Elynt.App.Pages">
+    <UserControl.Resources>
+        <!-- The restart need as a label: orange when the tool needs or may need a restart, like a tweak's "Needs reboot". -->
+        <Style x:Key="RestartPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding View.Restart}" Value="None">
+                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="RestartPillText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding View.Restart}" Value="None">
+                    <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,16">
+            <Button Content="Copy app log" Click="CopyAppLog" Padding="12,4" DockPanel.Dock="Left"
+                    ToolTip="Copies the app's and the service's latest logs, for sending to Aden with a bug report." />
+            <TextBlock x:Name="AppLogStatus" Style="{StaticResource Text.Dim}" Margin="12,0,0,0" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- Pixel scrolling, so a tall card at the smallest window scrolls smoothly rather than a whole card at a time. -->
+        <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding RepairTools}" SelectedItem="{Binding SelectedRepairTool}"
+                 ScrollViewer.CanContentScroll="False">
+            <!-- A row: the name, then the restart need and the opt-in mark as labels, then why it can't run here, if so. -->
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:RepairToolItemViewModel}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <!-- A tool that can't run on this PC is greyed out, as a tweak that doesn't fit is. -->
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding View.Available}" Value="False">
+                                            <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <WrapPanel Margin="0,8,0,-6">
+                            <Border Style="{StaticResource RestartPill}">
+                                <TextBlock Style="{StaticResource RestartPillText}" Text="{Binding RestartBadge}" />
+                            </Border>
+                            <Border Style="{StaticResource Pill.Warning}" Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}">
+                                <TextBlock Text="Opt-in" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                            </Border>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding View.NotAvailableReason}" Margin="0,8,0,0">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Dim}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding View.NotAvailableReason}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
