@@ -33,6 +33,9 @@ public sealed record ScheduledTaskStep(string TaskPath, bool Enabled) : TweakSte
 /// <summary>Whether a scheduled task was enabled before the app switched it.</summary>
 public sealed record ScheduledTaskRecord(string TaskPath, bool WasEnabled, bool SetEnabled) : StepRecord
 {
+    /// <summary>Task Scheduler keeps its tasks for the whole PC, even one that runs at one account's sign-in.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var now = ScheduledTaskStep.State(system, TaskPath);

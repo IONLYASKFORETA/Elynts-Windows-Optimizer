@@ -141,7 +141,10 @@ public partial interface IEngine
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
 
-    /// <summary>Every change the app made for this user, newest first.</summary>
+    /// <summary>
+    /// This account's Undo history, newest first: its own changes and every whole-PC change, whichever administrator
+    /// account made it (ADR 0007).
+    /// </summary>
     IReadOnlyList<ChangeView> ListHistory();
 
     /// <summary>
@@ -635,7 +638,7 @@ public sealed partial class Engine(
             }
 
             RevertSteps(entry.Steps);
-            journal.CloseReverted(entry, _clock.GetUtcNow());
+            journal.CloseReverted(entry, user, _clock.GetUtcNow());
             _log.LogInformation("Reverted {Tweak} for {User}", tweak.Id, user);
             return Done(tweak, wording.Undone);
         }
@@ -673,8 +676,11 @@ public sealed partial class Engine(
             .ToList();
     }
 
-    /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
-    private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
+    /// <summary>
+    /// Only the newest open change to a tweak in this account's Undo history can be undone: older ones are what it was
+    /// applied over. Whole-PC changes from other accounts count, whichever account made them.
+    /// </summary>
+    private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, user) == entry;
 
     /// <summary>
     /// Made by a destructive tweak, so there is nothing to put back and it is never offered for undo (ADR 0002). Only

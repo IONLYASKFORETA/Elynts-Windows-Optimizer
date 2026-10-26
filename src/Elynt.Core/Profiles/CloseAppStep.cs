@@ -52,6 +52,9 @@ public sealed record CloseAppStep(string ExePath, string User) : TweakStep
 /// <summary>An app the profile closed, reopened for <paramref name="User"/> on undo unless it is already running again.</summary>
 public sealed record ClosedAppRecord(string ExePath, string User) : StepRecord
 {
+    /// <summary>The app was running in one account's session, and undo starts it again there.</summary>
+    public override bool AffectsEveryAccount() => false;
+
     public override string? FindConflict(SystemAdapters system) => null;
 
     public override void Revert(SystemAdapters system)

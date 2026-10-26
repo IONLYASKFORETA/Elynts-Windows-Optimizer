@@ -113,6 +113,12 @@ public sealed record RegistryEachKeyStep(
 /// <summary>The exact prior state of each value a <see cref="RegistryEachKeyStep"/> changed.</summary>
 public sealed record RegistryEachKeyRecord(IReadOnlyList<RegistryValueRecord> Values) : StepRecord
 {
+    /// <summary>
+    /// Whole-PC when every value it changed is under HKLM. One that matched no keys changed nothing in any account's
+    /// own settings, so it counts as whole-PC too.
+    /// </summary>
+    public override bool AffectsEveryAccount() => Values.All(value => value.AffectsEveryAccount());
+
     public override string? FindConflict(SystemAdapters system) =>
         Values.Select(value => value.FindConflict(system)).FirstOrDefault(conflict => conflict is not null);
 
