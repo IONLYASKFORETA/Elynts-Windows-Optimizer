@@ -24,6 +24,8 @@ public sealed class PipeContractTests : IAsyncLifetime
 {
     private readonly string _pipeName = $"elynt-test-{Guid.NewGuid():N}";
     private readonly StubEngine _engine = new();
+    private readonly FakeAdministratorCheck _administrators = new();
+    private int _enginesBuilt;
     private readonly CancellationTokenSource _stop = new();
     private Task _server = Task.CompletedTask;
     private EnginePipeClient _client = null!;
@@ -32,7 +34,12 @@ public sealed class PipeContractTests : IAsyncLifetime
     {
         var server = new EnginePipeServer(
             () => new NamedPipeServerStream(_pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous),
-            _ => _engine);
+            _ =>
+            {
+                Interlocked.Increment(ref _enginesBuilt);
+                return _engine;
+            },
+            _administrators);
         _server = server.RunAsync(_stop.Token);
         _client = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
     }
@@ -621,6 +628,34 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_standard_account_is_refused_with_a_plain_message_and_no_command_runs()
+    {
+        _administrators.ConnectingAccountIsAdministrator = false;
+        var cancellation = TestContext.Current.CancellationToken;
+
+        var refused = await Assert.ThrowsAsync<AccountRefusedException>(() => _client.ListTweaksAsync(cancellation));
+        // Asking again on the same connection gets no further.
+        await Assert.ThrowsAsync<AccountRefusedException>(() => _client.ApplyAsync("some.tweak", cancellation: cancellation));
+
+        Assert.Equal(
+            "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC. Nothing was changed.",
+            refused.Message);
+        Assert.Null(_engine.LastCall);
+        Assert.Equal(0, _enginesBuilt);
+    }
+
+    [Fact]
+    public async Task An_administrator_account_is_served_as_before()
+    {
+        _administrators.ConnectingAccountIsAdministrator = true;
+
+        var result = await _client.ApplyAsync("some.tweak", cancellation: TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("Apply some.tweak", _engine.LastCall);
+    }
+
+    [Fact]
     public async Task A_failing_command_reports_an_error_and_keeps_the_connection()
     {
         _engine.Throw = true;
@@ -672,6 +707,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             AntiCheatWarning = "Turning this on may stop Counter-Strike 2 (FACEIT) from launching.",
             PendingReboot = true,
             NotApplicableReason = "Needs an AMD CPU.",
+            AlreadySet = true,
             ProfileEligible = true,
         };
 
@@ -1103,6 +1139,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         [
             new(Change, "some.tweak", "Some tweak", new DateTimeOffset(2026, 10, 16, 9, 0, 0, TimeSpan.FromHours(2)),
                 ChangeState.Undone, new DateTimeOffset(2026, 10, 16, 9, 5, 0, TimeSpan.FromHours(2)), CanUndo: false),
+            new(Guid.Parse("7d4f8a2e-55b1-4c3e-9a0d-2f6e1b8c9d04"), "some.destructive", "Some destructive tweak",
+                new DateTimeOffset(2026, 10, 16, 9, 10, 0, TimeSpan.FromHours(2)), ChangeState.Applied, null, CanUndo: false)
+            {
+                Destructive = true,
+            },
         ];
 
         public TaskCompletionSource? HoldRepair { get; set; }

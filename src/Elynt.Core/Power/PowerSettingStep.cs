@@ -66,6 +66,9 @@ public sealed record PowerSettingStep(Guid Subgroup, Guid Setting, string Settin
 public sealed record PowerSettingRecord(
     Guid Plan, Guid Subgroup, Guid Setting, string SettingName, uint BeforeAc, uint BeforeDc, uint After) : StepRecord
 {
+    /// <summary>Power plans and their settings are the PC's, whoever is signed in.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var power = PowerPlanStep.Power(system);

@@ -102,6 +102,25 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public string? BlockedReason => View.BlockedReason;
 
+    /// <summary>
+    /// Why the switch is locked, as the label on the row and in the detail pane reads, or null when it isn't. Every
+    /// lock's words live here and nowhere in the XAML, so another lock adds its own case to this one switch.
+    /// </summary>
+    public string? LockText => View switch
+    {
+        // On because something other than the app set it: the app has nothing of its own to undo.
+        { AlreadySet: true } => "Already set on this PC",
+        // On by the app's own destructive change, which has nothing to put back, so it stays on (ADR 0002).
+        { Reversibility: Reversibility.Destructive, State: TweakState.On } => CantBeUndoneText,
+        _ => null,
+    };
+
+    /// <summary>The words for a destructive change that is in place, on its switch and on its Undo history row alike.</summary>
+    public const string CantBeUndoneText = "Can't be undone";
+
+    /// <summary>The switch can't be flipped either way; <see cref="LockText"/> says why.</summary>
+    public bool IsLocked => LockText is not null;
+
     private static string AntiCheatName(AntiCheat antiCheat) => antiCheat switch
     {
         AntiCheat.Vanguard => "Riot Vanguard",
@@ -143,11 +162,12 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
     }
 
     /// <summary>
-    /// A not-applicable tweak can only be switched off, and only when it has something to undo. A blocked tweak (e.g.
-    /// Defender off while Tamper Protection is on) can't be turned on until the user clears the block by hand, but can
-    /// still be turned back off when it is on.
+    /// A locked switch (see <see cref="LockText"/>) can't be flipped at all, whether or not the tweak fits this PC or is
+    /// blocked. A not-applicable tweak can only be switched off, and only when it has something to undo. A blocked tweak
+    /// (e.g. Defender off while Tamper Protection is on) can't be turned on until the user clears the block by hand, but
+    /// can still be turned back off when it is on.
     /// </summary>
-    public bool IsEnabled => !IsBusy && (View.Applicable || View.CanUndo) &&
+    public bool IsEnabled => !IsBusy && !IsLocked && (View.Applicable || View.CanUndo) &&
         (!IsBlocked || View.CanUndo || View.State == TweakState.On);
 
     /// <summary>The service's answer to the last flip, shown in the detail pane.</summary>

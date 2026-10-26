@@ -28,6 +28,9 @@ public sealed record AppRemovalStep(RemovableApp App) : TweakStep
 /// <summary>Whether the app was installed before the app removed it.</summary>
 public sealed record AppRemovalRecord(RemovableApp App, bool WasInstalled) : StepRecord
 {
+    /// <summary>The app was uninstalled for one account; undo installs it again for that account.</summary>
+    public override bool AffectsEveryAccount() => false;
+
     // Reinstalling an app the user put back themselves would be pointless, never harmful, so nothing conflicts.
     public override string? FindConflict(SystemAdapters system) => null;
 
@@ -72,6 +75,9 @@ public sealed record AppDeprovisionStep(RemovableApp App) : TweakStep
 /// <summary>Whether Windows provisioned the app for new accounts before the app stopped it.</summary>
 public sealed record AppDeprovisionRecord(RemovableApp App, bool WasProvisioned) : StepRecord
 {
+    /// <summary>The copy Windows gives new accounts is the PC's, not any one account's.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system) => null;
 
     public override void Revert(SystemAdapters system)

@@ -11,9 +11,10 @@ namespace Elynt.Core;
 public partial interface IEngine
 {
     /// <summary>
-    /// Detects every change the app made and lists those something else (usually a Windows update) undid, including
-    /// removed apps that came back. Full when the Windows build changed since the last check, quick otherwise. With
-    /// automatic re-apply on, instant changes are put back during the check.
+    /// Detects every change the app made and lists those something else (usually a Windows update, or an app's own
+    /// update) undid, including removed apps that came back and startup items switched back on. Full when the Windows
+    /// build changed since the last check, quick otherwise. With automatic re-apply on, instant changes (startup
+    /// switches among them) are put back during the check.
     /// </summary>
     DriftReport CheckDrift();
 
@@ -31,9 +32,9 @@ public partial interface IEngine
 }
 
 /// <summary>
-/// The drift monitor: finds changes the app made that something else (usually a Windows update) has since undone,
-/// including removed apps that came back, and puts them back when the user asks (or automatically, if they chose
-/// that, for instant changes only).
+/// The drift monitor: finds changes the app made that something else (usually a Windows update, or an app's own
+/// update) has since undone, including removed apps that came back and startup items switched back on, and puts them
+/// back when the user asks (or automatically, if they chose that, for instant changes only).
 /// </summary>
 public sealed partial class Engine
 {
@@ -105,6 +106,15 @@ public sealed partial class Engine
             drifted.Add(item);
         }
 
+        // Startup switches are instant changes, so automatic re-apply covers every one.
+        foreach (var switchedBack in Startup.Drifted())
+        {
+            if (state.AutoReapply && Startup.Reapply(switchedBack).Succeeded)
+                reapplied.Add(switchedBack.Item);
+            else
+                drifted.Add(switchedBack.Item);
+        }
+
         _log.LogInformation("{Kind} drift check for {User} on {Build}: {Drifted} drifted, {Reapplied} re-applied, {Unsupported} unsupported",
             kind, user, build, drifted.Count, reapplied.Count, unsupported.Count);
         return new DriftReport(kind, build, drifted, reapplied, unsupported, Describe(drifted, reapplied, unsupported));
@@ -122,6 +132,7 @@ public sealed partial class Engine
             .Where(change => !IsMarked(change.Tweak.Id))
             .Select(change => Reapply(change.Tweak, change.Entry, confirmDestructive))
             .OfType<ReapplyOutcome>()
+            .Concat(Startup.Drifted().Where(drift => wanted is null || wanted.Contains(drift.Item.TweakId)).Select(Startup.Reapply))
             .ToList();
 
         if (outcomes.Count == 0)
@@ -295,9 +306,10 @@ public sealed partial class Engine
         if (drifted.Count > 0)
         {
             var names = string.Join(", ", drifted.Select(d => d.Name));
+            // A Windows update, an app's own update or another tool: the words cover all of them.
             parts.Add(drifted.Count == 1
-                ? $"Windows undid 1 change: {names}. Re-apply it?"
-                : $"Windows undid {drifted.Count} changes: {names}. Re-apply them all, or pick which.");
+                ? $"1 change was undone outside the app, usually by an update: {names}. Re-apply it?"
+                : $"{drifted.Count} changes were undone outside the app, usually by an update: {names}. Re-apply them all, or pick which.");
         }
         if (reapplied.Count > 0)
             parts.Add($"Put back automatically: {string.Join(", ", reapplied.Select(d => d.Name))}.");
@@ -307,8 +319,9 @@ public sealed partial class Engine
     }
 
     /// <summary>
-    /// Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks, and a
-    /// change that ends on its own (the update pause) isn't drift when it ends.
+    /// Every tweak whose newest change is fully applied, with that change. Startup switches aren't tweaks (the
+    /// startup manager finds their drift), and a change that ends on its own (the update pause) isn't drift when it
+    /// ends.
     /// </summary>
     private IEnumerable<(TweakDefinition Tweak, JournalEntry Entry)> AppliedChanges()
     {

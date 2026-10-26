@@ -63,6 +63,9 @@ public sealed record DeviceState(string InstanceId, bool Enabled);
 /// <param name="After">What the app set every device to.</param>
 public sealed record DeviceEnabledRecord(string DeviceName, IReadOnlyList<DeviceState> Before, bool After) : StepRecord
 {
+    /// <summary>A device is on or off for the whole PC.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var devices = DeviceEnabledStep.Devices(system);

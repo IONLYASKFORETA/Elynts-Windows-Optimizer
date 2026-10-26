@@ -148,7 +148,7 @@ public static partial class HardRules
     private static string? RegistryViolation(RegistryTarget registry)
     {
         var location = registry.Location;
-        if (location.Root != RegistryRoot.LocalMachine)
+        if (!location.IsMachineWide)
             return null;
         var key = location.KeyPath.TrimEnd('\\');
 

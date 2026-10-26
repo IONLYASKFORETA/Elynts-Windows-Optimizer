@@ -80,6 +80,9 @@ public sealed record PowerPlanStep(Guid Plan, string PlanName, Guid? CreateFrom 
 /// <summary>The plan that was active before, and whether the app created <paramref name="Plan"/>.</summary>
 public sealed record PowerPlanRecord(Guid Before, Guid Plan, bool Created) : StepRecord
 {
+    /// <summary>The active power plan is the PC's, whoever is signed in.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var active = PowerPlanStep.Power(system).GetActive();

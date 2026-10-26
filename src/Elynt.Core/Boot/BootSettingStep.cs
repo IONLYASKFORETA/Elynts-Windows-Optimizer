@@ -50,6 +50,9 @@ public sealed record BootSettingStep(string Element, string? Value) : TweakStep
 /// <param name="After">What the app set it to, or null when the app removed it.</param>
 public sealed record BootSettingRecord(string Element, string? Before, string? After) : StepRecord
 {
+    /// <summary>The boot entry starts Windows for every account.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var now = BootSettingStep.Boot(system).Get(Element);

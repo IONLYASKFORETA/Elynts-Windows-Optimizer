@@ -24,7 +24,8 @@ internal static partial class Tour
         ("wide", 2560, 1400), // a 1440p screen, maximised (larger than CI's screen: see AllowLargerThanScreen)
     ];
 
-    public static async Task RunAsync(Application app, string output)
+    /// <param name="administrators">The sample service's answer about whoever connects, switched for the refused shots.</param>
+    public static async Task RunAsync(Application app, string output, FakeAdministratorCheck administrators)
     {
         await WaitUntilAsync(() => app.MainWindow is MainWindow { IsLoaded: true }, TimeSpan.FromSeconds(30), () => "the window to open");
         var window = (MainWindow)app.MainWindow;
@@ -53,7 +54,27 @@ internal static partial class Tour
 
         await ShootConfirmationAsync(window, model, output);
         await CheckWaveHoldsStillAsync(window, model);
+        // Last: the window has nothing else to show once refused.
+        await ShootRefusedAsync(window, model, administrators, output);
         window.Close();
+    }
+
+    /// <summary>
+    /// The window as a standard account sees it: it reconnects, as Retry does, the service refuses the account, and
+    /// the window shows why in place of the sections. Shot at every size.
+    /// </summary>
+    private static async Task ShootRefusedAsync(MainWindow window, MainViewModel model, FakeAdministratorCheck administrators, string output)
+    {
+        administrators.ConnectingAccountIsAdministrator = false;
+        await model.ConnectAsync();
+        if (!model.IsRefused)
+            throw new InvalidOperationException($"The service didn't refuse a standard account (status: {model.Status}).");
+        foreach (var size in Sizes)
+        {
+            (window.Width, window.Height) = (size.Width, size.Height);
+            await SettleAsync();
+            Shoot(window, Path.Combine(output, size.Name), "refused-standard-account", screen: size.Name == "default");
+        }
     }
 
     private static async Task ShootPagesAsync(MainWindow window, MainViewModel model, string folder, bool screen)
@@ -74,6 +95,14 @@ internal static partial class Tour
                 model.SelectedTweak = model.Tweaks.MaxBy(DetailLength);
                 await SettleAsync();
                 Shoot(window, folder, $"{name}-fullest-tweak", screen);
+            }
+            // A tweak for each reason a switch is locked (already set on this PC, can't be undone), so the detail pane
+            // draws each label too.
+            foreach (var locked in model.IsTweakPage ? model.Tweaks.Where(t => t.IsLocked).DistinctBy(t => t.LockText).ToList() : [])
+            {
+                model.SelectedTweak = locked;
+                await SettleAsync();
+                Shoot(window, folder, $"{name}-locked-{Slug(locked.LockText!)}", screen);
             }
             if (model.HasRepairSelection && model.RepairTools.Count > 1)
             {

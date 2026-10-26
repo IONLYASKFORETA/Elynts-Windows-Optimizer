@@ -5,7 +5,7 @@ using Serilog;
 
 namespace Elynt.App.ViewModels;
 
-/// <summary>One change Windows undid, with a tick to pick it for re-applying.</summary>
+/// <summary>One change something else undid, with a tick to pick it for re-applying.</summary>
 public sealed class DriftItemViewModel(DriftItem item) : ObservableObject
 {
     private bool _ticked = true;
@@ -15,7 +15,12 @@ public sealed class DriftItemViewModel(DriftItem item) : ObservableObject
     public string Name => Item.Name;
 
     public string Detail =>
-        (Item.Kind == DriftKind.AppReturned ? "Came back with an update. " : "Windows changed this back. ") +
+        Item.Kind switch
+        {
+            DriftKind.AppReturned => "Came back with an update. ",
+            DriftKind.StartupItemSwitchedBack => "Switched back outside the app, usually by its own update. ",
+            _ => "Windows changed this back. ",
+        } +
         string.Join("; ", Item.Changes) +
         (Item.NeedsReboot ? " Takes effect after a restart." : "") +
         (Item.NeedsConfirmation ? " Can't be undone, so it asks first." : "");
@@ -28,7 +33,7 @@ public sealed class DriftItemViewModel(DriftItem item) : ObservableObject
 }
 
 /// <summary>
-/// What Windows undid, shown at the top of the Undo history: re-apply all, or tick and re-apply some. Also the
+/// What something else undid, shown at the top of the Undo history: re-apply all, or tick and re-apply some. Also the
 /// automatic re-apply switch (off by default; destructive and reboot-needing changes still ask).
 /// </summary>
 public sealed class DriftViewModel(Func<EnginePipeClient?> client, Func<string, bool> confirmDestructive, Func<Task> afterChange) : ObservableObject
@@ -70,7 +75,7 @@ public sealed class DriftViewModel(Func<EnginePipeClient?> client, Func<string, 
         }
     }
 
-    /// <summary>The tray note when a Windows update undid changes. On by default; saved per user.</summary>
+    /// <summary>The tray note when an update or another app undid changes. On by default; saved per user.</summary>
     public bool NotifyDrift
     {
         get => TrayNoteSettings.Current.Drift;

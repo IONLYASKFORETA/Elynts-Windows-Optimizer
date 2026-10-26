@@ -31,6 +31,9 @@ public sealed record OptionalFeatureStep(string Feature, bool Enabled, string Mi
 /// <param name="After">What the app set.</param>
 public sealed record OptionalFeatureRecord(string Feature, bool? Before, bool After) : StepRecord
 {
+    /// <summary>A Windows feature is on or off for the whole PC.</summary>
+    public override bool AffectsEveryAccount() => true;
+
     public override string? FindConflict(SystemAdapters system)
     {
         var now = system.Features.IsEnabled(Feature);

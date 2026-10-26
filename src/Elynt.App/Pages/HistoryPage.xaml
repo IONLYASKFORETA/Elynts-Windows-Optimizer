@@ -1,4 +1,4 @@
-<!-- Undo history: every change, newest first, with undo for any one and restore everything. -->
+<!-- Undo history: every change, newest first, with undo for any one that can be undone and restore everything. -->
 <UserControl x:Class="Elynt.App.Pages.HistoryPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -22,7 +22,7 @@
             <Button DockPanel.Dock="Right" Style="{StaticResource Button.Destructive}" Content="Restore everything" Padding="16,7"
                     VerticalAlignment="Top" Margin="16,0,0,0" Click="RestoreEverything"
                     IsEnabled="{Binding CanRestoreEverything}"
-                    ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed." />
+                    ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed, and changes that can't be undone are left as they are." />
             <StackPanel>
                 <TextBlock Style="{StaticResource Text.H1}" Text="{Binding SelectedPage}" />
                 <TextBlock Style="{StaticResource Text.Dim}" Margin="0,4,0,0" Text="{Binding PageSummary}" />
@@ -36,12 +36,12 @@
                 <TextBlock Style="{StaticResource Text.Body}"
                            Text="Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
 
-                <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
+                <!-- Drift: changes something else undid (a Windows update, an app's own update), with re-apply all or pick. -->
                 <StackPanel DataContext="{Binding Drift}">
                     <TextBlock Style="{StaticResource Text.Message}" Margin="0,16,0,0" Text="{Binding Message}" />
                     <StackPanel Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
                         <Border Style="{StaticResource Table.Header}" Margin="0,14,0,0">
-                            <TextBlock Style="{StaticResource ColumnLabel}" Text="WHAT WINDOWS UNDID" />
+                            <TextBlock Style="{StaticResource ColumnLabel}" Text="UNDONE OUTSIDE THE APP" />
                         </Border>
                         <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
                             <ItemsControl.ItemTemplate>
@@ -71,18 +71,18 @@
                         <StackPanel>
                             <DockPanel>
                                 <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding AutoReapply}"
-                                          AutomationProperties.Name="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                                          AutomationProperties.Name="Re-apply undone changes automatically (ones that can't be undone or need a restart still ask)" />
                                 <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
                                            VerticalAlignment="Center"
-                                           Text="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                                           Text="Re-apply undone changes automatically (ones that can't be undone or need a restart still ask)" />
                             </DockPanel>
                             <Border Height="1" Margin="0,12" Background="{StaticResource Theme.Stroke}" />
                             <DockPanel>
                                 <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding NotifyDrift}"
-                                          AutomationProperties.Name="Show a tray note when a Windows update undoes changes" />
+                                          AutomationProperties.Name="Show a tray note when an update or another app undoes changes" />
                                 <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
                                            VerticalAlignment="Center"
-                                           Text="Show a tray note when a Windows update undoes changes" />
+                                           Text="Show a tray note when an update or another app undoes changes" />
                             </DockPanel>
                         </StackPanel>
                     </Border>
@@ -119,6 +119,12 @@
                                     <TextBlock Style="{StaticResource Cell}" Text="{Binding When}" />
                                     <StackPanel Grid.Column="1" Margin="0,0,16,0" VerticalAlignment="Center">
                                         <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Text="{Binding TweakName}" />
+                                        <!-- Why the row has no Undo button (a destructive change), as the tweak's locked switch says it;
+                                             its words come from the view model. -->
+                                        <Border Style="{StaticResource Pill}" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                                Visibility="{Binding CantBeUndone, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="{Binding CantBeUndoneText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                                        </Border>
                                         <!-- Why the last undo of this row didn't happen. -->
                                         <Border Margin="0,6,0,0">
                                             <Border.Style>
@@ -139,6 +145,7 @@
                                     <TextBlock Grid.Column="2" Style="{StaticResource Cell}" Text="{Binding StateText}" />
                                     <Button Grid.Column="3" Content="Undo" HorizontalAlignment="Right" VerticalAlignment="Center"
                                             Click="UndoChange" IsEnabled="{Binding CanUndo}"
+                                            Visibility="{Binding HasUndoButton, Converter={StaticResource Visible}}"
                                             AutomationProperties.Name="{Binding TweakName, StringFormat='Undo {0}'}" />
                                 </Grid>
                             </Border>

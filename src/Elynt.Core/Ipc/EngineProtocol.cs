@@ -228,6 +228,7 @@ public sealed record DriverInstallProgressEvent(DriverInstallProgress Progress) 
 /// <summary>
 /// One line from the service. <see cref="Error"/> is set only when the service itself failed. A line carrying
 /// <see cref="Event"/> is streamed while the command runs; any number of them come before the reply proper.
+/// <see cref="Refused"/> is the whole reply to every request from an account that isn't an administrator account.
 /// </summary>
 public sealed record EngineResponse(
     IReadOnlyList<TweakView>? Tweaks = null,
@@ -271,7 +272,8 @@ public sealed record EngineResponse(
     IReadOnlyList<ProfileNote>? ProfileNotes = null,
     CpuTuningReport? CpuTuning = null,
     CpuTuningResult? CpuResult = null,
-    PcOverview? Overview = null)
+    PcOverview? Overview = null,
+    string? Refused = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
