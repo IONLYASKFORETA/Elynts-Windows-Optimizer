@@ -8,17 +8,20 @@ namespace Elynt.Core.Tests;
 /// </summary>
 public sealed class FakeAccountRegistry(FakeRegistry machine, FakeRegistry account) : IRegistry
 {
-    private FakeRegistry For(RegistryRoot root) => root == RegistryRoot.LocalMachine ? machine : account;
+    private FakeRegistry For(RegistryLocation location) => location.IsMachineWide ? machine : account;
 
-    public RegistryValue? GetValue(RegistryLocation location) => For(location.Root).GetValue(location);
+    /// <summary>A key lives where its own default value does.</summary>
+    private FakeRegistry For(RegistryRoot root, string keyPath) => For(new RegistryLocation(root, keyPath, ""));
 
-    public void SetValue(RegistryLocation location, RegistryValue value) => For(location.Root).SetValue(location, value);
+    public RegistryValue? GetValue(RegistryLocation location) => For(location).GetValue(location);
 
-    public void DeleteValue(RegistryLocation location) => For(location.Root).DeleteValue(location);
+    public void SetValue(RegistryLocation location, RegistryValue value) => For(location).SetValue(location, value);
 
-    public bool KeyExists(RegistryRoot root, string keyPath) => For(root).KeyExists(root, keyPath);
+    public void DeleteValue(RegistryLocation location) => For(location).DeleteValue(location);
 
-    public IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath) => For(root).GetSubKeyNames(root, keyPath);
+    public bool KeyExists(RegistryRoot root, string keyPath) => For(root, keyPath).KeyExists(root, keyPath);
 
-    public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath) => For(root).DeleteKeyIfEmpty(root, keyPath);
+    public IReadOnlyList<string> GetSubKeyNames(RegistryRoot root, string keyPath) => For(root, keyPath).GetSubKeyNames(root, keyPath);
+
+    public void DeleteKeyIfEmpty(RegistryRoot root, string keyPath) => For(root, keyPath).DeleteKeyIfEmpty(root, keyPath);
 }
