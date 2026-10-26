@@ -22,6 +22,8 @@ concurrency:
 jobs:
   screenshots:
     runs-on: windows-latest
+    # A tour takes about 4 minutes. Without a limit, a window that hangs holds the runner for 6 hours.
+    timeout-minutes: 20
     permissions:
       contents: write # to push the pictures to screenshots/<branch>
     steps:
