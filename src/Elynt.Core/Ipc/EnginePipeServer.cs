@@ -25,7 +25,7 @@ public sealed class EnginePipeServer(
 {
     /// <summary>The whole reply to an account that isn't an administrator account. The window shows it as it is.</summary>
     private const string StandardAccountRefusal =
-        "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC.";
+        "Only an administrator account can use Elynt's Windows Optimizer. Sign in with one, or ask whoever looks after this PC. Nothing was changed.";
 
     private readonly ILogger _log = logger ?? NullLogger<EnginePipeServer>.Instance;
     private readonly SemaphoreSlim _commandLane = (commandLane ?? new CommandLane()).Semaphore;
