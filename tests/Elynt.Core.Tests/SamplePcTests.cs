@@ -1,5 +1,6 @@
 using Elynt.Core.Drift;
 using Elynt.Core.Games;
+using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
 
@@ -22,6 +23,17 @@ public sealed class SamplePcTests : IDisposable
         var tweak = NewEngine().ListTweaks().Single(t => t.Id == SamplePc.SetByWindows);
 
         Assert.Equal((TweakState.On, true), (tweak.State, tweak.AlreadySet));
+    }
+
+    [Fact]
+    public void A_destructive_change_is_applied_so_the_tour_draws_its_locked_switch_and_its_history_row()
+    {
+        var engine = NewEngine();
+
+        var tweak = engine.ListTweaks().Single(t => t.Id == SamplePc.Destructive);
+        Assert.Equal((Reversibility.Destructive, TweakState.On, false), (tweak.Reversibility, tweak.State, tweak.AlreadySet));
+        var change = Assert.Single(engine.ListHistory(), c => c.TweakId == SamplePc.Destructive);
+        Assert.Equal((ChangeState.Applied, true, false), (change.State, change.Destructive, change.CanUndo));
     }
 
     [Fact]

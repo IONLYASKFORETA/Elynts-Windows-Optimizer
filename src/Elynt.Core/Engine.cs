@@ -122,7 +122,14 @@ public sealed record ChangeView(
     DateTimeOffset ChangedAt,
     ChangeState State,
     DateTimeOffset? UndoneAt,
-    bool CanUndo);
+    bool CanUndo)
+{
+    /// <summary>
+    /// Made by a destructive tweak: there is nothing to put back, so it is never offered for undo and
+    /// <see cref="CanUndo"/> is always false (ADR 0002).
+    /// </summary>
+    public bool Destructive { get; init; }
+}
 
 /// <summary>
 /// The service's command surface. The pipe mirrors these commands one-to-one, and tests drive the app through
@@ -137,12 +144,15 @@ public partial interface IEngine
     /// <summary>Every change the app made for this user, newest first.</summary>
     IReadOnlyList<ChangeView> ListHistory();
 
-    /// <summary>Undoes one change from the history, putting back exactly what was there before it.</summary>
+    /// <summary>
+    /// Undoes one change from the history, putting back exactly what was there before it. A destructive change is
+    /// refused up front with its warning, before anything is touched.
+    /// </summary>
     CommandResult UndoChange(Guid changeId);
 
     /// <summary>
-    /// Undoes every change still in place, newest first. A change that can't be undone is reported and skipped;
-    /// the rest still go ahead.
+    /// Undoes every change still in place, newest first. A change whose undo fails is reported and skipped; the rest
+    /// still go ahead. Destructive changes are never tried: they are left as they are and named in the message.
     /// </summary>
     RestoreResult RestoreEverything();
 
@@ -574,28 +584,45 @@ public sealed partial class Engine(
     {
         // Journal order is the true order of changes (clocks can jump), so newest first is the journal reversed.
         var open = journal.EntriesFor(user).Where(IsUndoable).Reverse().ToList();
+        // Never tried: a destructive change has nothing to put back (ADR 0002), so it is left out and named instead.
+        var left = open.Where(IsDestructive).Select(NameOf).ToList();
 
         var results = new List<UndoOutcome>();
-        foreach (var entry in open)
+        foreach (var entry in open.Where(entry => !IsDestructive(entry)))
         {
             var name = NameOf(entry);
             var result = UndoChange(entry.Id);
             results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
         }
 
+        var leftAlone = left.Count switch
+        {
+            0 => "",
+            1 => $" 1 change can't be undone, so it was left as it is: {left[0]}.",
+            _ => $" {left.Count} changes can't be undone, so they were left as they are: {string.Join(", ", left)}.",
+        };
         if (results.Count == 0)
-            return new RestoreResult(true, "Nothing to undo: every change the app made has already been put back.", results);
+            return new RestoreResult(true, left.Count == 0
+                ? "Nothing to undo: every change the app made has already been put back."
+                : $"Nothing to undo.{leftAlone}", results);
 
         var failed = results.Count(r => !r.Succeeded);
-        _log.LogInformation("Restore everything for {User}: {Undone} undone, {Failed} not", user, results.Count - failed, failed);
+        _log.LogInformation("Restore everything for {User}: {Undone} undone, {Failed} not, {Left} left because they can't be undone",
+            user, results.Count - failed, failed, left.Count);
+        var undoable = results.Count == 1 ? "1 change" : $"{results.Count} changes";
         return failed == 0
-            ? new RestoreResult(true, $"Put back all {results.Count} changes. Your previous settings are back.", results)
-            : new RestoreResult(false, $"Put back {results.Count - failed} of {results.Count} changes. {failed} couldn't be undone; see each one below.", results);
+            ? new RestoreResult(true, left.Count == 0
+                ? $"Put back all {results.Count} changes. Your previous settings are back."
+                : $"Put back the {undoable} that can be undone.{leftAlone}", results)
+            : new RestoreResult(false, $"Put back {results.Count - failed} of {results.Count} changes. {failed} couldn't be undone; see each one below.{leftAlone}", results);
     }
 
     private CommandResult Undo(TweakDefinition tweak, JournalEntry entry, ChangeWording? wording = null)
     {
         wording ??= ChangeWording.Tweak;
+        // Refused before anything is read or written: a destructive change has nothing to put back (ADR 0002).
+        if (IsDestructive(tweak))
+            return Failed(tweak, $"This can't be undone. {tweak.DestructiveWarning} Nothing was changed.");
         try
         {
             var conflicts = entry.Steps.Select(step => step.FindConflict(system)).OfType<string>().ToList();
@@ -638,13 +665,24 @@ public sealed partial class Engine(
                     _ => ChangeState.Undone,
                 },
                 entry.Status is EntryStatus.Reverted or EntryStatus.Superseded ? entry.ClosedAt : null,
-                IsUndoable(entry)))
+                IsUndoable(entry) && !IsDestructive(entry))
+            {
+                Destructive = IsDestructive(entry),
+            })
             .Reverse()
             .ToList();
     }
 
     /// <summary>Only the newest open change to a tweak can be undone: older ones are what it was applied over.</summary>
     private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, entry.User) == entry;
+
+    /// <summary>
+    /// Made by a destructive tweak, so there is nothing to put back and it is never offered for undo (ADR 0002). Only
+    /// catalogue tweaks are ever destructive; startup switches, service start types and closed apps never are.
+    /// </summary>
+    private bool IsDestructive(JournalEntry entry) => catalogue.TryGet(entry.TweakId, out var tweak) && IsDestructive(tweak);
+
+    private static bool IsDestructive(TweakDefinition tweak) => tweak.Reversibility == Reversibility.Destructive;
 
     public IReadOnlyList<RepairToolView> ListRepairTools() => Repair.List();
 
@@ -784,7 +822,7 @@ public sealed partial class Engine(
         tweak.Undo,
         tweak.Refresh,
         state,
-        change is not null)
+        change is not null && !IsDestructive(tweak))
     {
         // Read from the journal, not from CanUndo: what matters is whether the app made a change of its own here.
         AlreadySet = state == TweakState.On && change is null,

@@ -124,16 +124,21 @@ public class AppRemovalTests
     }
 
     [Fact]
-    public void Undoing_removal_for_future_accounts_says_it_cannot_be_undone()
+    public void Undoing_removal_for_future_accounts_is_refused_up_front_with_its_warning()
     {
         _apps.Provision("Microsoft.Copilot");
         var engine = NewEngine();
-        Assert.True(engine.Apply("debloat.deprovision-preinstalled", new ApplyOptions(ConfirmDestructive: true)).Succeeded);
+        var applied = engine.Apply("debloat.deprovision-preinstalled", new ApplyOptions(ConfirmDestructive: true));
+        Assert.True(applied.Succeeded, applied.Message);
+        var change = engine.ListHistory().Single();
 
-        var undo = engine.Revert("debloat.deprovision-preinstalled");
-
-        Assert.False(undo.Succeeded);
-        Assert.Contains("can't be put back", undo.Message);
+        foreach (var undo in new[] { engine.Revert("debloat.deprovision-preinstalled"), engine.UndoChange(change.Id) })
+        {
+            Assert.False(undo.Succeeded);
+            Assert.StartsWith("This can't be undone.", undo.Message);
+            Assert.Contains(applied.Tweak!.DestructiveWarning!, undo.Message);
+        }
+        Assert.False(change.CanUndo);
         Assert.False(_apps.IsProvisioned("Microsoft.Copilot"));
     }
 
@@ -154,7 +159,7 @@ public class AppRemovalTests
         Assert.True(_apps.IsInstalled("Microsoft.BingNews"));
         Assert.True(restarted.Revert("privacy.remove-recall").Succeeded);
         Assert.True(_features.IsEnabled("Recall"));
-        Assert.Contains("can't be put back", restarted.Revert("debloat.deprovision-preinstalled").Message);
+        Assert.StartsWith("This can't be undone.", restarted.Revert("debloat.deprovision-preinstalled").Message);
     }
 
     [Fact]
