@@ -18,7 +18,8 @@ public sealed class RealAdministratorCheckTests
     public RealAdministratorCheckTests() =>
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Needs Windows' own tokens and pipes.");
 
-    [Fact]
+    // A pipe that hangs fails the test in seconds rather than holding up the whole CI run.
+    [Fact(Timeout = 30_000)]
     public async Task An_administrator_accounts_unelevated_window_counts_as_an_administrator_account()
     {
         using var account = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed);
@@ -28,24 +29,25 @@ public sealed class RealAdministratorCheckTests
         // Filtered the way UAC filters an administrator's window: asking "is it in the role" says no.
         Assert.False(new WindowsPrincipal(unelevated).IsInRole(WindowsBuiltInRole.Administrator));
 
-        Assert.True(await AskAboutAsync(unelevated));
+        Assert.True(await AskAboutAsync(unelevated, TestContext.Current.CancellationToken));
     }
 
-    [Fact]
+    // A pipe that hangs fails the test in seconds rather than holding up the whole CI run.
+    [Fact(Timeout = 30_000)]
     public async Task An_elevated_administrator_window_counts_too()
     {
         using var account = WindowsIdentity.GetCurrent(TokenAccessLevels.MaximumAllowed);
         Assert.SkipUnless(new WindowsPrincipal(account).IsInRole(WindowsBuiltInRole.Administrator),
             "Needs an elevated administrator account, as CI's runners have.");
 
-        Assert.True(await AskAboutAsync(account));
+        Assert.True(await AskAboutAsync(account, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
     /// Opens a fresh pipe as <paramref name="window"/> and asks the real check about whoever opened it, as the
     /// service does once a connection's first request has arrived.
     /// </summary>
-    private static async Task<bool> AskAboutAsync(WindowsIdentity window)
+    private static async Task<bool> AskAboutAsync(WindowsIdentity window, CancellationToken cancellation)
     {
         var name = $"elynt-test-{Guid.NewGuid():N}";
         // Open to this account by name. Windows' default rules let in Administrators and the pipe's owner, which is
@@ -56,19 +58,22 @@ public sealed class RealAdministratorCheckTests
             PipeAccessRights.ReadWrite | PipeAccessRights.Synchronize, AccessControlType.Allow));
         await using var service = NamedPipeServerStreamAcl.Create(
             name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, security);
-        var connected = service.WaitForConnectionAsync(TestContext.Current.CancellationToken);
+        var connected = service.WaitForConnectionAsync(cancellation);
 
-        // Opened and written to as that account, so whichever way Windows tracks the client, it sees that token.
-        await using var pipe = WindowsIdentity.RunImpersonated(window.AccessToken, () =>
+        // Opened and written to as that account, so whichever way Windows tracks the client, it sees that token. On its
+        // own thread, as the window is its own process: like the service's, this pipe has no buffer, so the write waits
+        // until the server reads it.
+        var opening = Task.Run(() => WindowsIdentity.RunImpersonated(window.AccessToken, () =>
         {
             var opened = EnginePipeClient.NewPipe(name);
             opened.Connect(5000);
             opened.WriteByte(1);
             return opened;
-        });
+        }));
         await connected;
         // Windows lets a server impersonate its client only once it has read from it.
         Assert.Equal(1, service.ReadByte());
+        await using var pipe = await opening.WaitAsync(cancellation);
 
         return new WindowsAdministratorCheck().IsAdministratorAccount(service);
     }
