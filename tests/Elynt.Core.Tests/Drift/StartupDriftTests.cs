@@ -164,7 +164,7 @@ public class StartupDriftTests
         Assert.True(engine.SetStartupItemEnabled(Discord, enabled: false).Succeeded);
         _registry.SetValue(DiscordApproved, SwitchedOn);
 
-        Assert.Equal("1 change the app made was undone since, usually by an update: Startup item: Discord. Re-apply it?",
+        Assert.Equal("1 change was undone outside the app, usually by an update: Startup item: Discord. Re-apply it?",
             NewEngine(Catalogue.Default).CheckDrift().Message);
 
         // What a Windows update does: writes its own value over each of the tweak's registry values.
@@ -173,7 +173,7 @@ public class StartupDriftTests
         var report = NewEngine(Catalogue.Default).CheckDrift();
 
         Assert.Equal([StartRecommendations, $"startup:{Discord}"], report.Drifted.Select(d => d.TweakId));
-        Assert.StartsWith("2 changes the app made were undone since, usually by an update:", report.Message);
+        Assert.StartsWith("2 changes were undone outside the app, usually by an update:", report.Message);
     }
 
     [Fact]
