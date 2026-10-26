@@ -672,6 +672,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             AntiCheatWarning = "Turning this on may stop Counter-Strike 2 (FACEIT) from launching.",
             PendingReboot = true,
             NotApplicableReason = "Needs an AMD CPU.",
+            AlreadySet = true,
             ProfileEligible = true,
         };
 

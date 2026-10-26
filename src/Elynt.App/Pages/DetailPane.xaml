@@ -145,7 +145,7 @@
                             DataContext="{Binding SelectedTweak}">
                     <TextBlock Style="{StaticResource Text.H2}" FontSize="19" Text="{Binding Name}" />
 
-                    <!-- Labels: the evidence tier, reversibility, then each risk flag. -->
+                    <!-- Labels: the evidence tier, reversibility, each risk flag, then why the switch is locked, as on the row. -->
                     <WrapPanel Margin="0,12,0,0">
                         <Border Style="{StaticResource Pill}">
                             <TextBlock Text="{Binding TierText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
@@ -167,6 +167,9 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Border Style="{StaticResource Pill}" Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
+                            <TextBlock Text="{Binding LockText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                        </Border>
                     </WrapPanel>
 
                     <!-- The same switch as the tweak's row, so the user can act while reading, and its state. -->

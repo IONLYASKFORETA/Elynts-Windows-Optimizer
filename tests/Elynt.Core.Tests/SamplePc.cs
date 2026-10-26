@@ -17,7 +17,8 @@ namespace Elynt.Core.Tests;
 
 /// <summary>
 /// A made-up gaming PC on the test fakes, for the screenshot tour: Windows 11 Pro 24H2, an ASUS B650 board with a Ryzen 7
-/// 7800X3D, 32 GB of DDR5 and an RTX 3080, with a few tweaks already on (one waiting for a restart). Every list the app
+/// 7800X3D, 32 GB of DDR5 and an RTX 3080, with a few tweaks already on (one waiting for a restart, and one that Windows
+/// set by itself, so it is already set and its switch is locked). Every list the app
 /// shows has at least two rows and every state a page handles has an example (drift, an undone change, a driver
 /// backup), so the tour draws each row template and a binding error in any of them fails CI. Nothing is real.
 /// <see cref="SamplePcTests"/> keeps it that way.
@@ -47,6 +48,12 @@ public static class SamplePc
 
     /// <summary>Switched off on the Startup page, then switched back on by a pretend Steam update, so drift lists a startup item.</summary>
     public const string DriftedStartupItem = "run:HKCU:Steam";
+
+    /// <summary>
+    /// Turned on by Windows itself when the owner switched Auto HDR on, with no change of the app's own: already set,
+    /// so Gaming shows its label and its locked switch.
+    /// </summary>
+    public const string SetByWindows = "gaming.windowed-games-optimizations-on";
 
     /// <summary>The query the tour types into Apps' winget search.</summary>
     public const string AppSearch = "player";
@@ -113,6 +120,9 @@ public static class SamplePc
         registry.SetValue(
             new RegistryLocation(RegistryRoot.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run", "Steam"),
             new RegistryValue(RegistryValueKind.Binary, [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+        // What Windows writes when Auto HDR is switched on in Settings: windowed games optimizations come on with it.
+        foreach (var step in Catalogue.Default.Get(SetByWindows).Steps.OfType<RegistryListItemStep>())
+            registry.SetValue(step.Location, RegistryValue.String("SwapEffectUpgradeEnable=1;AutoHDREnable=1;"));
 
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)
