@@ -17,8 +17,8 @@ namespace Elynt.Core.Tests;
 
 /// <summary>
 /// A made-up gaming PC on the test fakes, for the screenshot tour: Windows 11 Pro 24H2, an ASUS B650 board with a Ryzen 7
-/// 7800X3D, 32 GB of DDR5 and an RTX 3080, with a few tweaks already on (one waiting for a restart, and one that Windows
-/// set by itself, so it is already set and its switch is locked). Every list the app
+/// 7800X3D, 32 GB of DDR5 and an RTX 3080, with a few tweaks already on (one waiting for a restart, one that Windows
+/// set by itself, so it is already set and its switch is locked, and one that can't be undone). Every list the app
 /// shows has at least two rows and every state a page handles has an example (drift, an undone change, a driver
 /// backup), so the tour draws each row template and a binding error in any of them fails CI. Nothing is real.
 /// <see cref="SamplePcTests"/> keeps it that way.
@@ -52,6 +52,12 @@ public static class SamplePc
     /// </summary>
     public const string SetByWindows = "gaming.windowed-games-optimizations-on";
 
+    /// <summary>
+    /// Confirmed and applied, though it can't be undone: Debloat &amp; Privacy shows its switch locked on, and the Undo
+    /// history shows its row with no Undo button.
+    /// </summary>
+    public const string Destructive = "debloat.deprovision-preinstalled";
+
     /// <summary>The query the tour types into Apps' winget search.</summary>
     public const string AppSearch = "player";
 
@@ -65,6 +71,10 @@ public static class SamplePc
     public static Engine NewEngine(string scratch)
     {
         var registry = new FakeRegistry();
+        var apps = new FakeRemovableApps();
+        // What a fresh Windows install provisions for every new account, for the destructive tweak to remove.
+        foreach (var app in AppRemovalTweaks.Preinstalled.Prepend(AppRemovalTweaks.Copilot))
+            apps.Provision(app.PackageName);
         var (gpuTuning, cpuTuning) = Tuning();
         var engine = new Engine(
             Catalogue.Default,
@@ -85,7 +95,7 @@ public static class SamplePc
                 PnpDevices = new FakeDevices(),
                 ScanExclusions = new FakeScanExclusions(),
                 DefenderState = new FakeDefenderState(),
-                Apps = new FakeRemovableApps(),
+                Apps = apps,
                 Features = new FakeOptionalFeatures(),
                 DriverCleaning = DriverCleaning(scratch),
                 // No PawnIO, so the CPU's own temperature is missing and Home says how to get it.
@@ -109,6 +119,7 @@ public static class SamplePc
         foreach (var id in AlreadyOn)
             Check(engine.Apply(id).Succeeded, $"turning on {id}");
         Check(engine.Apply(Undone).Succeeded && engine.Revert(Undone).Succeeded, $"turning {Undone} on and off");
+        Check(engine.Apply(Destructive, new ApplyOptions(ConfirmDestructive: true)).Succeeded, $"confirming and applying {Destructive}");
         // What a Windows update does: writes its own value over each of the tweak's registry values.
         foreach (var step in Catalogue.Default.Get(Drifted).Steps.OfType<RegistryValueStep>())
             registry.SetValue(step.Location, RegistryValue.DWord(0));

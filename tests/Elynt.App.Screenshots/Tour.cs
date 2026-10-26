@@ -75,12 +75,13 @@ internal static partial class Tour
                 await SettleAsync();
                 Shoot(window, folder, $"{name}-fullest-tweak", screen);
             }
-            // A tweak whose switch is locked (already set on this PC), so the detail pane draws the label too.
-            if (model.IsTweakPage && model.Tweaks.FirstOrDefault(t => t.IsLocked) is { } locked)
+            // A tweak for each reason a switch is locked (already set on this PC, can't be undone), so the detail pane
+            // draws each label too.
+            foreach (var locked in model.IsTweakPage ? model.Tweaks.Where(t => t.IsLocked).DistinctBy(t => t.LockText).ToList() : [])
             {
                 model.SelectedTweak = locked;
                 await SettleAsync();
-                Shoot(window, folder, $"{name}-locked-tweak", screen);
+                Shoot(window, folder, $"{name}-locked-{Slug(locked.LockText!)}", screen);
             }
             if (model.HasRepairSelection && model.RepairTools.Count > 1)
             {

@@ -25,7 +25,7 @@ public partial class HistoryPage : UserControl
     {
         var answer = ConfirmDialog.Ask(
             Window.GetWindow(this),
-            "Undo every change the app made that is still in place, newest first?\n\nAnything something else has changed since is left alone and listed.",
+            "Undo every change the app made that is still in place, newest first?\n\nAnything something else has changed since is left alone and listed. Changes that can't be undone are left as they are.",
             "Restore everything",
             ConfirmButtons.OkCancel,
             ConfirmRisk.Destructive);
