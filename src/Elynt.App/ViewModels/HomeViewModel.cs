@@ -144,10 +144,10 @@ public sealed class HomeViewModel : ObservableObject
         !DriversChecked ? "drivers not checked yet" :
         DriverUpdates == 1 ? "driver update found at the last check" : "driver updates found at the last check";
 
-    /// <summary>Changes Windows undid, from the drift check at sign-in.</summary>
+    /// <summary>Changes something else undid (a Windows update, an app's own update), from the drift check at sign-in.</summary>
     public int DriftFound => _main.Drift?.Items.Count ?? 0;
 
-    public string DriftCaption => DriftFound == 1 ? "change Windows undid" : "changes Windows undid";
+    public string DriftCaption => DriftFound == 1 ? "change undone outside the app" : "changes undone outside the app";
 
     // ---- Waiting ----
 
@@ -164,7 +164,9 @@ public sealed class HomeViewModel : ObservableObject
             if (DriverUpdates > 0)
                 waiting.Add(new(DriverUpdates == 1 ? "A newer driver is available" : $"{DriverUpdates} newer drivers are available", Sections.Drivers));
             if (DriftFound > 0)
-                waiting.Add(new(DriftFound == 1 ? "Windows undid 1 change" : $"Windows undid {DriftFound} changes", MainViewModel.UndoHistory));
+                waiting.Add(new(DriftFound == 1
+                    ? "1 change was undone outside the app"
+                    : $"{DriftFound} changes were undone outside the app", MainViewModel.UndoHistory));
             return waiting;
         }
     }

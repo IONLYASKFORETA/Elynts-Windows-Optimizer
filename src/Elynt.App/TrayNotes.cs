@@ -20,7 +20,7 @@ public sealed class TrayNoteSettings
     /// <summary>A note when an app adds itself to startup.</summary>
     public bool NewStartupItems { get; set; } = true;
 
-    /// <summary>A note when a Windows update undid changes the app made.</summary>
+    /// <summary>A note when something else (usually a Windows update or an app's own update) undid changes the app made.</summary>
     public bool Drift { get; set; } = true;
 
     /// <summary>Quiet notes when a per-game profile is applied, undone or skipped.</summary>
@@ -152,8 +152,9 @@ public sealed class TrayNotes : IDisposable
     }
 
     /// <summary>
-    /// A note listing what Windows undid, or what was put back automatically. Clicking it opens the list, where the
-    /// user re-applies all or picks.
+    /// A note listing what something else undid (a Windows update, or an app's own update switching its startup item
+    /// back on), counting both, or what was put back automatically. Clicking it opens the list, where the user
+    /// re-applies all or picks.
     /// </summary>
     public void ShowDrift(DriftReport report, Action openDrift)
     {
@@ -162,12 +163,12 @@ public sealed class TrayNotes : IDisposable
         if (report.Drifted.Count > 0)
         {
             _driftClicked = openDrift;
-            _icon.ShowBalloonTip(15_000, "Windows undid some changes", $"{report.Message} Click here to choose.", Forms.ToolTipIcon.Info);
+            _icon.ShowBalloonTip(15_000, "Some changes were undone", $"{report.Message} Click here to choose.", Forms.ToolTipIcon.Info);
         }
         else if (report.Reapplied.Count > 0 || report.NewlyUnsupported.Count > 0)
         {
             _driftClicked = openDrift;
-            _icon.ShowBalloonTip(10_000, "After a Windows update", report.Message, Forms.ToolTipIcon.Info);
+            _icon.ShowBalloonTip(10_000, "After an update", report.Message, Forms.ToolTipIcon.Info);
         }
     }
 

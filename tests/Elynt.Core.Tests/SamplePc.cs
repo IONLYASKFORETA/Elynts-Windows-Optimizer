@@ -45,6 +45,9 @@ public static class SamplePc
     /// <summary>On, then set back by a pretend Windows update, so the Undo history has drift and an undo it refuses.</summary>
     public const string Drifted = "debloat.bing-in-start-search-off";
 
+    /// <summary>Switched off on the Startup page, then switched back on by a pretend Steam update, so drift lists a startup item.</summary>
+    public const string DriftedStartupItem = "run:HKCU:Steam";
+
     /// <summary>The query the tour types into Apps' winget search.</summary>
     public const string AppSearch = "player";
 
@@ -105,6 +108,11 @@ public static class SamplePc
         // What a Windows update does: writes its own value over each of the tweak's registry values.
         foreach (var step in Catalogue.Default.Get(Drifted).Steps.OfType<RegistryValueStep>())
             registry.SetValue(step.Location, RegistryValue.DWord(0));
+        // What Steam's own update does: switches it back on with Task Manager's switch.
+        Check(engine.SetStartupItemEnabled(DriftedStartupItem, enabled: false).Succeeded, $"switching off {DriftedStartupItem}");
+        registry.SetValue(
+            new RegistryLocation(RegistryRoot.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run", "Steam"),
+            new RegistryValue(RegistryValueKind.Binary, [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
 
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)

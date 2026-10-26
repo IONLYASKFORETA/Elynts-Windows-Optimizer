@@ -138,7 +138,7 @@ public partial class MainWindow : Window
     private bool ConfirmDestructiveReapply(string names) =>
         ConfirmDialog.Ask(
             this,
-            $"Windows undid these, and putting them back can't be undone:\n\n{names}\n\nRe-apply them too? Choose No to re-apply only the rest.",
+            $"These were undone outside the app, and putting them back can't be undone:\n\n{names}\n\nRe-apply them too? Choose No to re-apply only the rest.",
             "This can't be undone",
             ConfirmButtons.YesNo,
             ConfirmRisk.Destructive) == ConfirmAnswer.Yes;
