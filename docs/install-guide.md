@@ -44,6 +44,9 @@ Setup installs the app for your account only and opens it. The first time, the a
 service, which is what makes the changes you choose. Windows asks **"Do you want to allow this app to make changes
 to your device?"** once; choose **Yes**. The app window itself never runs as administrator.
 
+The app works only in an administrator account (on most PCs, the account Windows was set up with). In a standard
+account it says so and does nothing else; sign in with an administrator account instead.
+
 If you said No by accident, press **Retry** at the bottom of the window.
 
 ## Updates

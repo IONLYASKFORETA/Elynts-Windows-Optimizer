@@ -79,12 +79,15 @@ with an apply warning): those always wait for you. The update pause is not drift
 ## Security model and accepted risks
 
 - **Who can drive the service.** The service runs as SYSTEM and listens on a named pipe that any interactively
-  signed-in user may open (`InteractiveSid`, `src/Elynt.Service/EngineHost.cs`); network logons are denied. That is
-  deliberate: the app window runs without admin rights, and the app is meant for a single-user gaming PC. It means
-  any interactive user on the PC, admin or not, can ask the service for SYSTEM-level actions: tweaks, driver
-  installs and cleaning (pnputil), PawnIO, CPU (SMU/MSR) and GPU tuning. Hard rules (never remove Edge, never block
-  quality or security updates, destructive actions need confirmation) are enforced in the service, not the window,
-  so they hold whoever connects. On a PC shared with people you don't trust with admin rights, don't install it.
+  signed-in user may open (`InteractiveSid`, `src/Elynt.Service/EngineHost.cs`); network logons are denied. It
+  answers only administrator accounts (members of the Administrators group, ADR 0007): a standard account's window is
+  told to sign in with one, and nothing runs for it. The app window runs without admin rights, so the service checks
+  the account's group membership as Windows recorded it at sign-in (`src/Elynt.Windows/WindowsAdministratorCheck.cs`),
+  not whether the window is elevated. It means any program an administrator account runs, elevated or not, can ask the
+  service for SYSTEM-level actions without a UAC prompt: tweaks, driver installs and cleaning (pnputil), PawnIO, CPU
+  (SMU/MSR) and GPU tuning. That is accepted for a gaming PC whose administrators use it. Hard rules (never remove
+  Edge, never block quality or security updates, destructive actions need confirmation) are enforced in the service,
+  not the window, so they hold whoever connects.
 - **Unsigned update channel.** Beta and stable builds come from the public releases repo (Velopack, [docs/releasing.md](docs/releasing.md)) over HTTPS and are not
   code-signed (signing costs money). Trust rests on GitHub's account security and HTTPS; anyone who can publish to the
   releases repo can ship an update. This is an accepted risk for a private app shared with friends.
