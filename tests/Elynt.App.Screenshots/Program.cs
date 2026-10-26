@@ -24,11 +24,14 @@ public static class Program
         // starts every tour with nothing saved.
         var scratch = Directory.CreateTempSubdirectory("elynt-tour-");
         var engine = SamplePc.NewEngine(scratch.FullName);
+        // An administrator account until the tour's last step, which shows what a standard account sees.
+        var administrators = new FakeAdministratorCheck();
         var server = new EnginePipeServer(
             () => new NamedPipeServerStream(
                 EngineProtocol.PipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous),
-            _ => engine);
+            _ => engine,
+            administrators);
         var serving = Task.Run(() => server.RunAsync(stop.Token));
 
         UserSettings.File = new AppSettingsFile(Path.Combine(scratch.FullName, "settings.json"));
@@ -42,7 +45,7 @@ public static class Program
             try
             {
                 // App.xaml's StartupUri opens the window once this handler first yields.
-                await Tour.RunAsync(app, output);
+                await Tour.RunAsync(app, output, administrators);
                 exitCode = 0;
             }
             catch (Exception ex)

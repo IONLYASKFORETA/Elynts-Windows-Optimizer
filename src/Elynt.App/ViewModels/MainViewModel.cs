@@ -44,6 +44,7 @@ public sealed class MainViewModel(
     private string _status = "Connecting to the Elynt Optimizer service…";
     private bool _isConnected;
     private bool _isConnecting;
+    private string? _refusal;
     private string? _historyMessage;
     private bool _isRestoring;
     private readonly AppUpdater _updater = new();
@@ -171,8 +172,8 @@ public sealed class MainViewModel(
     /// <summary>The Settings page: the update channel and Animated accents.</summary>
     public bool IsSettingsPage => SelectedPage == Settings;
 
-    /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history.</summary>
-    public bool IsSectionPage => !IsHistoryPage;
+    /// <summary>Any section page (tweaks, Apps, Repair, BIOS), as opposed to the Undo history. None shows to a refused account.</summary>
+    public bool IsSectionPage => !IsHistoryPage && !IsRefused;
 
     /// <summary>The Services tab on the Startup &amp; Services page, set by the window. Null until then.</summary>
     public ServicesPageViewModel? ServicesPage { get; set; }
@@ -353,6 +354,7 @@ public sealed class MainViewModel(
             if (Set(ref _isConnected, value))
             {
                 OnPropertyChanged(nameof(IsDisconnected));
+                OnPropertyChanged(nameof(CanRetry));
                 OnPropertyChanged(nameof(IsGamesPage));
                 OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
@@ -362,6 +364,36 @@ public sealed class MainViewModel(
     }
 
     public bool IsDisconnected => !IsConnected;
+
+    /// <summary>
+    /// Why the service won't serve this Windows account (it isn't an administrator account), shown in place of the
+    /// sections. Null when it hasn't refused.
+    /// </summary>
+    public string? Refusal
+    {
+        get => _refusal;
+        private set
+        {
+            if (Set(ref _refusal, value))
+            {
+                OnPropertyChanged(nameof(IsRefused));
+                OnPropertyChanged(nameof(ShowsPages));
+                OnPropertyChanged(nameof(IsSectionPage));
+                OnPropertyChanged(nameof(CanRetry));
+            }
+        }
+    }
+
+    public bool IsRefused => Refusal is not null;
+
+    /// <summary>Whether the sidebar lists the pages: not for an account the service refused, which can't use any of them.</summary>
+    public bool ShowsPages => !IsRefused;
+
+    /// <summary>
+    /// Retry is offered while there is no connection, except to a refused account: the answer comes from how the
+    /// account signed in, so trying again can't change it.
+    /// </summary>
+    public bool CanRetry => IsDisconnected && !IsRefused;
 
     public IReadOnlyList<ReleaseChannel> Channels { get; } = Enum.GetValues<ReleaseChannel>();
 
@@ -454,14 +486,26 @@ public sealed class MainViewModel(
             Sensors = await LoadSensorsAsync(_client);
             Cpu = await LoadCpuAsync(_client);
             await HomePage.RefreshAsync();
+            Refusal = null;
             IsConnected = true;
             Status = "Connected. Every switch shows the setting as it is on this PC right now.";
             ShowPage();
+        }
+        catch (AccountRefusedException ex)
+        {
+            // The service answered the first request with this, and ran nothing for the account.
+            Log.Warning("The service refused this account: {Message}", ex.Message);
+            await DisconnectAsync();
+            // Home: the Undo history draws its own page, which would otherwise show behind the refusal.
+            SelectedPage = Home;
+            Refusal = ex.Message;
+            Status = "The service is running, but it only serves administrator accounts.";
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Couldn't reach the service");
             await DisconnectAsync();
+            Refusal = null;
             Status = "The Elynt Optimizer service isn't running, so nothing can be changed yet. Start it, then press Retry.";
         }
         finally
