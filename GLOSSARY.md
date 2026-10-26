@@ -1,12 +1,23 @@
 # Glossary
 
-**Tweak**: one described change to Windows that the app can apply and undo.
+**Tweak**: one described adjustment to Windows, with its own switch, that the app can apply and, unless it is labelled destructive, undo.
+_Avoid_: setting, optimization
 
-**Per-game profile**: a set of instant tweaks the user builds for one game, applied while that game runs and undone when it closes. Not a preset; presets don't exist.
+**Change**: one thing the app did to Windows, saved with exactly what was there before it: a tweak switched on, a startup item switched, a service's start type set, or a background app closed by a per-game profile. Each change is a row in the Undo history. Cleaning, driver installs and tuning aren't changes.
+_Avoid_: global setting, journal entry
 
-**Temporary change**: a change made by a per-game profile, journaled as temporary so it is undone after the game closes, the app crashes, or the PC reboots.
+**Undo**: putting back exactly what was there before a change. The app only undoes its own changes, and refuses when something else has changed the same setting since.
+_Avoid_: revert, which is kept for tuning
 
-**Global setting**: a tweak that stays applied until the user undoes it, including every tweak that needs a reboot.
+**Undo history**: every change the app made for this Windows account, newest first, each with its own Undo. **Restore everything** undoes every change that can be undone, newest first.
+
+**Already set**: a tweak that is on because something other than the app set it (Windows, the user or another tool). It counts as on, but the app has no change of its own to undo, so it can't be switched off from the app.
+
+**Instant change**: a change that takes effect at once, with no restart or sign-out. Only tweaks that make instant changes can go in a per-game profile, and never destructive or Security ones.
+
+**Per-game profile**: what the user sets for one game, all of it instant: tweaks, background apps to close, the game's priority, the timer resolution and a tuning profile. It goes on when the game starts and comes off 15 seconds after it closes. One runs at a time across the PC: the first game started stays in charge, and another game's profile is skipped meanwhile. Not a preset; presets don't exist.
+
+**Temporary change**: a change made by a per-game profile. It is undone when the game closes, or at the next start after a crash or reboot. Switching the same tweak on yourself while the game runs keeps it, so it stays on after the game.
 
 **Feature update**: the yearly Windows 11 version upgrade (e.g. 24H2 to 25H2). Can be skipped by pinning a version.
 
@@ -24,7 +35,7 @@
 
 **Evidence tier**: how well a tweak's benefit is backed: proven, situational or possible placebo.
 
-**Reversibility label**: what undo can do for a tweak: reversible, needs a download, or destructive. A destructive tweak needs a separate confirmation, enforced by the Engine.
+**Reversibility label**: what undo can do for a tweak: reversible, needs a download, or destructive. A destructive tweak needs a separate confirmation, enforced by the Engine, and its change is never offered for undo.
 
 **Risk flag**: a risk shown on every tweak it applies to: security risk, needs reboot, can stop boot, or an anti-cheat conflict (which warns, never blocks).
 
@@ -36,7 +47,9 @@
 
 **BIOS guide**: step-by-step instructions, matched to the detected board vendor and CPU, for a change only the BIOS can make (XMP/EXPO, PBO, Curve Optimizer, Intel undervolting). The app reads these settings (a **readout**) but never changes them.
 
-**Confirm-or-revert**: every GPU or CPU tuning change goes back on its own after a short window (15 s for GPUs, 60 s for CPUs) unless the user keeps it. Several unkept changes in a row go back to the last kept settings.
+**Confirm-or-revert**: every new GPU or CPU tune goes back on its own after a short window (15 s for GPUs, 60 s for CPUs) unless the user keeps it. Several unkept tunes in a row go back to the last kept settings.
+
+**Revert**: GPU or CPU tuning going back on its own, as confirm-or-revert does. Only tuning reverts; a change is undone.
 
 **Tuning profile**: GPU or CPU tuning inside a per-game profile. It goes on when the game starts without confirm-or-revert (nobody is watching) and comes off with the rest of the profile, back to the kept tune or defaults. While it holds the hardware, the Overclocking page can't change it.
 
