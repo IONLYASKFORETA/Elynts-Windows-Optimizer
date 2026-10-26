@@ -4,28 +4,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <UserControl.Resources>
-        <!-- A repair tool's restart need as a label: orange when it needs or may need a restart, as on its row. -->
-        <Style x:Key="RestartPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding View.Restart}" Value="None">
-                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="RestartPillText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding View.Restart}" Value="None">
-                    <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
     <!-- A column on the right (the window sets its width), set off from the page by a line on its left. Everything in it
          wraps to that width and scrolls up and down. -->
     <Border Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1,0,0,0">

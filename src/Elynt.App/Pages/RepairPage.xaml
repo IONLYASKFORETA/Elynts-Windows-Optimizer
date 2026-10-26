@@ -4,28 +4,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <UserControl.Resources>
-        <!-- The restart need as a label: orange when the tool needs or may need a restart, like a tweak's "Needs reboot". -->
-        <Style x:Key="RestartPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding View.Restart}" Value="None">
-                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="RestartPillText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{StaticResource Theme.Orange}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding View.Restart}" Value="None">
-                    <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
     <DockPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,16">
             <Button Content="Copy app log" Click="CopyAppLog" Padding="12,4" DockPanel.Dock="Left"

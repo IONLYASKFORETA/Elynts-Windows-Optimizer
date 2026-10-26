@@ -18,18 +18,6 @@
             <Setter Property="TextWrapping" Value="NoWrap" />
             <Setter Property="Margin" Value="0,0,12,0" />
         </Style>
-        <!-- The service's answer to the last save or delete; it takes no room while there is none. -->
-        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
-            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
-            <Style.Triggers>
-                <Trigger Property="Text" Value="{x:Null}">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                </Trigger>
-                <Trigger Property="Text" Value="">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
     </UserControl.Resources>
 
     <!-- Per-game profile editor: instant changes only, applied when the game starts and undone 15 s after it closes. -->
@@ -152,7 +140,7 @@
                     </StackPanel>
                 </StackPanel>
 
-                <TextBlock Style="{StaticResource Note}" Margin="0,12,0,0" Text="{Binding Message}" />
+                <TextBlock Style="{StaticResource Text.Message}" Margin="0,12,0,0" Text="{Binding Message}" />
             </StackPanel>
         </Border>
     </StackPanel>

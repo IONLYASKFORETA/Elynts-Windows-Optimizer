@@ -4,21 +4,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
-    <UserControl.Resources>
-        <!-- The service's answer to the last add or remove; it takes no room while there is none. -->
-        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
-            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
-            <Style.Triggers>
-                <Trigger Property="Text" Value="{x:Null}">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                </Trigger>
-                <Trigger Property="Text" Value="">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </UserControl.Resources>
-
     <!-- The editor and the games scroll together, so both stay reachable at the smallest window. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <!-- Full width up to a comfortable width for the editor's form, then held to the left. -->
@@ -33,7 +18,7 @@
                 <TextBlock Style="{StaticResource Text.Dim}"
                            Text="Found in Steam, Epic, GOG, Battle.net, EA, Ubisoft and the Xbox app. Tweak warnings name these games." />
                 <Button Content="Add a game by its .exe…" Click="AddGame" HorizontalAlignment="Left" Margin="0,12,0,0" />
-                <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0" Text="{Binding Message}" />
+                <TextBlock Style="{StaticResource Text.Message}" Margin="0,10,0,0" Text="{Binding Message}" />
                 <TextBlock Style="{StaticResource Text.Dim}" Margin="0,12,0,0" Text="No games found yet."
                            Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}" />
                 <!-- A card per game; Remove only on games added by their .exe. -->
