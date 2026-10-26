@@ -141,7 +141,10 @@ public partial interface IEngine
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
     CommandResult Revert(string tweakId);
 
-    /// <summary>Every change the app made for this user, newest first.</summary>
+    /// <summary>
+    /// This account's Undo history, newest first: its own changes and every whole-PC change, whichever administrator
+    /// account made it (ADR 0007).
+    /// </summary>
     IReadOnlyList<ChangeView> ListHistory();
 
     /// <summary>

@@ -258,6 +258,34 @@ public class WholePcChangeTests
         Assert.Equal([(false, true), (true, false)], adens.Select(c => (c.Id == permanent.Id, c.CanUndo)));
     }
 
+    [Fact]
+    public void A_drift_check_in_the_other_account_finds_and_reapplies_whole_PC_changes_but_not_the_first_accounts_own()
+    {
+        var aden = EngineFor(Aden);
+        Applied(aden, MachineWide);
+        Applied(aden, OwnSettings);
+        _machine.SetValue(MachineValue, RegistryValue.DWord(7)); // A Windows update put back its own values.
+        Own(Aden).SetValue(OwnValue, RegistryValue.DWord(7));
+        var friend = EngineFor(Friend);
+
+        var drifted = friend.CheckDrift().Drifted.Select(d => d.TweakId).ToList();
+        var reapplied = friend.ReapplyDrift(null);
+
+        Assert.Equal([MachineWide.Id], drifted);
+        Assert.True(reapplied.Succeeded, reapplied.Message);
+        Assert.Equal(RegistryValue.DWord(1), _machine.GetValue(MachineValue));
+        Assert.Equal(RegistryValue.DWord(7), Own(Aden).GetValue(OwnValue));
+        Assert.True(Listed(EngineFor(Aden), MachineWide).CanUndo);
+    }
+
+    [Fact]
+    public void A_whole_PC_change_that_needs_a_restart_waits_for_one_in_the_other_account_too()
+    {
+        Applied(EngineFor(Aden), PlaceboTweaks.DynamicTickOff);
+
+        Assert.True(Listed(EngineFor(Friend), PlaceboTweaks.DynamicTickOff).PendingReboot);
+    }
+
     // ---- helpers ----
 
     /// <summary>The Engine the service builds for one account: the PC's adapters, that account's HKCU, the shared journal.</summary>

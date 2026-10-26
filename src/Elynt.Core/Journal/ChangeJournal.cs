@@ -199,13 +199,16 @@ public sealed class ChangeJournal
     /// </summary>
     public void KeepPermanently(JournalEntry entry) => Change([entry], e => e.Temporary = false);
 
-    /// <summary>When this tweak was last applied or undone for this user, or null if it never was.</summary>
+    /// <summary>
+    /// When this tweak was last applied or undone in this account's Undo history (whole-PC changes from any account
+    /// included), or null if it never was.
+    /// </summary>
     public DateTimeOffset? LastChangedAt(string tweakId, string user)
     {
         lock (_gate)
         {
             return _entries
-                .Where(e => e.TweakId == tweakId && e.User == user)
+                .Where(e => e.TweakId == tweakId && e.SeenBy(user))
                 .Select(e => e.Status switch
                 {
                     EntryStatus.Applying or EntryStatus.Applied => e.AppliedAt,
@@ -216,13 +219,13 @@ public sealed class ChangeJournal
         }
     }
 
-    /// <summary>Every tweak this user has a change to undo for, oldest first.</summary>
+    /// <summary>Every tweak with a change to undo in this account's Undo history, oldest first.</summary>
     public IReadOnlyList<string> UndoableTweakIds(string user)
     {
         lock (_gate)
         {
             return _entries
-                .Where(e => e.User == user && e.Status is EntryStatus.Applying or EntryStatus.Applied)
+                .Where(e => e.SeenBy(user) && e.Status is EntryStatus.Applying or EntryStatus.Applied)
                 .Select(e => e.TweakId)
                 .Distinct()
                 .ToList();
