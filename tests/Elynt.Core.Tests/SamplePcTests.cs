@@ -1,3 +1,4 @@
+using Elynt.Core.Drift;
 using Elynt.Core.Games;
 
 namespace Elynt.Core.Tests;
@@ -57,6 +58,15 @@ public sealed class SamplePcTests : IDisposable
 
         var drifted = history.First(c => c.TweakId == SamplePc.Drifted && c.CanUndo);
         Assert.False(engine.UndoChange(drifted.Id).Succeeded);
+    }
+
+    [Fact]
+    public void Drift_has_two_rows_one_of_them_a_startup_item_switched_back_on()
+    {
+        var drifted = NewEngine().CheckDrift().Drifted;
+
+        Assert.True(drifted.Count >= 2);
+        Assert.Contains(drifted, d => d.Kind == DriftKind.StartupItemSwitchedBack && d.TweakId == $"startup:{SamplePc.DriftedStartupItem}");
     }
 
     [Fact]

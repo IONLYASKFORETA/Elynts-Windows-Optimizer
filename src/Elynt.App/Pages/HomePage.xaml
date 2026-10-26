@@ -176,7 +176,7 @@
 
             <!-- What is waiting: each item opens the page that deals with it. -->
             <TextBlock Style="{StaticResource Text.Label}" Margin="0,26,0,10" Text="WAITING" />
-            <TextBlock Style="{StaticResource Text.Dim}" Text="Nothing is waiting: no restarts, driver updates found or changes Windows undid."
+            <TextBlock Style="{StaticResource Text.Dim}" Text="Nothing is waiting: no restarts, driver updates found or changes undone outside the app."
                        Visibility="{Binding NothingWaiting, Converter={StaticResource Visible}}" />
             <ItemsControl ItemsSource="{Binding Waiting}" Focusable="False"
                           Visibility="{Binding HasWaiting, Converter={StaticResource Visible}}">

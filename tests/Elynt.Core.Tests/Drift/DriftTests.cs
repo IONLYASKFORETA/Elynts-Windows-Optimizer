@@ -274,7 +274,7 @@ public class DriftTests
     }
 
     [Fact]
-    public void The_report_says_in_plain_words_what_windows_undid()
+    public void The_report_says_in_plain_words_what_was_undone()
     {
         _apps.Install("Microsoft.Copilot");
         Assert.True(NewEngine().Apply(StartRecommendations).Succeeded);
@@ -285,7 +285,8 @@ public class DriftTests
         var report = NewEngine().CheckDrift();
 
         Assert.Equal(2, report.Drifted.Count);
-        Assert.Contains("Windows undid 2 changes", report.Message);
+        Assert.StartsWith("2 changes the app made were undone since, usually by an update:", report.Message);
+        Assert.EndsWith("Re-apply them all, or pick which.", report.Message);
     }
 
     [Fact]

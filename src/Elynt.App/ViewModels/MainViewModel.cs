@@ -87,7 +87,7 @@ public sealed class MainViewModel(
     /// <summary>The Startup tab on the Startup &amp; Services page.</summary>
     public StartupPageViewModel Startup => _startup ??= new StartupPageViewModel(() => IsConnected ? _client : null);
 
-    /// <summary>What Windows undid, shown on the Undo history page. Set by the window, which owns the confirmation.</summary>
+    /// <summary>What something else undid, shown on the Undo history page. Set by the window, which owns the confirmation.</summary>
     public DriftViewModel? Drift { get; set; }
 
     /// <summary>Re-reads the switches and the history, e.g. after drift was re-applied.</summary>

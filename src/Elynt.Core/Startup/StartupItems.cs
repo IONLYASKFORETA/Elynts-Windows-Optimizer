@@ -1,3 +1,4 @@
+using Elynt.Core.Journal;
 using Elynt.Core.Registry;
 using Elynt.Core.Tweaks;
 
@@ -39,6 +40,13 @@ internal abstract record StartupSwitch
 
     /// <summary>The step that sets the item on or off; captured and journaled like a tweak's step.</summary>
     public abstract TweakStep StepFor(bool enabled, DateTimeOffset now);
+
+    /// <summary>
+    /// Whether the journaled switch in <paramref name="record"/> turned the item on (true) or off (false), read the
+    /// way this switch reads Windows, so a different "off" value (Task Manager's own date) still counts as off. Null
+    /// when the record isn't one of this switch's.
+    /// </summary>
+    public abstract bool? EnabledBy(StepRecord record);
 }
 
 internal static class StartupItems
@@ -152,20 +160,25 @@ internal static class StartupItems
 /// </summary>
 internal sealed record StoreTaskSwitch(RegistryLocation State, bool EnabledByDefault) : StartupSwitch
 {
-    private uint? Read(SystemAdapters system) =>
-        system.Registry.GetValue(State) is { Kind: RegistryValueKind.DWord, Data.Length: 4 } value ? BitConverter.ToUInt32(value.Data) : null;
+    private static uint? Read(RegistryValue? value) =>
+        value is { Kind: RegistryValueKind.DWord, Data.Length: 4 } ? BitConverter.ToUInt32(value.Data) : null;
 
-    public override bool IsEnabled(SystemAdapters system) => Read(system) switch
+    private bool IsOn(RegistryValue? value) => Read(value) switch
     {
         null => EnabledByDefault,
         2 or 4 => true,
         _ => false,
     };
 
-    public override bool CanSwitch(SystemAdapters system) => Read(system) is not (3 or 4);
+    public override bool IsEnabled(SystemAdapters system) => IsOn(system.Registry.GetValue(State));
+
+    public override bool CanSwitch(SystemAdapters system) => Read(system.Registry.GetValue(State)) is not (3 or 4);
 
     public override TweakStep StepFor(bool enabled, DateTimeOffset now) =>
         new RegistryValueStep(State, RegistryValue.DWord(enabled ? 2u : 1u));
+
+    public override bool? EnabledBy(StepRecord record) =>
+        record is RegistryValueRecord set && set.Location == State ? IsOn(set.After) : null;
 }
 
 /// <summary>A scheduled task's own Enabled setting, as Task Scheduler's Disable and Enable set it.</summary>
@@ -176,6 +189,8 @@ internal sealed record ScheduledTaskSwitch(string Path, bool Enabled) : StartupS
     public override bool CanSwitch(SystemAdapters system) => !StartupItems.IsMicrosoftTask(Path);
 
     public override TweakStep StepFor(bool enabled, DateTimeOffset now) => new ScheduledTaskStep(Path, enabled);
+
+    public override bool? EnabledBy(StepRecord record) => record is ScheduledTaskRecord set ? set.SetEnabled : null;
 }
 
 /// <summary>
@@ -195,9 +210,13 @@ internal sealed record StartupApprovedSwitch(RegistryLocation Approved) : Startu
         return new RegistryValue(RegistryValueKind.Binary, data);
     }
 
-    public override bool IsEnabled(SystemAdapters system) =>
-        system.Registry.GetValue(Approved) is not { Data.Length: > 0 } value || (value.Data[0] & 1) == 0;
+    private static bool IsOn(RegistryValue? value) => value is not { Data.Length: > 0 } || (value.Data[0] & 1) == 0;
+
+    public override bool IsEnabled(SystemAdapters system) => IsOn(system.Registry.GetValue(Approved));
 
     public override TweakStep StepFor(bool enabled, DateTimeOffset now) =>
         new RegistryValueStep(Approved, enabled ? On : Off(now));
+
+    public override bool? EnabledBy(StepRecord record) =>
+        record is RegistryValueRecord set && set.Location == Approved ? IsOn(set.After) : null;
 }

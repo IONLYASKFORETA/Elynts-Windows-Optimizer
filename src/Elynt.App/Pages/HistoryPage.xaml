@@ -36,12 +36,12 @@
                 <TextBlock Style="{StaticResource Text.Body}"
                            Text="Undo puts back exactly what was there before. If something else has changed a setting since, the app won't overwrite it and tells you." />
 
-                <!-- Drift: what a Windows update undid, with re-apply all or pick. -->
+                <!-- Drift: changes something else undid (a Windows update, an app's own update), with re-apply all or pick. -->
                 <StackPanel DataContext="{Binding Drift}">
                     <TextBlock Style="{StaticResource Text.Message}" Margin="0,16,0,0" Text="{Binding Message}" />
                     <StackPanel Visibility="{Binding HasDrift, Converter={StaticResource Visible}}">
                         <Border Style="{StaticResource Table.Header}" Margin="0,14,0,0">
-                            <TextBlock Style="{StaticResource ColumnLabel}" Text="WHAT WINDOWS UNDID" />
+                            <TextBlock Style="{StaticResource ColumnLabel}" Text="UNDONE OUTSIDE THE APP" />
                         </Border>
                         <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
                             <ItemsControl.ItemTemplate>
@@ -71,18 +71,18 @@
                         <StackPanel>
                             <DockPanel>
                                 <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding AutoReapply}"
-                                          AutomationProperties.Name="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                                          AutomationProperties.Name="Re-apply undone changes automatically (ones that can't be undone or need a restart still ask)" />
                                 <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
                                            VerticalAlignment="Center"
-                                           Text="Re-apply automatically after Windows updates (changes that can't be undone or need a restart still ask)" />
+                                           Text="Re-apply undone changes automatically (ones that can't be undone or need a restart still ask)" />
                             </DockPanel>
                             <Border Height="1" Margin="0,12" Background="{StaticResource Theme.Stroke}" />
                             <DockPanel>
                                 <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding NotifyDrift}"
-                                          AutomationProperties.Name="Show a tray note when a Windows update undoes changes" />
+                                          AutomationProperties.Name="Show a tray note when an update or another app undoes changes" />
                                 <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Margin="0,0,16,0"
                                            VerticalAlignment="Center"
-                                           Text="Show a tray note when a Windows update undoes changes" />
+                                           Text="Show a tray note when an update or another app undoes changes" />
                             </DockPanel>
                         </StackPanel>
                     </Border>
