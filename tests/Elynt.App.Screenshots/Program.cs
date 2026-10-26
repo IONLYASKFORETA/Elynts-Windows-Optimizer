@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using System.Windows;
 using Elynt.Core;
 using Elynt.Core.Ipc;
+using Elynt.Core.Tests;
 
 namespace Elynt.App.Screenshots;
 
@@ -18,7 +19,11 @@ public static class Program
     {
         var output = Path.GetFullPath(args.FirstOrDefault() ?? "ui-shots");
         using var stop = new CancellationTokenSource();
-        var engine = SamplePc.NewEngine();
+        // The sample PC's driver backups and the tour's settings file go here, deleted at the end. The tour flips the
+        // Animated accents switch, which saves: a throwaway settings file keeps that out of the user's own file, and
+        // starts every tour with nothing saved.
+        var scratch = Directory.CreateTempSubdirectory("elynt-tour-");
+        var engine = SamplePc.NewEngine(scratch.FullName);
         var server = new EnginePipeServer(
             () => new NamedPipeServerStream(
                 EngineProtocol.PipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances,
@@ -26,10 +31,7 @@ public static class Program
             _ => engine);
         var serving = Task.Run(() => server.RunAsync(stop.Token));
 
-        // The tour flips the Animated accents switch, which saves. A throwaway settings file keeps that out of the
-        // user's own file, and starts every tour with nothing saved.
-        var settings = Directory.CreateTempSubdirectory("elynt-tour-");
-        UserSettings.File = new AppSettingsFile(Path.Combine(settings.FullName, "settings.json"));
+        UserSettings.File = new AppSettingsFile(Path.Combine(scratch.FullName, "settings.json"));
 
         var bindingErrors = BindingErrorLog.Listen();
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -63,7 +65,7 @@ public static class Program
         {
             // Stopping the server cancels its wait for the next client.
         }
-        settings.Delete(recursive: true);
+        scratch.Delete(recursive: true);
         Console.WriteLine($"Screenshots in {output}");
         // Reported, not fatal here, so the pictures still get published; the workflow fails on this file.
         if (bindingErrors.Errors.Count > 0)

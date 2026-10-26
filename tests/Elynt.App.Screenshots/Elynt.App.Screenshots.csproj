@@ -25,6 +25,8 @@
     <!-- The same fakes the logic tests use, so the sample PC behaves like the tested one. -->
     <Compile Include="..\Elynt.Core.Tests\**\Fake*.cs" Exclude="..\Elynt.Core.Tests\bin\**;..\Elynt.Core.Tests\obj\**"
              Link="Fakes\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The made-up PC the tour shows, kept filled by SamplePcTests. -->
+    <Compile Include="..\Elynt.Core.Tests\SamplePc.cs" Link="Fakes\SamplePc.cs" />
   </ItemGroup>
 
   <ItemGroup>
