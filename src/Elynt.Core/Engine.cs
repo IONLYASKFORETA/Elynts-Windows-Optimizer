@@ -133,7 +133,7 @@ public sealed record ChangeView(
 
 /// <summary>
 /// The service's command surface. The pipe mirrors these commands one-to-one, and tests drive the app through
-/// them, so this is the single test seam.
+/// them, so this is the main test seam.
 /// </summary>
 public partial interface IEngine
 {
