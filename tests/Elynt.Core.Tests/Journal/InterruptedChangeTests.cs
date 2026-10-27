@@ -64,7 +64,7 @@ public class InterruptedChangeTests
 
         Assert.False(reapplied.Succeeded);
         Assert.Contains("The prior state is saved", reapplied.Message);
-        Assert.Null(reapplied.NotPossibleHere);
+        Assert.Null(reapplied.Unsupported);
         var change = history.List()[0];
         Assert.Equal(ChangeState.Interrupted, change.State);
         Assert.True(change.CanUndo);

@@ -185,12 +185,9 @@ internal sealed class StartupManager(
         return new ReapplyOutcome(drift.Item.TweakId, drift.Item.Name, result.Succeeded, result.Succeeded ? "Re-applied." : result.Message);
     }
 
-    /// <summary>The name the Undo history shows for a startup switch, from its journal id.</summary>
-    public static string NameFor(SystemAdapters system, string journalId)
-    {
-        var itemId = journalId[JournalPrefix.Length..];
-        return Named(Find(system, itemId)?.Name ?? StartupItems.NameFromId(itemId));
-    }
+    /// <summary>The name the Undo history shows for a switch of the startup item <paramref name="itemId"/>.</summary>
+    public static string NameFor(SystemAdapters system, string itemId) =>
+        Named(Find(system, itemId)?.Name ?? StartupItems.NameFromId(itemId));
 
     private static string Named(string itemName) => $"Startup item: {itemName}";
 

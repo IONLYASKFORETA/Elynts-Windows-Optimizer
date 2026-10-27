@@ -196,7 +196,7 @@ public sealed partial class Engine
             return new ReapplyOutcome(tweak.Id, tweak.Name, false, refused.Message);
 
         var made = History.Reapply(tweak, previous, undone);
-        if (made.NotPossibleHere is { } reason)
+        if (made.Unsupported is { } reason)
             return Unsupported(tweak, reason);
         return new ReapplyOutcome(tweak.Id, tweak.Name, made.Succeeded, made.Message);
     }
@@ -259,7 +259,7 @@ public sealed partial class Engine
     /// </summary>
     private IEnumerable<(TweakDefinition Tweak, JournalEntry Entry)> AppliedChanges()
     {
-        foreach (var id in History.TweaksWithChanges())
+        foreach (var id in History.WithChanges())
         {
             var entry = History.Newest(id);
             if (entry is not { Status: EntryStatus.Applied } || History.Resolve(id, entry) is not { } tweak || IsMarked(id) || tweak.Expires)

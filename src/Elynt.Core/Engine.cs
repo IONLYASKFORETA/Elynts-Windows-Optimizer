@@ -462,7 +462,7 @@ public sealed partial class Engine(
             {
                 // On only because a running game's profile turned it on: the user wants it kept, so the profile's
                 // change becomes theirs. Undo still goes back to how it was before the game.
-                if (!temporary && History.KeepGameChange(tweak.Id))
+                if (!temporary && History.KeepTemporaryChange(tweak.Id))
                     return Done(tweak, $"{wording.Done} A game's profile had it on already; it now stays on after the game closes.");
                 return Done(tweak, wording.AlreadyDone);
             }

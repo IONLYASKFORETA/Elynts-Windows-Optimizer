@@ -35,8 +35,11 @@ internal sealed record ChangeOutcome(bool Succeeded, string Message)
     /// <summary>Undo refused because something else has changed the setting since the app's change.</summary>
     public bool ChangedSince { get; init; }
 
-    /// <summary>Why the change's parts can't be read or made on this PC. Everything was put back.</summary>
-    public string? NotPossibleHere { get; init; }
+    /// <summary>
+    /// Why this is an unsupported change, when re-applying showed its parts can't be read or made on this Windows build.
+    /// Everything was put back.
+    /// </summary>
+    public string? Unsupported { get; init; }
 }
 
 /// <summary>
@@ -68,9 +71,8 @@ internal sealed class UndoHistory(
     public IReadOnlyList<string> WithChanges(ChangeKind kind) =>
         journal.UndoableTweakIds(user).Where(id => KindOf(id) == kind).ToList();
 
-    /// <summary>Every tweak (per-game ones included), service and closed app with a change to undo, oldest first.</summary>
-    public IReadOnlyList<string> TweaksWithChanges() =>
-        journal.UndoableTweakIds(user).Where(id => KindOf(id) != ChangeKind.StartupSwitch).ToList();
+    /// <summary>Everything with a change to undo, of every kind, oldest first.</summary>
+    public IReadOnlyList<string> WithChanges() => journal.UndoableTweakIds(user);
 
     /// <summary>When this tweak was last changed or undone, or null if it never was.</summary>
     public DateTimeOffset? LastChangedAt(string tweakId) => journal.LastChangedAt(tweakId, user);
@@ -100,29 +102,40 @@ internal sealed class UndoHistory(
         .Reverse()
         .ToList();
 
-    /// <summary>What a saved change was made to, read from how its id is written.</summary>
-    public static ChangeKind KindOf(string tweakId) =>
-        tweakId.StartsWith(StartupManager.JournalPrefix, StringComparison.Ordinal) ? ChangeKind.StartupSwitch
-        : tweakId.StartsWith(ServiceChange.IdPrefix, StringComparison.Ordinal) ? ChangeKind.Service
-        : tweakId.StartsWith(CloseApp.IdPrefix, StringComparison.Ordinal) ? ChangeKind.ClosedApp
-        : tweakId.Contains(PerGameTweak.Separator) ? ChangeKind.PerGameTweak
-        : ChangeKind.Tweak;
+    /// <summary>
+    /// What a saved change was made to, read from how its id is written: its kind, and the name inside the id (a
+    /// service's name, an app's path or a startup item's id). A tweak's name is its whole id, which the catalogue finds,
+    /// per-game ones included, because the window sends those same ids.
+    /// </summary>
+    public static (ChangeKind Kind, string Name) Read(string tweakId)
+    {
+        if (tweakId.StartsWith(StartupManager.JournalPrefix, StringComparison.Ordinal))
+            return (ChangeKind.StartupSwitch, tweakId[StartupManager.JournalPrefix.Length..]);
+        if (tweakId.StartsWith(ServiceChange.IdPrefix, StringComparison.Ordinal))
+            return (ChangeKind.Service, tweakId[ServiceChange.IdPrefix.Length..]);
+        if (tweakId.StartsWith(CloseApp.IdPrefix, StringComparison.Ordinal))
+            return (ChangeKind.ClosedApp, tweakId[CloseApp.IdPrefix.Length..]);
+        return (tweakId.Contains(PerGameTweak.Separator) ? ChangeKind.PerGameTweak : ChangeKind.Tweak, tweakId);
+    }
+
+    public static ChangeKind KindOf(string tweakId) => Read(tweakId).Kind;
 
     /// <summary>
     /// The tweak behind a change: a catalogue or per-game tweak, or one built from the saved change (a service's start
     /// type, a closed app). Null for a startup switch, and for a tweak this version no longer has.
     /// </summary>
-    public TweakDefinition? Resolve(string tweakId, JournalEntry? change) => KindOf(tweakId) switch
+    public TweakDefinition? Resolve(string tweakId, JournalEntry? change) => Read(tweakId) switch
     {
-        ChangeKind.StartupSwitch => null,
-        ChangeKind.Service => ServiceChange.Resolve(tweakId, change, system),
-        ChangeKind.ClosedApp => CloseApp.Resolve(tweakId, change),
+        (ChangeKind.StartupSwitch, _) => null,
+        (ChangeKind.Service, var serviceName) => ServiceChange.Resolve(serviceName, change, system),
+        // Reopened as the account that had it open.
+        (ChangeKind.ClosedApp, var exePath) => CloseApp.Define(exePath, change?.User ?? ""),
         _ => catalogue.TryGet(tweakId, out var tweak) ? tweak : null,
     };
 
     /// <summary>The name the Undo history shows for a change.</summary>
     public string NameOf(JournalEntry change) =>
-        KindOf(change.TweakId) == ChangeKind.StartupSwitch ? StartupManager.NameFor(system, change.TweakId)
+        Read(change.TweakId) is (ChangeKind.StartupSwitch, var itemId) ? StartupManager.NameFor(system, itemId)
         : Resolve(change.TweakId, change)?.Name ?? change.TweakId;
 
     /// <summary>
@@ -151,7 +164,8 @@ internal sealed class UndoHistory(
             return new(false, $"{ex.Message} The app backs up the whole store before its first change of this kind. Nothing was changed.");
         }
 
-        var (result, error) = WriteAhead(tweak, [.. tweak.Steps.Select(_ => (StepRecord?)null)], temporary, replacing);
+        var nothingKept = new StepRecord?[tweak.Steps.Count];
+        var (result, error) = WriteAhead(tweak, nothingKept, temporary, replacing);
         switch (result)
         {
             case WriteAheadResult.Made:
@@ -193,7 +207,7 @@ internal sealed class UndoHistory(
                 log.LogInformation("Re-applied drifted {Tweak} for {User}", tweak.Id, user);
                 return new(true, "Re-applied.");
             case WriteAheadResult.CouldNotRead or WriteAheadResult.PutBack:
-                return new(false, $"Couldn't re-apply this: {error!.Message} Nothing was changed.") { NotPossibleHere = error.Message };
+                return new(false, $"Couldn't re-apply this: {error!.Message} Nothing was changed.") { Unsupported = error.Message };
             case WriteAheadResult.NotSaved:
                 return new(false, $"Couldn't save the current settings first: {error!.Message} Nothing was changed.");
             default:
@@ -205,7 +219,7 @@ internal sealed class UndoHistory(
     /// When the newest change to this tweak is a game profile's temporary one, the user switching the tweak on makes it
     /// theirs: it stays after the game closes, and undo still goes back to how it was before the game.
     /// </summary>
-    public bool KeepGameChange(string tweakId)
+    public bool KeepTemporaryChange(string tweakId)
     {
         if (Newest(tweakId) is not { Temporary: true } change)
             return false;
@@ -224,10 +238,22 @@ internal sealed class UndoHistory(
         if (change is null)
             return new(false, "There is no such change in your undo history.");
 
-        var startupSwitch = KindOf(change.TweakId) == ChangeKind.StartupSwitch;
-        var tweak = Resolve(change.TweakId, change);
-        if (!startupSwitch && tweak is null)
+        if (KindOf(change.TweakId) != ChangeKind.StartupSwitch && Resolve(change.TweakId, change) is null)
             return new(false, $"This change was made by a tweak this version no longer has ('{change.TweakId}').");
+        return Undo(change);
+    }
+
+    /// <summary>
+    /// Puts back exactly what was there before a change, unless something else has changed the setting since, and
+    /// closes every older change to the same tweak, so a second undo can never write back a stale snapshot. Only the
+    /// newest change to a tweak that hasn't been undone can be: an older one's saved state would undo the newer one too.
+    /// </summary>
+    /// <param name="wording">How the page that asked words it; a tweak's, or a startup switch's, by default.</param>
+    public ChangeOutcome Undo(JournalEntry change, ChangeWording? wording = null)
+    {
+        var tweak = Resolve(change.TweakId, change);
+        var startupSwitch = KindOf(change.TweakId) == ChangeKind.StartupSwitch;
+        wording ??= startupSwitch ? ChangeWording.StartupSwitch : ChangeWording.Tweak;
         if (change.Status is not (EntryStatus.Applying or EntryStatus.Applied))
             return new(false, "This change has already been undone.") { Tweak = tweak };
         if (!IsNewest(change))
@@ -235,18 +261,6 @@ internal sealed class UndoHistory(
                 ? "A newer change to this startup item comes after this one. Undo the newer change instead."
                 : "A newer change to this tweak comes after this one. Undo the newer change instead.") { Tweak = tweak };
 
-        return Undo(change);
-    }
-
-    /// <summary>
-    /// Puts back exactly what was there before a change, unless something else has changed the setting since, and
-    /// closes every older change to the same tweak, so a second undo can never write back a stale snapshot.
-    /// </summary>
-    /// <param name="wording">How the page that asked words it; a tweak's, or a startup switch's, by default.</param>
-    public ChangeOutcome Undo(JournalEntry change, ChangeWording? wording = null)
-    {
-        var tweak = Resolve(change.TweakId, change);
-        wording ??= KindOf(change.TweakId) == ChangeKind.StartupSwitch ? ChangeWording.StartupSwitch : ChangeWording.Tweak;
         // Refused before anything is read or written: a destructive change has nothing to put back (ADR 0002).
         if (tweak is not null && IsDestructive(tweak))
             return new(false, $"This can't be undone. {tweak.DestructiveWarning} Nothing was changed.") { Tweak = tweak };
@@ -319,6 +333,7 @@ internal sealed class UndoHistory(
             : new RestoreResult(false, $"Put back {results.Count - failed} of {results.Count} changes. {failed} couldn't be undone; see each one below.{leftAlone}", results);
     }
 
+    /// <summary>How the write-ahead ended, so making a change and re-applying one can each word it for the user.</summary>
     private enum WriteAheadResult
     {
         Made,
@@ -396,7 +411,7 @@ internal sealed class UndoHistory(
             catch (Exception putBack)
             {
                 log.LogError(putBack, "Couldn't put back the prior state of {Tweak}; it stays in the Undo history to undo", tweak.Id);
-                return (WriteAheadResult.Interrupted, ex);
+                return (WriteAheadResult.Interrupted, putBack);
             }
         }
 

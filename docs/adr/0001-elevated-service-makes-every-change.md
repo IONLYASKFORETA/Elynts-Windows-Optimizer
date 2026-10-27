@@ -10,5 +10,6 @@ accounts.
 
 - Velopack installs the app per user and can't manage a Windows service, so the app installs, updates and removes
   its own service, with one UAC prompt (see `docs/releasing.md`).
-- Every command crosses the pipe, which mirrors the Engine's commands one to one. That is also why the Engine is the
-  single test seam: tests drive the same commands the window sends.
+- Every command crosses the pipe, which mirrors the Engine's commands one to one, so tests drive the same commands the
+  window sends. A piece with a smaller interface of its own, such as the Undo history, is also tested at that
+  interface (CODING_STANDARDS.md: each behaviour is tested at its own seam).

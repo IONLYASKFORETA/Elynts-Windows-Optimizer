@@ -28,12 +28,9 @@ public static class ServiceChange
         Risks = kind == ServiceKind.Driver ? RiskFlags.CanStopBoot : RiskFlags.None,
     };
 
-    /// <summary>The tweak behind a journaled service change, or null when the id isn't a service change.</summary>
-    internal static TweakDefinition? Resolve(string tweakId, JournalEntry? entry, SystemAdapters system)
+    /// <summary>The tweak behind a journaled change to <paramref name="name"/>'s start type.</summary>
+    internal static TweakDefinition Resolve(string name, JournalEntry? entry, SystemAdapters system)
     {
-        if (!tweakId.StartsWith(IdPrefix, StringComparison.Ordinal))
-            return null;
-        var name = tweakId[IdPrefix.Length..];
         var start = entry?.Steps.OfType<ServiceConfigRecord>().FirstOrDefault()?.After.Start ?? ServiceStart.Manual;
 
         ServiceInfo? service = null;
