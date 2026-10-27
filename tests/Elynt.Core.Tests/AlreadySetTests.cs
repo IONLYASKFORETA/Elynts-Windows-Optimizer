@@ -33,7 +33,7 @@ public class AlreadySetTests
         var engine = EngineFor(Plain);
 
         var applied = engine.Apply(Plain.Id).Tweak!;
-        var undone = engine.Revert(Plain.Id).Tweak!;
+        var undone = engine.UndoTweak(Plain.Id).Tweak!;
 
         Assert.Equal((TweakState.On, false), (applied.State, applied.AlreadySet));
         Assert.Equal((TweakState.Off, false), (undone.State, undone.AlreadySet));

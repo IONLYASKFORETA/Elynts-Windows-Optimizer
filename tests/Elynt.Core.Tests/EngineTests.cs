@@ -56,7 +56,7 @@ public class EngineTests
         Assert.False(view.CanUndo);
 
         Assert.True(engine.Apply(tweak.Id).Succeeded);
-        var revert = engine.Revert(tweak.Id);
+        var revert = engine.UndoTweak(tweak.Id);
 
         Assert.False(revert.Succeeded);
         Assert.Equal(TweakState.On, revert.Tweak!.State);
@@ -96,7 +96,7 @@ public class EngineTests
 
             _registry.Revive();
             var restarted = NewEngineWith(new JsonFileJournalStore(journalFile));
-            var revert = restarted.Revert(tweak.Id);
+            var revert = restarted.UndoTweak(tweak.Id);
 
             Assert.True(revert.Succeeded, revert.Message);
             Assert.Equal(before, RegistrySnapshot.Take(_registry, tweak));
@@ -119,11 +119,11 @@ public class EngineTests
         Seed(tweak, StartingState.DifferentType);
         var userValues = RegistrySnapshot.Take(_registry, tweak);
         engine.Apply(tweak.Id);
-        engine.Revert(tweak.Id);
+        engine.UndoTweak(tweak.Id);
 
         Assert.Equal(userValues, RegistrySnapshot.Take(_registry, tweak));
         Assert.False(engine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
-        Assert.False(engine.Revert(tweak.Id).Succeeded);
+        Assert.False(engine.UndoTweak(tweak.Id).Succeeded);
         Assert.Equal(userValues, RegistrySnapshot.Take(_registry, tweak));
     }
 
@@ -175,7 +175,7 @@ public class EngineTests
         Assert.True(engine.Apply(tweak.Id).Succeeded);
 
         store.Full = true;
-        Assert.False(engine.Revert(tweak.Id).Succeeded);
+        Assert.False(engine.UndoTweak(tweak.Id).Succeeded);
 
         var onDisk = Assert.Single(new ChangeJournal(store).EntriesFor("S-1-5-21-test"));
         var inMemory = Assert.Single(journal.EntriesFor("S-1-5-21-test"));
@@ -195,7 +195,7 @@ public class EngineTests
         var mine = new Engine(Catalogue.Default, Adapters(), journal, "S-1-5-21-test");
 
         Assert.False(mine.ListTweaks().Single(t => t.Id == tweak.Id).CanUndo);
-        Assert.False(mine.Revert(tweak.Id).Succeeded);
+        Assert.False(mine.UndoTweak(tweak.Id).Succeeded);
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class EngineTests
         var engine = NewEngine();
 
         Assert.False(engine.Apply("no.such-tweak").Succeeded);
-        Assert.False(engine.Revert("no.such-tweak").Succeeded);
+        Assert.False(engine.UndoTweak("no.such-tweak").Succeeded);
     }
 
     [Fact]

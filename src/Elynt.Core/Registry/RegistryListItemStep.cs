@@ -83,7 +83,7 @@ public sealed record RegistryListItemRecord(
         return $"Something else changed {Item} in {Location} since the app set it. It is now {shown}.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         var current = system.Registry.GetValue(Location);
         RegistryValue? restored;

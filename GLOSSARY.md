@@ -16,6 +16,8 @@ _Avoid_: user setting, per-user change
 
 **Undo history**: this account's changes plus every whole-PC change, newest first, each with its own Undo. **Restore everything** undoes every change in it that can be undone, newest first.
 
+**Interrupted change**: a change that stopped part-way, because the service stopped in the middle of it or putting it back after a failure didn't work. What was there before is still saved, so it stays in the Undo history and can be undone like any other change.
+
 **Administrator account**: a Windows account in the Administrators group. Only administrator accounts can use the app; anyone else is told to ask one.
 
 **Already set**: a tweak that is on because something other than the app set it (Windows, the user or another tool). It counts as on, but the app has no change of its own to undo, so it can't be switched off from the app.

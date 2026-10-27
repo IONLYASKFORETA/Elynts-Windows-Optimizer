@@ -90,6 +90,20 @@ public class StartupItemsTests
     }
 
     [Fact]
+    public void Turning_it_back_on_when_the_registry_refuses_says_the_switch_failed()
+    {
+        AddDiscord();
+        var engine = NewEngine();
+        engine.SetStartupItemEnabled("run:HKCU:Discord", enabled: false);
+
+        _registry.FailOnceAfter(0);
+        var result = engine.SetStartupItemEnabled("run:HKCU:Discord", enabled: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Couldn't change this: The registry is unavailable.", result.Message);
+    }
+
+    [Fact]
     public void An_item_task_manager_turned_off_shows_as_off_and_turns_on_like_task_manager()
     {
         AddDiscord();

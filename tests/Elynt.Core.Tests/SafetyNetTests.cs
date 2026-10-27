@@ -68,10 +68,10 @@ public class SafetyNetTests
     {
         var engine = NewEngine();
         engine.Apply(Mouse.Id);
-        engine.Revert(Mouse.Id);
+        engine.UndoTweak(Mouse.Id);
         _clock.Advance(TimeSpan.FromHours(23));
         var second = engine.Apply(Mouse.Id);
-        engine.Revert(Mouse.Id);
+        engine.UndoTweak(Mouse.Id);
 
         Assert.Single(_restorePoints.Attempts);
         Assert.DoesNotContain("restore point", second.Message, StringComparison.OrdinalIgnoreCase);
@@ -87,7 +87,7 @@ public class SafetyNetTests
         _restorePoints.Next = RestorePointResult.Skipped("System Protection is turned off for C:.");
         var engine = NewEngine();
         engine.Apply(Mouse.Id);
-        engine.Revert(Mouse.Id);
+        engine.UndoTweak(Mouse.Id);
         _clock.Advance(TimeSpan.FromHours(3));
 
         var later = engine.Apply(Mouse.Id);

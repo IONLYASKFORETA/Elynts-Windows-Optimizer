@@ -45,7 +45,7 @@ public sealed record ScheduledTaskRecord(string TaskPath, bool WasEnabled, bool 
         return null;
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (ScheduledTaskStep.State(system, TaskPath) != WasEnabled)
             ScheduledTaskStep.Tasks(system).SetEnabled(TaskPath, WasEnabled);

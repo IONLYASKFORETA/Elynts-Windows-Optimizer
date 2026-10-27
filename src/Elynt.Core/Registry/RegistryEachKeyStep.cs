@@ -122,9 +122,9 @@ public sealed record RegistryEachKeyRecord(IReadOnlyList<RegistryValueRecord> Va
     public override string? FindConflict(SystemAdapters system) =>
         Values.Select(value => value.FindConflict(system)).FirstOrDefault(conflict => conflict is not null);
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         foreach (var value in Values)
-            value.Revert(system);
+            value.Undo(system);
     }
 }

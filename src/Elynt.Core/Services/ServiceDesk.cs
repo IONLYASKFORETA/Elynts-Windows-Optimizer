@@ -4,7 +4,7 @@ using Elynt.Core.Tweaks;
 namespace Elynt.Core.Services;
 
 /// <summary>Lists services for one user and decides who may change each one and to what.</summary>
-internal sealed class ServiceDesk(SystemAdapters system, ChangeJournal journal, string user)
+internal sealed class ServiceDesk(SystemAdapters system, UndoHistory history)
 {
     private static readonly IReadOnlyList<ServiceStart> NormalStarts = [ServiceStart.Automatic, ServiceStart.Manual];
     private static readonly IReadOnlyList<ServiceStart> AdvancedStarts = [ServiceStart.Automatic, ServiceStart.Manual, ServiceStart.Disabled];
@@ -48,10 +48,10 @@ internal sealed class ServiceDesk(SystemAdapters system, ChangeJournal journal, 
     }
 
     /// <summary>Undoes the app's last change to a service through the Engine's undo, in the Services page's words.</summary>
-    public ServiceResult Undo(string name, Func<string, ChangeWording, CommandResult> revert)
+    public ServiceResult Undo(string name, Func<string, ChangeWording, CommandResult> undo)
     {
         var displayName = Refresh(name)?.DisplayName ?? name;
-        var result = revert(ServiceChange.TweakIdFor(name), Wording(displayName, start: null));
+        var result = undo(ServiceChange.TweakIdFor(name), Wording(displayName, start: null));
         return new(result.Succeeded, result.Message, Refresh(name));
     }
 
@@ -97,7 +97,7 @@ internal sealed class ServiceDesk(SystemAdapters system, ChangeJournal journal, 
             access == ServiceAccess.Protected ? null : Recommend(service, listed),
             access == ServiceAccess.Listed ? NormalStarts : [],
             access == ServiceAccess.Protected ? [] : AdvancedStarts,
-            journal.LatestUndoable(ServiceChange.TweakIdFor(service.Name), user) is not null);
+            history.Newest(ServiceChange.TweakIdFor(service.Name)) is not null);
     }
 
     /// <summary>Manual for a listed service whose hardware this PC doesn't have, while it is still set to start on its own.</summary>

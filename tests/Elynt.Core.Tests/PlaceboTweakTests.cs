@@ -83,7 +83,7 @@ public class PlaceboTweakTests
         Assert.Equal("Yes", _boot.Get("disabledynamictick"));
         Assert.True(result.Tweak!.PendingReboot);
 
-        Assert.True(NewEngine().Revert(PlaceboTweaks.DynamicTickOff.Id).Succeeded);
+        Assert.True(NewEngine().UndoTweak(PlaceboTweaks.DynamicTickOff.Id).Succeeded);
         Assert.Null(_boot.Get("disabledynamictick"));
     }
 
@@ -106,7 +106,7 @@ public class PlaceboTweakTests
         Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(ethernet));
         Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(ethernet with { ValueName = "TCPNoDelay" }));
 
-        Assert.True(engine.Revert(PlaceboTweaks.NagleOff.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.NagleOff.Id).Succeeded);
         Assert.Equal(RegistryValue.DWord(2), _registry.GetValue(wifi));
         Assert.Null(_registry.GetValue(ethernet));
         Assert.True(_registry.KeyExists(RegistryRoot.LocalMachine, ethernet.KeyPath));
@@ -139,7 +139,7 @@ public class PlaceboTweakTests
         Assert.True(result.Tweak!.Risks.HasFlag(RiskFlags.CanStopBoot));
         Assert.Contains(result.Tweak.ExactChange, c => c.Contains("MSISupported"));
 
-        Assert.True(engine.Revert(PlaceboTweaks.MsiModeGpu.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.MsiModeGpu.Id).Succeeded);
         Assert.False(_registry.KeyExists(RegistryRoot.LocalMachine, GpuKey + @"\Device Parameters"));
     }
 
@@ -160,7 +160,7 @@ public class PlaceboTweakTests
         Assert.Equal(RegistryValue.String("0"), _registry.GetValue(nic));
         Assert.Null(_registry.GetValue(virtualAdapter with { ValueName = "*InterruptModeration" }));
 
-        Assert.True(engine.Revert(PlaceboTweaks.NicInterruptModerationOff.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.NicInterruptModerationOff.Id).Succeeded);
         Assert.Equal(RegistryValue.String("1"), _registry.GetValue(nic));
     }
 
@@ -173,7 +173,7 @@ public class PlaceboTweakTests
         engine.Apply(PlaceboTweaks.NagleOff.Id);
         _registry.SetValue(wifi, RegistryValue.DWord(5));
 
-        var result = engine.Revert(PlaceboTweaks.NagleOff.Id);
+        var result = engine.UndoTweak(PlaceboTweaks.NagleOff.Id);
 
         Assert.False(result.Succeeded);
         Assert.Equal(RegistryValue.DWord(5), _registry.GetValue(wifi));
@@ -193,7 +193,7 @@ public class PlaceboTweakTests
         Assert.Equal(100u, _power.GetSetting(PowerPlans.Balanced, PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, PowerSource.Ac));
         Assert.Equal(100u, _power.GetSetting(PowerPlans.Balanced, PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, PowerSource.Dc));
 
-        Assert.True(engine.Revert(PlaceboTweaks.CoreParkingOff.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.CoreParkingOff.Id).Succeeded);
         Assert.Equal(10u, _power.GetSetting(PowerPlans.Balanced, PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, PowerSource.Ac));
         Assert.Equal(5u, _power.GetSetting(PowerPlans.Balanced, PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, PowerSource.Dc));
     }
@@ -205,7 +205,7 @@ public class PlaceboTweakTests
         engine.Apply(PlaceboTweaks.CoreParkingOff.Id);
         _power.SetActive(PowerPlans.HighPerformance);
 
-        Assert.True(engine.Revert(PlaceboTweaks.CoreParkingOff.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.CoreParkingOff.Id).Succeeded);
         Assert.NotEqual(100u, _power.GetSetting(PowerPlans.Balanced, PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, PowerSource.Ac));
     }
 
@@ -234,7 +234,7 @@ public class PlaceboTweakTests
             Assert.True(applied.Succeeded, applied.Message);
 
             var restarted = new Engine(Catalogue.Default, Adapters(), new ChangeJournal(new JsonFileJournalStore(file)), "S-1-5-21-test");
-            var reverted = restarted.Revert(id);
+            var reverted = restarted.UndoTweak(id);
 
             Assert.True(reverted.Succeeded, reverted.Message);
             Assert.Equal(before, Elynt.Tests.Shared.SystemSnapshot.Take(Adapters(), tweak));
@@ -259,7 +259,7 @@ public class PlaceboTweakTests
         Assert.False(_devices.IsEnabled(Hpet));
         Assert.True(result.Tweak!.PendingReboot);
 
-        Assert.True(engine.Revert(PlaceboTweaks.HpetOff.Id).Succeeded);
+        Assert.True(engine.UndoTweak(PlaceboTweaks.HpetOff.Id).Succeeded);
         Assert.True(_devices.IsEnabled(Hpet));
     }
 
@@ -271,7 +271,7 @@ public class PlaceboTweakTests
         engine.Apply(PlaceboTweaks.HpetOff.Id);
         _devices.Remove(Hpet);
 
-        var result = engine.Revert(PlaceboTweaks.HpetOff.Id);
+        var result = engine.UndoTweak(PlaceboTweaks.HpetOff.Id);
 
         Assert.False(result.Succeeded);
         Assert.Contains("PNP0103", result.Message);

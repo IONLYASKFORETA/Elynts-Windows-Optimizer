@@ -77,7 +77,7 @@ public class DebloatSettingsTests
         Assert.True(applied.Tweak!.PendingReboot);
         Assert.Equal(Registry.RegistryValue.DWord(4), _registry.GetValue(start));
 
-        Assert.True(engine.Revert("privacy.diagtrack-service-off").Succeeded);
+        Assert.True(engine.UndoTweak("privacy.diagtrack-service-off").Succeeded);
         Assert.Equal(Registry.RegistryValue.DWord(2), _registry.GetValue(start));
     }
 

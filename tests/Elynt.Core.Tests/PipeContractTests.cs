@@ -156,12 +156,21 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Revert_arrives_unchanged()
+    public async Task UndoTweak_arrives_unchanged()
     {
-        var result = await _client.RevertAsync("some.tweak", TestContext.Current.CancellationToken);
+        var result = await _client.UndoTweakAsync("some.tweak", TestContext.Current.CancellationToken);
 
-        Assert.Equal("Revert some.tweak", _engine.LastCall);
-        AssertSameJson(_engine.Revert("some.tweak"), result);
+        Assert.Equal("UndoTweak some.tweak", _engine.LastCall);
+        AssertSameJson(_engine.UndoTweak("some.tweak"), result);
+    }
+
+    [Fact]
+    public void UndoTweak_keeps_the_command_name_earlier_builds_send()
+    {
+        var line = EngineProtocol.Serialize<EngineRequest>(new UndoTweakRequest("some.tweak"));
+
+        Assert.Contains("\"command\":\"revert\"", line);
+        Assert.Equal(new UndoTweakRequest("some.tweak"), EngineProtocol.Deserialize<EngineRequest>(line));
     }
 
     [Fact]
@@ -1073,9 +1082,9 @@ public sealed class PipeContractTests : IAsyncLifetime
             Warning: "Overclocking may damage your GPU.",
             Locked: true);
 
-        public CommandResult Revert(string tweakId)
+        public CommandResult UndoTweak(string tweakId)
         {
-            LastCall = $"Revert {tweakId}";
+            LastCall = $"UndoTweak {tweakId}";
             return new CommandResult(false, "Nothing to undo.", View with { State = TweakState.Off });
         }
 

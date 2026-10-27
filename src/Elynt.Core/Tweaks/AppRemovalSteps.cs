@@ -34,7 +34,7 @@ public sealed record AppRemovalRecord(RemovableApp App, bool WasInstalled) : Ste
     // Reinstalling an app the user put back themselves would be pointless, never harmful, so nothing conflicts.
     public override string? FindConflict(SystemAdapters system) => null;
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (!WasInstalled || system.Apps.IsInstalled(App))
             return;
@@ -80,7 +80,7 @@ public sealed record AppDeprovisionRecord(RemovableApp App, bool WasProvisioned)
 
     public override string? FindConflict(SystemAdapters system) => null;
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (!WasProvisioned || system.Apps.IsProvisioned(App))
             return;

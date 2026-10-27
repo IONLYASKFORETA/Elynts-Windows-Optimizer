@@ -990,8 +990,8 @@ public sealed class MainViewModel(
 
             var result = turnOn
                 ? await _client.ApplyAsync(item.View.Id, new ApplyOptions(ConfirmDestructive: confirmed, ConfirmWarning: warningConfirmed))
-                : await _client.RevertAsync(item.View.Id);
-            Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Revert", item.View.Id, result.Succeeded, result.Message);
+                : await _client.UndoTweakAsync(item.View.Id);
+            Log.Information("{Action} {Tweak}: {Succeeded} {Message}", turnOn ? "Apply" : "Undo", item.View.Id, result.Succeeded, result.Message);
             if (result.Tweak is not null)
                 item.View = result.Tweak;
             item.Message = result.Message;

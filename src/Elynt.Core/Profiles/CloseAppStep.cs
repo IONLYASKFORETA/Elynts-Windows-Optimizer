@@ -27,12 +27,6 @@ public static class CloseApp
     {
         ProfileEligible = true,
     };
-
-    /// <summary>The change behind a journaled app close, or null when the id isn't one.</summary>
-    internal static TweakDefinition? Resolve(string tweakId, JournalEntry? entry) =>
-        tweakId.StartsWith(IdPrefix, StringComparison.Ordinal)
-            ? Define(tweakId[IdPrefix.Length..], entry?.User ?? "")
-            : null;
 }
 
 /// <summary>Closes every process running from <paramref name="ExePath"/>. "On" means it isn't running.</summary>
@@ -57,7 +51,7 @@ public sealed record ClosedAppRecord(string ExePath, string User) : StepRecord
 
     public override string? FindConflict(SystemAdapters system) => null;
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (!system.Processes.IsRunning(ExePath))
             system.Processes.Start(ExePath, User);

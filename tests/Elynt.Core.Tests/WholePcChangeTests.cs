@@ -66,7 +66,7 @@ public class WholePcChangeTests
         var friend = EngineFor(Friend);
 
         var view = Listed(friend, MachineWide);
-        var off = friend.Revert(MachineWide.Id);
+        var off = friend.UndoTweak(MachineWide.Id);
 
         Assert.Equal((TweakState.On, false, true), (view.State, view.AlreadySet, view.CanUndo));
         Assert.True(off.Succeeded, off.Message);
@@ -116,7 +116,7 @@ public class WholePcChangeTests
 
         Assert.Empty(friend.ListHistory());
         Assert.False(Listed(friend, both).CanUndo);
-        Assert.False(friend.Revert(both.Id).Succeeded);
+        Assert.False(friend.UndoTweak(both.Id).Succeeded);
         Assert.Equal(RegistryValue.DWord(1), _machine.GetValue(MachineValue));
     }
 

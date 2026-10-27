@@ -64,7 +64,7 @@ public class DriftTests
         Assert.Empty(engine.CheckDrift().Drifted);
 
         // The before-state is now Windows' new value, not the value from before the app's first change.
-        Assert.True(engine.Revert(StartRecommendations).Succeeded);
+        Assert.True(engine.UndoTweak(StartRecommendations).Succeeded);
         Assert.All(Values(StartRecommendations), v => Assert.Equal(RegistryValue.DWord(7), v));
     }
 
@@ -79,7 +79,7 @@ public class DriftTests
         Assert.Single(item.Changes);
 
         Assert.True(engine.ReapplyDrift([StartRecommendations]).Succeeded);
-        Assert.True(engine.Revert(StartRecommendations).Succeeded);
+        Assert.True(engine.UndoTweak(StartRecommendations).Succeeded);
 
         Assert.Equal([RegistryValue.DWord(7), null], Values(StartRecommendations));
     }
@@ -116,7 +116,7 @@ public class DriftTests
         Assert.False(_apps.IsInstalled("Microsoft.Copilot"));
 
         // Undo still reinstalls it, since it was installed when the app removed it again.
-        Assert.True(engine.Revert("debloat.remove-copilot").Succeeded);
+        Assert.True(engine.UndoTweak("debloat.remove-copilot").Succeeded);
         Assert.True(_apps.IsInstalled("Microsoft.Copilot"));
     }
 

@@ -27,7 +27,8 @@ public abstract record StepRecord
     /// </summary>
     public abstract string? FindConflict(SystemAdapters system);
 
-    public abstract void Revert(SystemAdapters system);
+    /// <summary>Puts back the saved prior state.</summary>
+    public abstract void Undo(SystemAdapters system);
 
     /// <summary>
     /// True when this part affects every account on the PC (a machine-wide setting, a service, a boot setting, a power
@@ -44,6 +45,7 @@ public enum EntryStatus
     Applied,
     /// <summary>The change failed part-way and was put back straight away.</summary>
     RolledBack,
+    /// <summary>Undone. Saved under this older name, which journals already on disk use.</summary>
     Reverted,
     /// <summary>An older change to a tweak that was undone later: undoing the newest change ends the older ones too.</summary>
     Superseded,
@@ -86,8 +88,8 @@ public sealed class JournalEntry
 }
 
 /// <summary>
-/// The write-ahead change journal. Every entry is saved with the exact prior state before the change it
-/// describes is made, so undo works even after a crash.
+/// The write-ahead change journal every account shares. Every entry is saved with the exact prior state before the
+/// change it describes is made, so undo works even after a crash. Only <see cref="UndoHistory"/> writes to it.
 /// </summary>
 public sealed class ChangeJournal
 {
@@ -102,7 +104,7 @@ public sealed class ChangeJournal
     }
 
     /// <summary>Saves a new entry in the <see cref="EntryStatus.Applying"/> state. Call before changing anything.</summary>
-    public JournalEntry Open(string tweakId, string user, string osBuild, DateTimeOffset at, IReadOnlyList<StepRecord> steps, bool temporary = false)
+    internal JournalEntry Open(string tweakId, string user, string osBuild, DateTimeOffset at, IReadOnlyList<StepRecord> steps, bool temporary = false)
     {
         var entry = new JournalEntry
         {
@@ -131,7 +133,7 @@ public sealed class ChangeJournal
         return entry;
     }
 
-    public void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at) =>
+    internal void Close(JournalEntry entry, EntryStatus status, DateTimeOffset at) =>
         Change([entry], e =>
         {
             e.Status = status;
@@ -139,11 +141,11 @@ public sealed class ChangeJournal
         });
 
     /// <summary>
-    /// Marks the newest open change to this tweak as reverted and any older open ones in the undoing account's Undo
+    /// Marks the newest open change to this tweak as undone and any older open ones in the undoing account's Undo
     /// history (whole-PC changes from other accounts among them) as superseded, so a second undo can never write back
     /// an older, stale snapshot.
     /// </summary>
-    public void CloseReverted(JournalEntry newest, string user, DateTimeOffset at)
+    internal void CloseUndone(JournalEntry newest, string user, DateTimeOffset at)
     {
         lock (_gate)
         {
@@ -161,7 +163,7 @@ public sealed class ChangeJournal
     /// Marks an older change as superseded by a newer change to the same tweak (a re-apply after drift), so undo
     /// returns to the newer change's before-state and never to the older, stale one.
     /// </summary>
-    public void Supersede(JournalEntry older, DateTimeOffset at)
+    internal void Supersede(JournalEntry older, DateTimeOffset at)
     {
         Change([older], e =>
         {
@@ -197,7 +199,7 @@ public sealed class ChangeJournal
     /// <summary>
     /// A temporary change the user chose to keep: it is no longer undone when the game closes or the service starts.
     /// </summary>
-    public void KeepPermanently(JournalEntry entry) => Change([entry], e => e.Temporary = false);
+    internal void KeepPermanently(JournalEntry entry) => Change([entry], e => e.Temporary = false);
 
     /// <summary>
     /// When this tweak was last applied or undone in this account's Undo history (whole-PC changes from any account

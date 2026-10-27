@@ -82,7 +82,7 @@ public sealed record PowerSettingRecord(
               $"It is now {ac} plugged in and {dc} on battery.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         var power = PowerPlanStep.Power(system);
         power.SetSetting(Plan, Subgroup, Setting, PowerSource.Ac, BeforeAc);

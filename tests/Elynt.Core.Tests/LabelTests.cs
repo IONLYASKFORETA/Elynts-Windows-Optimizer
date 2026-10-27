@@ -185,7 +185,7 @@ public class LabelTests
         _clock.Now += TimeSpan.FromMinutes(1);
         Assert.False(Single(engine).PendingReboot);
 
-        var reverted = engine.Revert(tweak.Id);
+        var reverted = engine.UndoTweak(tweak.Id);
 
         Assert.True(reverted.Succeeded);
         Assert.True(reverted.Tweak!.PendingReboot);
@@ -269,7 +269,7 @@ public class LabelTests
 
         var view = Assert.Single(engine.ListTweaks());
         Assert.True(view.CanUndo);
-        Assert.True(engine.Revert(tweak.Id).Succeeded);
+        Assert.True(engine.UndoTweak(tweak.Id).Succeeded);
         Assert.Null(_registry.GetValue(TestValue));
     }
 

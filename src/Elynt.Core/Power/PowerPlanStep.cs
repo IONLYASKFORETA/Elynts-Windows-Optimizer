@@ -91,7 +91,7 @@ public sealed record PowerPlanRecord(Guid Before, Guid Plan, bool Created) : Ste
             : $"Something else switched the power plan since the app made {Plan} active. The active plan is now {active}.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         var power = PowerPlanStep.Power(system);
         power.SetActive(Before);

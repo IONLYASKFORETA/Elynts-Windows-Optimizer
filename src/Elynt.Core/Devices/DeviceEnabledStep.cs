@@ -76,7 +76,7 @@ public sealed record DeviceEnabledRecord(string DeviceName, IReadOnlyList<Device
             : $"The {DeviceName} device {gone.InstanceId} is no longer present, so it can't be put back.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         var devices = DeviceEnabledStep.Devices(system);
         foreach (var device in Before)

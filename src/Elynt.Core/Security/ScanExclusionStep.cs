@@ -46,7 +46,7 @@ public sealed record ScanExclusionRecord(string Folder, bool WasExcluded) : Step
     /// </summary>
     public override string? FindConflict(SystemAdapters system) => null;
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (!WasExcluded)
             ScanExclusionStep.Exclusions(system).Remove(Folder);

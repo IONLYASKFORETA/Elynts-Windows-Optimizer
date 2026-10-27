@@ -24,7 +24,8 @@ namespace Elynt.Core.Ipc;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "command")]
 [JsonDerivedType(typeof(ListTweaksRequest), "listTweaks")]
 [JsonDerivedType(typeof(ApplyRequest), "apply")]
-[JsonDerivedType(typeof(RevertRequest), "revert")]
+// "revert" is the name earlier builds send, kept so a window and a service from different builds still talk mid-update.
+[JsonDerivedType(typeof(UndoTweakRequest), "revert")]
 [JsonDerivedType(typeof(ListHistoryRequest), "listHistory")]
 [JsonDerivedType(typeof(UndoChangeRequest), "undoChange")]
 [JsonDerivedType(typeof(RestoreEverythingRequest), "restoreEverything")]
@@ -94,7 +95,7 @@ public sealed record ListTweaksRequest : EngineRequest;
 
 public sealed record ApplyRequest(string TweakId, ApplyOptions? Options = null) : EngineRequest;
 
-public sealed record RevertRequest(string TweakId) : EngineRequest;
+public sealed record UndoTweakRequest(string TweakId) : EngineRequest;
 
 public sealed record ListHistoryRequest : EngineRequest;
 
@@ -305,7 +306,7 @@ public static class EngineProtocol
     {
         ListTweaksRequest => new(Tweaks: engine.ListTweaks()),
         ApplyRequest apply => new(Result: engine.Apply(apply.TweakId, apply.Options)),
-        RevertRequest revert => new(Result: engine.Revert(revert.TweakId)),
+        UndoTweakRequest undo => new(Result: engine.UndoTweak(undo.TweakId)),
         ListHistoryRequest => new(History: engine.ListHistory()),
         UndoChangeRequest undo => new(Result: engine.UndoChange(undo.ChangeId)),
         RestoreEverythingRequest => new(Restore: engine.RestoreEverything()),
