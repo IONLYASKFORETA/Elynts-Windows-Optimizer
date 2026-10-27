@@ -1,3 +1,4 @@
+using Elynt.Core.Repair;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Security;
@@ -33,18 +34,32 @@ public sealed class TamperProtectionGuard : IApplyGuard
     public const string Guide =
         "Turn off Tamper Protection first, by hand, in Windows Security. The app never does this for you, and can't: " +
         "Tamper Protection exists to stop any program (this one included) changing Microsoft Defender. " +
-        "To turn it off: 1) Open Windows Security (press Start, type \"Windows Security\", open it). " +
-        "2) Go to Virus & threat protection. 3) Under \"Virus & threat protection settings\", click Manage settings. " +
+        "To turn it off: 1) Open Windows Security (press Start, type \"Windows Security\", open it). If it opens as a " +
+        "blank white window, fix that first with \"" + RepairCatalogue.WindowsSecurityAppName + "\" in this app's " +
+        "Repair section. 2) Go to Virus & threat protection. 3) Under \"Virus & threat protection settings\", click Manage settings. " +
         "4) Switch Tamper Protection off, and accept the Windows prompt. " +
         "Then come back here and turn this on again. When you're done, you can turn Tamper Protection back on in the " +
         "same place; turning Microsoft Defender back on here does not need it off.";
 
+    private const string CantRead =
+        "The app can't read Microsoft Defender's state on this PC, so it can't confirm Tamper Protection is off. For " +
+        "safety it won't change Defender until it can. ";
+
     public string? Blocking(SystemAdapters system)
     {
         if (system.DefenderState is not { } defender)
-            return "The app can't read Microsoft Defender's state on this PC, so it can't confirm Tamper Protection is " +
-                   "off. For safety it won't change Defender until it can. " + Guide;
+            return CantRead + Guide;
 
-        return defender.TamperProtectionOn ? Guide : null;
+        try
+        {
+            return defender.TamperProtectionOn ? Guide : null;
+        }
+        catch (Exception)
+        {
+            // Refuse rather than throw, so the page still shows why and the switch fails with plain words, not a
+            // PowerShell error.
+            return CantRead + "Defender didn't answer when the app asked, which happens when its service is stopped " +
+                   "or parts of it were removed. " + Guide;
+        }
     }
 }

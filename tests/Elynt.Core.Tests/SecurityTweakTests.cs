@@ -203,6 +203,31 @@ public class SecurityTweakTests
     }
 
     [Fact]
+    public void Defender_off_refuses_in_plain_words_when_Defender_does_not_answer()
+    {
+        // Get-MpComputerStatus fails when Defender's service is stopped or parts of it were removed.
+        _defender.ReadFails = true;
+
+        var result = NewEngine().Apply(SecurityTweaks.DefenderOff.Id, new ApplyOptions(ConfirmWarning: true));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("can't read Microsoft Defender's state", result.Message);
+        Assert.Contains("Nothing was changed.", result.Message);
+        Assert.Null(_registry.GetValue(DisableAntiSpyware));
+        // The page still shows why, rather than an open switch that fails when pressed.
+        Assert.Contains("didn't answer", NewEngine().ListTweaks().Single(t => t.Id == SecurityTweaks.DefenderOff.Id).BlockedReason);
+    }
+
+    [Fact]
+    public void The_Tamper_Protection_guide_points_to_the_Windows_Security_repair_by_the_name_the_Repair_page_shows()
+    {
+        var repair = Assert.Single(Repair.RepairCatalogue.Default.Tools, t => t.Id == Repair.RepairToolIds.WindowsSecurityApp);
+
+        Assert.Contains("blank white window", Security.TamperProtectionGuard.Guide);
+        Assert.Contains($"\"{repair.Name}\"", Security.TamperProtectionGuard.Guide);
+    }
+
+    [Fact]
     public void Defender_off_needs_the_user_to_read_and_confirm_the_warning_first()
     {
         var result = NewEngine().Apply(SecurityTweaks.DefenderOff.Id);

@@ -10,6 +10,7 @@ public static class RepairToolIds
     public const string WindowsUpdateReset = "repair.windows-update";
     public const string IconAndFontCache = "repair.icon-font-cache";
     public const string StoreCache = "repair.store-cache";
+    public const string WindowsSecurityApp = "repair.windows-security-app";
     public const string Runtimes = "repair.runtimes";
 }
 
@@ -150,6 +151,16 @@ public sealed class RepairCatalogue(IReadOnlyList<RepairToolDefinition> tools)
             ],
             Requires: new(RepairFolder.UserLocalAppData, $@"Packages\{StorePackage}", "The Microsoft Store isn't installed for you, so there's no Store cache to reset.")),
 
+        // No folder requirement: a broken install may not have one, and the step itself says when the app is missing.
+        new(RepairToolIds.WindowsSecurityApp,
+            WindowsSecurityAppName,
+            "Resets the Windows Security app for your account and registers it again from the copy Windows keeps, like Settings › Apps › Installed apps › Windows Security › Advanced options › Reset. Fixes Windows Security opening as a blank white window. Microsoft Defender itself and its settings aren't changed.",
+            RestartNeed.None,
+            "No restart needed. Close Windows Security first. If it's still blank afterwards, restart the PC and open it again.",
+            [
+                new ResetAppStep("Reset and register Windows Security again", "Microsoft.SecHealthUI", ToolOutput.ResetApp("Windows Security")),
+            ]),
+
         new(RepairToolIds.Runtimes,
             "Reinstall game runtimes",
             "Reinstalls Visual C++ (2008–2015+, 32- and 64-bit), DirectX (June 2010 legacy files) and the .NET Desktop runtimes through winget. Fixes games that crash at launch with a missing DLL such as MSVCP140.dll or d3dx9_43.dll.",
@@ -166,6 +177,9 @@ public sealed class RepairCatalogue(IReadOnlyList<RepairToolDefinition> tools)
     ]);
 
     private const string StorePackage = "Microsoft.WindowsStore_8wekyb3d8bbwe";
+
+    /// <summary>Named here so the Tamper Protection guide can point to the tool by the name the Repair page shows.</summary>
+    public const string WindowsSecurityAppName = "Repair the Windows Security app";
 
 
     private static RunProgramStep StopService(string service) =>

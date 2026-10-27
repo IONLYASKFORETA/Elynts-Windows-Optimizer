@@ -12,7 +12,10 @@ public sealed class FakeRepairSystem : IRepairSystem
 
     public string SystemDrive { get; set; } = "C:";
 
-    /// <summary>Every program run, as "program arg1 arg2", and every folder cleared, as "clear ...", in order.</summary>
+    /// <summary>
+    /// Every program run, as "program arg1 arg2", every folder cleared, as "clear ...", and every app reset, as
+    /// "reset-app Package as user", in order.
+    /// </summary>
     public List<string> Actions { get; } = [];
 
     /// <summary>Runs whose command line starts with <paramref name="commandPrefix"/> print these lines and exit with this code. Unscripted runs print nothing and exit 0.</summary>
@@ -39,15 +42,22 @@ public sealed class FakeRepairSystem : IRepairSystem
 
     public bool FileExists(RepairFolder root, string path) => _files.ContainsKey(Key(root, path));
 
-    public async Task<int> RunAsync(ProgramRun run, Action<string> output, CancellationToken cancellation)
+    public Task<int> RunAsync(ProgramRun run, Action<string> output, CancellationToken cancellation) =>
+        RunScriptedAsync(run.ToString(), run.Program, output, cancellation);
+
+    /// <summary>Scripted like a program run, with the command line "reset-app Package".</summary>
+    public Task<int> ResetAppAsync(string packageName, string user, Action<string> output, CancellationToken cancellation) =>
+        RunScriptedAsync($"reset-app {packageName}", packageName, output, cancellation, $" as {user}");
+
+    private async Task<int> RunScriptedAsync(
+        string commandLine, string program, Action<string> output, CancellationToken cancellation, string asUser = "")
     {
-        var commandLine = run.ToString();
-        Actions.Add(commandLine);
+        Actions.Add(commandLine + asUser);
         var script = _scripts.FirstOrDefault(s => commandLine.StartsWith(s.Prefix, StringComparison.OrdinalIgnoreCase));
         if (script.Prefix is null)
             return 0;
         if (script.ExitCode == int.MinValue)
-            throw new FileNotFoundException($"{run.Program} wasn't found.");
+            throw new FileNotFoundException($"{program} wasn't found.");
         if (script.ExitCode == int.MaxValue)
         {
             await Task.Delay(Timeout.Infinite, cancellation);

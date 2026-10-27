@@ -1,13 +1,17 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Principal;
 using System.Text;
 using Elynt.Core.Repair;
 using Microsoft.Win32;
 
 namespace Elynt.Windows;
 
-/// <summary>Runs repair tools on the real PC, as the service (SYSTEM), on behalf of one signed-in user.</summary>
-public sealed class WindowsRepairSystem(string userSid) : IRepairSystem
+/// <summary>
+/// Runs repair tools on the real PC, as the service (SYSTEM), on behalf of one signed-in user. Resetting a built-in
+/// app runs as that user (<paramref name="account"/>), since Windows keeps those apps per account.
+/// </summary>
+public sealed class WindowsRepairSystem(string userSid, WindowsIdentity? account = null) : IRepairSystem
 {
     static WindowsRepairSystem() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -50,6 +54,33 @@ public sealed class WindowsRepairSystem(string userSid) : IRepairSystem
         await readers;
         return process.ExitCode;
     }
+
+    public Task<int> ResetAppAsync(string packageName, string user, Action<string> output, CancellationToken cancellation) =>
+        Task.Run(() =>
+        {
+            var identity = account ?? throw new InvalidOperationException("Couldn't tell which account to reset the app for.");
+            // Output comes back over a private pipe: the user's process is in another session, so it has no stdout here.
+            var (exit, text) = UserProcess.RunReturning(identity, PowerShell.Path,
+                pipe => ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
+                    PowerShell.Encode(ResetAppScript(packageName, pipe))],
+                TimeSpan.FromMinutes(5));
+            foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                output(line);
+            return exit;
+        }, cancellation);
+
+    /// <summary>
+    /// Reset first (Settings' Reset), then register again from the copy Windows keeps; each runs even if the other
+    /// fails, and the script exits 0 when either worked.
+    /// </summary>
+    private static string ResetAppScript(string packageName, string pipe) =>
+        "$ProgressPreference = 'SilentlyContinue'; $elyntExit = 1; " +
+        $"$app = Get-AppxPackage -Name {PowerShell.Quote(packageName)} | Sort-Object Version -Descending | Select-Object -First 1; " +
+        "$elyntLines = if ($null -eq $app) { $elyntExit = " + ResetAppStep.NotInstalled + "; 'The app is not installed for this account.' } else { " +
+        "try { $app | Reset-AppxPackage -ErrorAction Stop; $elyntExit = 0; 'Reset: done.' } catch { \"Reset failed: $($_.Exception.Message)\" }; " +
+        "try { Add-AppxPackage -Register (Join-Path $app.InstallLocation 'AppxManifest.xml') -DisableDevelopmentMode -ErrorAction Stop; " +
+        "$elyntExit = 0; 'Registered again: done.' } catch { \"Registering again failed: $($_.Exception.Message)\" } }; " +
+        PowerShell.SendToPipe(pipe, "($elyntLines -join [Environment]::NewLine)") + "; exit $elyntExit";
 
     public bool FolderExists(RepairFolder root, string relativePath, string user) =>
         Directory.Exists(Resolve(root, relativePath));
