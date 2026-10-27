@@ -61,7 +61,10 @@ internal sealed partial class RepairBench(
             {
                 outcome = step switch
                 {
-                    RunProgramStep run => await RunProgramAsync(tool, i, run, text, progress, token),
+                    RunProgramStep run => await RunAsync(tool, i, run, run.Interpret, text, progress,
+                        output => Pc.RunAsync(run.Resolve(Pc.SystemDrive), output, token)),
+                    ResetAppStep reset => await RunAsync(tool, i, reset, reset.Interpret, text, progress,
+                        output => Pc.ResetAppAsync(reset.PackageName, user, output, token)),
                     ClearFolderStep clear => ClearFolder(clear, text),
                     _ => throw new NotSupportedException(step.GetType().Name),
                 };
@@ -104,18 +107,20 @@ internal sealed partial class RepairBench(
         return new(tool.Id, !failed, summary, restart, followUp, location, logText);
     }
 
-    private async Task<StepOutcome> RunProgramAsync(
-        RepairToolDefinition tool, int index, RunProgramStep step, StringBuilder text, IProgress<RepairProgress>? progress, CancellationToken cancellation)
+    /// <summary>Runs a step that prints output and ends with an exit code, streaming each line to the log and the page.</summary>
+    private static async Task<StepOutcome> RunAsync(
+        RepairToolDefinition tool, int index, RepairStep step, Func<int, string, StepOutcome> interpret, StringBuilder text,
+        IProgress<RepairProgress>? progress, Func<Action<string>, Task<int>> run)
     {
         var output = new StringBuilder();
-        var exitCode = await Pc.RunAsync(step.Resolve(Pc.SystemDrive), line =>
+        var exitCode = await run(line =>
         {
             output.AppendLine(line);
             text.AppendLine(line);
             progress?.Report(new(tool.Id, index + 1, tool.Steps.Count, step.Name, Percent(line), line));
-        }, cancellation);
+        });
         text.AppendLine($"Exit code: {exitCode}");
-        return step.Interpret(exitCode, output.ToString());
+        return interpret(exitCode, output.ToString());
     }
 
     private StepOutcome ClearFolder(ClearFolderStep step, StringBuilder text)

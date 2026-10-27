@@ -62,6 +62,25 @@ public sealed record ClearFolderStep(
     }
 }
 
+/// <summary>
+/// Resets a built-in Windows app for the signed-in user, like Settings › Apps › Advanced options › Reset, then
+/// registers it again from the copy Windows keeps. Each is tried even if the other fails.
+/// </summary>
+/// <param name="PackageName">The app's package name, e.g. Microsoft.SecHealthUI.</param>
+public sealed record ResetAppStep(
+    string Name,
+    string PackageName,
+    Func<int, string, StepOutcome> Interpret,
+    bool AlwaysRun = false) : RepairStep(Name, AlwaysRun)
+{
+    /// <summary>The exit code for "this user doesn't have the app", so there was nothing to reset.</summary>
+    public const int NotInstalled = 3;
+
+    public override string Describe(string systemDrive) =>
+        $"As you: Get-AppxPackage {PackageName} | Reset-AppxPackage, then " +
+        $"Add-AppxPackage -Register <its folder>\\AppxManifest.xml -DisableDevelopmentMode";
+}
+
 /// <summary>A folder that must exist for a tool to apply (e.g. the Store's package folder).</summary>
 public sealed record FolderRequirement(RepairFolder Root, string RelativePath, string ReasonWhenMissing);
 

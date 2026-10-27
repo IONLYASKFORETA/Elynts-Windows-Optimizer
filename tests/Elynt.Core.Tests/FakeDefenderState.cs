@@ -8,7 +8,21 @@ namespace Elynt.Core.Tests;
 /// </summary>
 public sealed class FakeDefenderState : IDefenderState
 {
-    public bool TamperProtectionOn { get; set; } = true;
+    private bool _tamperProtectionOn = true;
+    private bool _defenderRunning = true;
 
-    public bool DefenderRunning { get; set; } = true;
+    /// <summary>Reading throws, as Get-MpComputerStatus does when Defender's service is stopped or removed.</summary>
+    public bool ReadFails { get; set; }
+
+    public bool TamperProtectionOn
+    {
+        get => ReadFails ? throw new InvalidOperationException("Get-MpComputerStatus failed (exit code 1).") : _tamperProtectionOn;
+        set => _tamperProtectionOn = value;
+    }
+
+    public bool DefenderRunning
+    {
+        get => ReadFails ? throw new InvalidOperationException("Get-MpComputerStatus failed (exit code 1).") : _defenderRunning;
+        set => _defenderRunning = value;
+    }
 }

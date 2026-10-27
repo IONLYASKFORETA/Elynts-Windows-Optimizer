@@ -158,7 +158,7 @@ internal sealed class EngineHost(
                 _systemInfo,
                 _hardware,
                 new WingetPackageManager(identity, loggers.CreateLogger<WingetPackageManager>()),
-                new WindowsRepairSystem(sid),
+                new WindowsRepairSystem(sid, identity),
                 _drivers,
                 _games,
                 Cleanup: new WindowsCleanupSystem(sid))

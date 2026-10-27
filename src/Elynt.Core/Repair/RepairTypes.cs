@@ -85,6 +85,13 @@ public interface IRepairSystem
 
     /// <summary>Deletes the files matching <paramref name="pattern"/> in a folder (and its subfolders when asked). Files in use are skipped and counted. A missing folder clears nothing.</summary>
     FolderClearResult ClearFolder(RepairFolder root, string relativePath, string pattern, bool includeSubfolders, string user);
+
+    /// <summary>
+    /// Resets a built-in Windows app for the user and registers it again (see <see cref="ResetAppStep"/>), running as
+    /// that user: Windows keeps these apps per account, so SYSTEM can't reset them. Passes each output line on.
+    /// </summary>
+    /// <returns>0 when it was reset or registered again, <see cref="ResetAppStep.NotInstalled"/> when the user doesn't have the app.</returns>
+    Task<int> ResetAppAsync(string packageName, string user, Action<string> output, CancellationToken cancellation);
 }
 
 /// <summary>Where every repair run's log is kept.</summary>

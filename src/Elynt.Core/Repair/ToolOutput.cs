@@ -73,6 +73,22 @@ public static class ToolOutput
         _ => StepOutcome.Failed($"Couldn't reinstall {name} (error {Hex(exitCode)}). {LastLine(output)}".TrimEnd()),
     };
 
+    /// <summary>Windows' own repair that keeps files and apps, the last resort for a broken built-in app.</summary>
+    private const string ReinstallWindows =
+        "Windows' own repair, which keeps your files and apps: Settings › System › Recovery › Fix problems using " +
+        "Windows Update › Reinstall now.";
+
+    /// <summary>What to try when resetting a built-in app didn't fix it, mildest first.</summary>
+    private const string NextRepairs = "run Repair Windows system files here, then " + ReinstallWindows;
+
+    public static Func<int, string, StepOutcome> ResetApp(string name) => (exitCode, _) => exitCode switch
+    {
+        0 => StepOutcome.Ok($"Windows repaired {name}'s install for your account. Open it again to check; if it still doesn't work, {NextRepairs}"),
+        ResetAppStep.NotInstalled => StepOutcome.Failed(
+            $"{name} isn't installed for your account, so there was nothing to reset. It comes back with {ReinstallWindows}"),
+        _ => StepOutcome.Failed($"Windows couldn't reset {name} (exit code {exitCode}); the log has what it said. Next, {NextRepairs}"),
+    };
+
     private static bool Has(string output, string text) => output.Contains(text, StringComparison.OrdinalIgnoreCase);
 
     private static string Hex(int code) => $"0x{code:X8}";

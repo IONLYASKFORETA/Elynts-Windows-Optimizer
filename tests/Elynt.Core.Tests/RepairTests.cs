@@ -30,6 +30,7 @@ public class RepairTests
         Assert.Equal(RestartNeed.None, Tool(RepairToolIds.WindowsUpdateReset).Restart);
         Assert.Equal(RestartNeed.Restart, Tool(RepairToolIds.IconAndFontCache).Restart);
         Assert.Equal(RestartNeed.None, Tool(RepairToolIds.StoreCache).Restart);
+        Assert.Equal(RestartNeed.None, Tool(RepairToolIds.WindowsSecurityApp).Restart);
 
         Assert.All(NewEngine().ListRepairTools(), tool =>
         {
@@ -272,6 +273,46 @@ public class RepairTests
         Assert.True(result.Succeeded, result.Summary);
         Assert.False(_pc.FileExists(RepairFolder.UserLocalAppData, @"Packages\Microsoft.WindowsStore_8wekyb3d8bbwe\LocalCache\Local\cache.bin"));
         Assert.True(_pc.FileExists(RepairFolder.UserLocalAppData, @"Packages\Microsoft.WindowsStore_8wekyb3d8bbwe\Settings\settings.dat"));
+    }
+
+    [Fact]
+    public async Task Repairing_Windows_Security_resets_its_app_as_the_signed_in_user_and_says_what_to_try_next()
+    {
+        var tool = Tool(RepairToolIds.WindowsSecurityApp);
+        Assert.True(tool.Available);
+        Assert.Contains("blank white window", tool.WhatItDoes);
+        Assert.Contains("Reset-AppxPackage", Assert.Single(tool.ExactCommands));
+        _pc.Script("reset-app Microsoft.SecHealthUI", 0, "Reset: done.", "Registered again: done.");
+
+        var result = await Run(RepairToolIds.WindowsSecurityApp);
+
+        Assert.Equal(["reset-app Microsoft.SecHealthUI as S-1-5-21-test"], _pc.Actions);
+        Assert.True(result.Succeeded, result.Summary);
+        Assert.False(result.RestartNeeded);
+        Assert.Contains("Open it again to check", result.Summary);
+        Assert.Contains("Repair Windows system files", result.Summary);
+        Assert.Contains("Registered again: done.", result.LogText);
+    }
+
+    [Fact]
+    public async Task Repairing_Windows_Security_when_it_is_missing_or_will_not_reset_points_to_Windows_own_repairs()
+    {
+        _pc.Script("reset-app Microsoft.SecHealthUI", ResetAppStep.NotInstalled, "The app is not installed for this account.");
+
+        var missing = await Run(RepairToolIds.WindowsSecurityApp);
+
+        Assert.False(missing.Succeeded);
+        Assert.Contains("isn't installed for your account", missing.Summary);
+        Assert.Contains("Fix problems using Windows Update", missing.Summary);
+
+        _pc.Script("reset-app Microsoft.SecHealthUI", 1, "Reset failed: Access is denied.", "Registering again failed: Access is denied.");
+
+        var failed = await Run(RepairToolIds.WindowsSecurityApp);
+
+        Assert.False(failed.Succeeded);
+        Assert.Contains("couldn't reset Windows Security (exit code 1)", failed.Summary);
+        Assert.Contains("Repair Windows system files", failed.Summary);
+        Assert.Contains("Access is denied.", failed.LogText);
     }
 
     [Fact]
