@@ -65,8 +65,8 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
     public async Task<CommandResult> ApplyAsync(string tweakId, ApplyOptions? options = null, CancellationToken cancellation = default) =>
         (await SendAsync(new ApplyRequest(tweakId, options), cancellation)).Result ?? throw Missing("result");
 
-    public async Task<CommandResult> RevertAsync(string tweakId, CancellationToken cancellation = default) =>
-        (await SendAsync(new RevertRequest(tweakId), cancellation)).Result ?? throw Missing("result");
+    public async Task<CommandResult> UndoTweakAsync(string tweakId, CancellationToken cancellation = default) =>
+        (await SendAsync(new UndoTweakRequest(tweakId), cancellation)).Result ?? throw Missing("result");
 
     public async Task<IReadOnlyList<ChangeView>> ListHistoryAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new ListHistoryRequest(), cancellation)).History ?? throw Missing("history");

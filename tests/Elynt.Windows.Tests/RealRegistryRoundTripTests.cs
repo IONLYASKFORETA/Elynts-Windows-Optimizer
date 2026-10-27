@@ -169,7 +169,7 @@ public sealed class RealRegistryRoundTripTests : IDisposable
         Assert.True(engine.Apply(tweak.Id).Succeeded);
         _registry.SetValue(location, RegistryValue.String("changed elsewhere"));
 
-        var result = engine.Revert(tweak.Id);
+        var result = engine.UndoTweak(tweak.Id);
 
         Assert.False(result.Succeeded);
         Assert.Contains(location.ToString(), result.Message);

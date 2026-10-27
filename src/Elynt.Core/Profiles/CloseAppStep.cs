@@ -57,7 +57,7 @@ public sealed record ClosedAppRecord(string ExePath, string User) : StepRecord
 
     public override string? FindConflict(SystemAdapters system) => null;
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (!system.Processes.IsRunning(ExePath))
             system.Processes.Start(ExePath, User);

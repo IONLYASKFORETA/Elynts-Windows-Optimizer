@@ -64,7 +64,7 @@ public sealed record BootSettingRecord(string Element, string? Before, string? A
 
     private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         var boot = BootSettingStep.Boot(system);
         if (Before is null)

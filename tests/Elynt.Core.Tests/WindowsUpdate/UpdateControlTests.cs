@@ -35,7 +35,7 @@ public class UpdateControlTests
         Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == "update.pause").State);
         Assert.Contains(engine.ListHistory(), c => c.TweakId == "update.pause" && c.State == ChangeState.Applied);
 
-        Assert.True(engine.Revert("update.pause").Succeeded);
+        Assert.True(engine.UndoTweak("update.pause").Succeeded);
         Assert.Null(_registry.GetValue(qualityEnd));
         Assert.False(_registry.KeyExists(RegistryRoot.LocalMachine, UxSettings));
     }

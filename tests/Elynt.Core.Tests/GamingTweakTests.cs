@@ -128,7 +128,7 @@ public class GamingTweakTests
 
         // The user turns on Auto HDR in Settings afterwards.
         _registry.SetValue(DirectXSettings, RegistryValue.String("SwapEffectUpgradeEnable=1;AutoHDREnable=1;"));
-        var reverted = engine.Revert(GamingTweaks.WindowedGamesOptimizationsOn.Id);
+        var reverted = engine.UndoTweak(GamingTweaks.WindowedGamesOptimizationsOn.Id);
 
         Assert.True(reverted.Succeeded, reverted.Message);
         Assert.Equal(RegistryValue.String("SwapEffectUpgradeEnable=0;AutoHDREnable=1;"), _registry.GetValue(DirectXSettings));
@@ -149,7 +149,7 @@ public class GamingTweakTests
         Assert.True(applied.Tweak.PendingReboot);
         Assert.Equal(EvidenceTier.Proven, applied.Tweak.Tier);
 
-        Assert.True(engine.Revert(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+        Assert.True(engine.UndoTweak(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
         Assert.Equal("Yes", _boot.Get("useplatformclock"));
     }
 
@@ -175,7 +175,7 @@ public class GamingTweakTests
         Assert.True(applied.Tweak!.ProfileEligible);
         Assert.Equal(EvidenceTier.Situational, applied.Tweak.Tier);
 
-        engine.Revert(GamingTweaks.HighPerformancePlan.Id);
+        engine.UndoTweak(GamingTweaks.HighPerformancePlan.Id);
         Assert.Equal(PowerPlans.Balanced, _power.Active);
     }
 
@@ -205,7 +205,7 @@ public class GamingTweakTests
         Assert.Equal(PowerPlans.ElyntUltimatePerformance, _power.Active);
         Assert.Contains(PowerPlans.ElyntUltimatePerformance, _power.Plans);
 
-        engine.Revert(GamingTweaks.UltimatePerformancePlan.Id);
+        engine.UndoTweak(GamingTweaks.UltimatePerformancePlan.Id);
         Assert.Equal(PowerPlans.Balanced, _power.Active);
         Assert.Equal(plansBefore, _power.Plans);
     }
@@ -260,7 +260,7 @@ public class GamingTweakTests
 
         Assert.Contains(engine.ListTweaks(), t => t.Id == ForGame(Game) && t.State == TweakState.On && t.CanUndo);
 
-        Assert.True(engine.Revert(ForGame(Game)).Succeeded);
+        Assert.True(engine.UndoTweak(ForGame(Game)).Succeeded);
         Assert.Null(_registry.GetValue(GameLayers));
         Assert.DoesNotContain(engine.ListTweaks(), t => t.Id == ForGame(Game));
     }
@@ -304,7 +304,7 @@ public class GamingTweakTests
             Assert.True(applied.Succeeded, applied.Message);
 
             var restarted = new Engine(Catalogue.Default, adapters, new ChangeJournal(new JsonFileJournalStore(file)), "S-1-5-21-test");
-            var reverted = restarted.Revert(id);
+            var reverted = restarted.UndoTweak(id);
 
             Assert.True(reverted.Succeeded, reverted.Message);
             Assert.Equal(before, Elynt.Tests.Shared.SystemSnapshot.Take(adapters, tweak));
@@ -323,7 +323,7 @@ public class GamingTweakTests
         engine.Apply(GamingTweaks.HighPerformancePlan.Id);
         _power.Active = PowerPlans.PowerSaver;
 
-        var reverted = engine.Revert(GamingTweaks.HighPerformancePlan.Id);
+        var reverted = engine.UndoTweak(GamingTweaks.HighPerformancePlan.Id);
 
         Assert.False(reverted.Succeeded);
         Assert.Equal(PowerPlans.PowerSaver, _power.Active);
@@ -337,7 +337,7 @@ public class GamingTweakTests
         engine.Apply(GamingTweaks.UsePlatformClockRemoved.Id);
         _boot.Set("useplatformclock", "No");
 
-        Assert.False(engine.Revert(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
+        Assert.False(engine.UndoTweak(GamingTweaks.UsePlatformClockRemoved.Id).Succeeded);
         Assert.Equal("No", _boot.Get("useplatformclock"));
     }
 
@@ -349,7 +349,7 @@ public class GamingTweakTests
         engine.Apply(GamingTweaks.WindowedGamesOptimizationsOn.Id);
         _registry.SetValue(DirectXSettings, RegistryValue.String("AutoHDREnable=1;SwapEffectUpgradeEnable=0;"));
 
-        Assert.False(engine.Revert(GamingTweaks.WindowedGamesOptimizationsOn.Id).Succeeded);
+        Assert.False(engine.UndoTweak(GamingTweaks.WindowedGamesOptimizationsOn.Id).Succeeded);
         Assert.Equal(RegistryValue.String("AutoHDREnable=1;SwapEffectUpgradeEnable=0;"), _registry.GetValue(DirectXSettings));
     }
 

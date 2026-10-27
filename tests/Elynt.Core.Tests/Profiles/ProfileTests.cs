@@ -224,7 +224,7 @@ public class ProfileTests
         Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(GameMode));
         Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == GamingTweaks.GameModeOn.Id).State);
         // Undo still goes back to how it was before the game.
-        Assert.True(engine.Revert(GamingTweaks.GameModeOn.Id).Succeeded);
+        Assert.True(engine.UndoTweak(GamingTweaks.GameModeOn.Id).Succeeded);
         Assert.Null(_registry.GetValue(GameMode));
     }
 }

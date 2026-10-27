@@ -139,7 +139,9 @@ public partial interface IEngine
 {
     IReadOnlyList<TweakView> ListTweaks();
     CommandResult Apply(string tweakId, ApplyOptions? options = null);
-    CommandResult Revert(string tweakId);
+
+    /// <summary>Switches a tweak off by undoing the newest change to it, the one its switch shows.</summary>
+    CommandResult UndoTweak(string tweakId);
 
     /// <summary>
     /// This account's Undo history, newest first: its own changes and every whole-PC change, whichever administrator
@@ -374,13 +376,16 @@ public sealed partial class Engine(
     private readonly AppManager _appManager = new(apps ?? AppCatalogue.Default, system.Packages);
 
     // Built on first use, so they share the Engine's own clock, log and change flow.
+    private UndoHistory History => field ??= new(journal, user, catalogue, system, safetyNet, _clock, _log);
+
     private StartupManager Startup => field ??= new(
-        system, journal, user, safetyNet, _clock, _log, (tweak, wording) => ApplyTweak(tweak, ApplyOptions.Default, wording: wording));
+        system, History, user, safetyNet, _clock, _log,
+        (tweak, wording, replacing) => ApplyTweak(tweak, ApplyOptions.Default, wording: wording, replacing: replacing));
 
     private RepairBench Repair => field ??= new(
         repairs ?? RepairCatalogue.Default, system, repairLogs ?? new InMemoryRepairLogStore(), user, _clock, _log);
 
-    private ServiceDesk Services => field ??= new(system, journal, user);
+    private ServiceDesk Services => field ??= new(system, History);
 
     public IReadOnlyList<ServiceView> ListServices() => Services.List();
 
@@ -388,16 +393,7 @@ public sealed partial class Engine(
         Services.Set(serviceName, start, options ?? ApplyOptions.Default, (tweak, o, wording) => ApplyTweak(tweak, o, wording: wording));
 
     public ServiceResult UndoServiceChange(string serviceName) =>
-        Services.Undo(serviceName, (id, wording) => Revert(id, wording));
-
-    /// <summary>A catalogue tweak, or the change behind a journaled service start type.</summary>
-    private bool TryResolve(string tweakId, JournalEntry? entry, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TweakDefinition? tweak)
-    {
-        if (catalogue.TryGet(tweakId, out tweak))
-            return true;
-        tweak = ServiceChange.Resolve(tweakId, entry, system) ?? Profiles.CloseApp.Resolve(tweakId, entry);
-        return tweak is not null;
-    }
+        Services.Undo(serviceName, (id, wording) => UndoTweak(id, wording));
 
     private CleanupBench Cleanup => field ??= new(
         cleanup ?? CleanupCatalogue.Default, system, cleanupSchedules ?? new InMemoryCleanupScheduleStore(), user, _clock, _log, safetyNet);
@@ -431,8 +427,7 @@ public sealed partial class Engine(
         .ToList();
 
     /// <summary>One game's instance of a per-game tweak is listed while it has a change to undo.</summary>
-    private IEnumerable<TweakDefinition> GamesWithChanges() => journal.UndoableTweakIds(user)
-        .Where(id => id.Contains(PerGameTweak.Separator))
+    private IEnumerable<TweakDefinition> GamesWithChanges() => History.WithChanges(ChangeKind.PerGameTweak)
         .Select(id => catalogue.TryGet(id, out var tweak) ? tweak : null)
         .OfType<TweakDefinition>();
 
@@ -447,10 +442,15 @@ public sealed partial class Engine(
         return ApplyTweak(tweak, options ?? ApplyOptions.Default);
     }
 
-    /// <summary>Applies a catalogue tweak, or a change built on the fly (a service start type), through every safeguard.</summary>
+    /// <summary>
+    /// Applies a catalogue tweak, or a change built on the fly (a service start type, a startup switch, a closed app):
+    /// the Engine decides whether it is allowed, and the Undo history makes it safely.
+    /// </summary>
     /// <param name="temporary">Made by a per-game profile, so undone when the game closes or after a crash or reboot.</param>
     /// <param name="wording">How the result reads on the page that asked (a startup item, a service); a tweak's by default.</param>
-    private CommandResult ApplyTweak(TweakDefinition tweak, ApplyOptions options, bool temporary = false, ChangeWording? wording = null)
+    /// <param name="replacing">An older change to the same thing that this one takes the place of (a startup switch).</param>
+    private CommandResult ApplyTweak(
+        TweakDefinition tweak, ApplyOptions options, bool temporary = false, ChangeWording? wording = null, JournalEntry? replacing = null)
     {
         wording ??= ChangeWording.Tweak;
         if (Refusal(tweak, options) is { } refused)
@@ -462,59 +462,17 @@ public sealed partial class Engine(
             {
                 // On only because a running game's profile turned it on: the user wants it kept, so the profile's
                 // change becomes theirs. Undo still goes back to how it was before the game.
-                if (!temporary && journal.LatestUndoable(tweak.Id, user) is { Temporary: true } profileChange)
-                {
-                    journal.KeepPermanently(profileChange);
-                    _log.LogInformation("Kept {Tweak} for {User} after the game closes", tweak.Id, user);
+                if (!temporary && History.KeepGameChange(tweak.Id))
                     return Done(tweak, $"{wording.Done} A game's profile had it on already; it now stays on after the game closes.");
-                }
                 return Done(tweak, wording.AlreadyDone);
             }
 
-            // The safety net goes down before anything changes: whole-store backups, then a restore point.
-            string? note;
-            try
-            {
-                note = safetyNet?.BeforeChange(tweak);
-            }
-            catch (BackupFailedException ex)
-            {
-                return Failed(tweak, $"{ex.Message} The app backs up the whole store before its first change of this kind. Nothing was changed.");
-            }
-            var turnedOn = note is null ? wording.Done : $"{wording.Done} {note}";
-
-            // Write-ahead: the exact prior state is on disk before anything changes.
-            List<StepRecord> records;
-            JournalEntry entry;
-            try
-            {
-                records = tweak.Steps.Select(step => step.Capture(system)).ToList();
-                entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, temporary);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "Couldn't record the prior state of {Tweak}", tweak.Id);
-                return Failed(tweak, $"Couldn't save the current settings before changing them: {ex.Message} Nothing was changed.");
-            }
-
-            try
-            {
-                foreach (var step in tweak.Steps)
-                    step.Apply(system);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "Applying {Tweak} failed; putting back the prior state", tweak.Id);
-                RevertSteps(records);
-                journal.Close(entry, EntryStatus.RolledBack, _clock.GetUtcNow());
-                return Failed(tweak, $"{wording.CouldNot}: {ex.Message} Nothing was changed.");
-            }
-
-            journal.Close(entry, EntryStatus.Applied, _clock.GetUtcNow());
-            _log.LogInformation("Applied {Tweak} for {User}", tweak.Id, user);
-            var done = Done(tweak, turnedOn);
+            var made = History.Make(tweak, wording, temporary, replacing);
+            if (!made.Succeeded)
+                return Failed(tweak, made.Message);
+            var done = Done(tweak, made.Message);
             // Anti-cheat conflicts warn and never block: the change is made, and the message names the games.
-            return done.Tweak?.AntiCheatWarning is { } warning ? done with { Message = $"{turnedOn} {warning}" } : done;
+            return done.Tweak?.AntiCheatWarning is { } warning ? done with { Message = $"{made.Message} {warning}" } : done;
         }
         catch (Exception ex)
         {
@@ -552,141 +510,34 @@ public sealed partial class Engine(
         return null;
     }
 
-    public CommandResult Revert(string tweakId) => Revert(tweakId, ChangeWording.Tweak);
+    public CommandResult UndoTweak(string tweakId) => UndoTweak(tweakId, ChangeWording.Tweak);
 
-    private CommandResult Revert(string tweakId, ChangeWording wording)
+    private CommandResult UndoTweak(string tweakId, ChangeWording wording)
     {
-        var entry = journal.LatestUndoable(tweakId, user);
-        if (!TryResolve(tweakId, entry, out var tweak))
-            return entry is null && wording != ChangeWording.Tweak ? new(false, wording.NothingToUndo, null) : Unknown(tweakId);
+        var change = History.Newest(tweakId);
+        if (History.Resolve(tweakId, change) is not { } tweak)
+            return change is null && wording != ChangeWording.Tweak ? new(false, wording.NothingToUndo, null) : Unknown(tweakId);
 
-        if (entry is null)
+        if (change is null)
             return Failed(tweak, wording.NothingToUndo);
 
-        return Undo(tweak, entry, wording);
+        var undone = History.Undo(change, wording);
+        return undone.Succeeded ? Done(tweak, undone.Message) : Failed(tweak, undone.Message);
     }
 
     public CommandResult UndoChange(Guid changeId)
     {
-        var entry = journal.EntriesFor(user).FirstOrDefault(e => e.Id == changeId);
-        if (entry is null)
-            return new(false, "There is no such change in your undo history.", null);
-        if (StartupManager.Owns(entry.TweakId))
-            return UndoStartupChange(entry);
-        if (!TryResolve(entry.TweakId, entry, out var tweak))
-            return new(false, $"This change was made by a tweak this version no longer has ('{entry.TweakId}').", null);
-        if (entry.Status is not (EntryStatus.Applying or EntryStatus.Applied))
-            return Failed(tweak, "This change has already been undone.");
-        if (!IsUndoable(entry))
-            return Failed(tweak, "A newer change to this tweak comes after this one. Undo the newer change instead.");
-
-        return Undo(tweak, entry);
+        var undone = History.UndoChange(changeId);
+        return undone.Tweak is not { } tweak ? new(undone.Succeeded, undone.Message, null)
+            : undone.Succeeded ? Done(tweak, undone.Message)
+            : Failed(tweak, undone.Message);
     }
 
-    public RestoreResult RestoreEverything()
-    {
-        // Journal order is the true order of changes (clocks can jump), so newest first is the journal reversed.
-        var open = journal.EntriesFor(user).Where(IsUndoable).Reverse().ToList();
-        // Never tried: a destructive change has nothing to put back (ADR 0002), so it is left out and named instead.
-        var left = open.Where(IsDestructive).Select(NameOf).ToList();
-
-        var results = new List<UndoOutcome>();
-        foreach (var entry in open.Where(entry => !IsDestructive(entry)))
-        {
-            var name = NameOf(entry);
-            var result = UndoChange(entry.Id);
-            results.Add(new UndoOutcome(entry.Id, name, result.Succeeded, result.Message));
-        }
-
-        var leftAlone = left.Count switch
-        {
-            0 => "",
-            1 => $" 1 change was left as it is, because it can never be undone: {left[0]}.",
-            _ => $" {left.Count} changes were left as they are, because they can never be undone: {string.Join(", ", left)}.",
-        };
-        if (results.Count == 0)
-            return new RestoreResult(true, left.Count == 0
-                ? "Nothing to undo: every change the app made has already been put back."
-                : $"Nothing to undo.{leftAlone}", results);
-
-        var failed = results.Count(r => !r.Succeeded);
-        _log.LogInformation("Restore everything for {User}: {Undone} undone, {Failed} not, {Left} left because they can't be undone",
-            user, results.Count - failed, failed, left.Count);
-        var undoable = results.Count == 1 ? "1 change" : $"{results.Count} changes";
-        return failed == 0
-            ? new RestoreResult(true, left.Count == 0
-                ? $"Put back all {results.Count} changes. Your previous settings are back."
-                : $"Put back the {undoable} that can be undone.{leftAlone}", results)
-            : new RestoreResult(false, $"Put back {results.Count - failed} of {results.Count} changes. {failed} couldn't be undone; see each one below.{leftAlone}", results);
-    }
-
-    private CommandResult Undo(TweakDefinition tweak, JournalEntry entry, ChangeWording? wording = null)
-    {
-        wording ??= ChangeWording.Tweak;
-        // Refused before anything is read or written: a destructive change has nothing to put back (ADR 0002).
-        if (IsDestructive(tweak))
-            return Failed(tweak, $"This can't be undone. {tweak.DestructiveWarning} Nothing was changed.");
-        try
-        {
-            var conflicts = entry.Steps.Select(step => step.FindConflict(system)).OfType<string>().ToList();
-            if (conflicts.Count > 0)
-            {
-                _log.LogWarning("Not reverting {Tweak} for {User}: {Conflicts}", tweak.Id, user, conflicts);
-                return Failed(tweak,
-                    $"Didn't undo this. {string.Join(" ", conflicts)} Undoing now would overwrite that, so nothing was changed. " +
-                    $"{wording.ChangeAgain} to take a fresh copy of the current settings, or leave it as it is.");
-            }
-
-            RevertSteps(entry.Steps);
-            journal.CloseReverted(entry, user, _clock.GetUtcNow());
-            _log.LogInformation("Reverted {Tweak} for {User}", tweak.Id, user);
-            return Done(tweak, wording.Undone);
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Reverting {Tweak} failed", tweak.Id);
-            return Failed(tweak, $"Couldn't undo this: {ex.Message}");
-        }
-    }
+    public RestoreResult RestoreEverything() => History.RestoreEverything();
 
     private DriverFlow DriverFlow => field ??= new(system, DriverCleaner, _log);
 
-    public IReadOnlyList<ChangeView> ListHistory()
-    {
-        var entries = journal.EntriesFor(user);
-        return entries
-            .Select(entry => new ChangeView(
-                entry.Id,
-                entry.TweakId,
-                NameOf(entry),
-                entry.AppliedAt,
-                entry.Status switch
-                {
-                    EntryStatus.Applying => ChangeState.Interrupted,
-                    EntryStatus.Applied => ChangeState.Applied,
-                    EntryStatus.RolledBack => ChangeState.Failed,
-                    _ => ChangeState.Undone,
-                },
-                entry.Status is EntryStatus.Reverted or EntryStatus.Superseded ? entry.ClosedAt : null,
-                IsUndoable(entry) && !IsDestructive(entry))
-            {
-                Destructive = IsDestructive(entry),
-            })
-            .Reverse()
-            .ToList();
-    }
-
-    /// <summary>
-    /// Only the newest open change to a tweak in this account's Undo history can be undone: older ones are what it was
-    /// applied over. Whole-PC changes from other accounts count, whichever account made them.
-    /// </summary>
-    private bool IsUndoable(JournalEntry entry) => journal.LatestUndoable(entry.TweakId, user) == entry;
-
-    /// <summary>
-    /// Made by a destructive tweak, so there is nothing to put back and it is never offered for undo (ADR 0002). Only
-    /// catalogue tweaks are ever destructive; startup switches, service start types and closed apps never are.
-    /// </summary>
-    private bool IsDestructive(JournalEntry entry) => catalogue.TryGet(entry.TweakId, out var tweak) && IsDestructive(tweak);
+    public IReadOnlyList<ChangeView> ListHistory() => History.List();
 
     private static bool IsDestructive(TweakDefinition tweak) => tweak.Reversibility == Reversibility.Destructive;
 
@@ -783,12 +634,6 @@ public sealed partial class Engine(
 
     private static TuningResult NoGpuTuning => new(false, "GPU tuning isn't available on this PC.", null);
 
-    private void RevertSteps(IReadOnlyList<StepRecord> records)
-    {
-        for (var i = records.Count - 1; i >= 0; i--)
-            records[i].Revert(system);
-    }
-
     private string? WhyNotApplicable(TweakDefinition tweak) =>
         UnsupportedReason(tweak.Id) ??
         tweak.Applicability.WhyNot(system.System) ??
@@ -815,7 +660,7 @@ public sealed partial class Engine(
     {
         var affected = AffectedGames(tweak);
         var state = SafeDetect(tweak);
-        var change = journal.LatestUndoable(tweak.Id, user);
+        var change = History.Newest(tweak.Id);
         return new(
         tweak.Id,
         tweak.Section,
@@ -840,7 +685,7 @@ public sealed partial class Engine(
         AffectedGames = affected,
         AntiCheatWarning = Games.AntiCheatWarning.For(affected),
         PendingReboot = tweak.Risks.HasFlag(RiskFlags.NeedsReboot) &&
-                        journal.LastChangedAt(tweak.Id, user) > system.System.BootTime,
+                        History.LastChangedAt(tweak.Id) > system.System.BootTime,
         NotApplicableReason = WhyNotApplicable(tweak),
         BlockedReason = Blocking(tweak),
         Warnings = tweak.HardwareNotes

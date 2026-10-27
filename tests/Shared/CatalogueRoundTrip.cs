@@ -31,7 +31,7 @@ public static class CatalogueRoundTrip
         Assert.True(applied.Succeeded, applied.Message);
         Assert.Equal(TweakState.On, engine.ListTweaks().Single(t => t.Id == tweakId).State);
 
-        var reverted = engine.Revert(tweakId);
+        var reverted = engine.UndoTweak(tweakId);
         Assert.True(reverted.Succeeded, reverted.Message);
         Assert.Equal(before, SystemSnapshot.Take(system, tweak));
     }

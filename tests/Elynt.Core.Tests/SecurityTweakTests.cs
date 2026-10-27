@@ -71,7 +71,7 @@ public class SecurityTweakTests
         var engine = NewEngine();
         engine.Apply(SecurityTweaks.MemoryIntegrityOff.Id);
 
-        var result = engine.Revert(SecurityTweaks.MemoryIntegrityOff.Id);
+        var result = engine.UndoTweak(SecurityTweaks.MemoryIntegrityOff.Id);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Equal(RegistryValue.DWord(1), _registry.GetValue(HvciEnabled));
@@ -115,7 +115,7 @@ public class SecurityTweakTests
         new Engine(Catalogue.Default, Adapters(), new ChangeJournal(store), User).Apply(id);
 
         var restarted = new Engine(Catalogue.Default, Adapters(), new ChangeJournal(store), User);
-        var undone = restarted.Revert(id);
+        var undone = restarted.UndoTweak(id);
 
         Assert.True(undone.Succeeded, undone.Message);
         Assert.Empty(_exclusions.Paths);
@@ -129,7 +129,7 @@ public class SecurityTweakTests
         var id = ExclusionFor(@"D:\Games\Apex\r5apex.exe");
 
         Assert.True(engine.Apply(id).Succeeded);
-        Assert.False(engine.Revert(id).Succeeded);
+        Assert.False(engine.UndoTweak(id).Succeeded);
 
         Assert.Equal([@"D:\Games\Apex"], _exclusions.Paths);
     }
@@ -234,7 +234,7 @@ public class SecurityTweakTests
         var engine = NewEngine();
         Assert.True(engine.Apply(SecurityTweaks.DefenderOff.Id, new ApplyOptions(ConfirmWarning: true)).Succeeded);
 
-        var result = engine.Revert(SecurityTweaks.DefenderOff.Id);
+        var result = engine.UndoTweak(SecurityTweaks.DefenderOff.Id);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Equal(RegistryValue.DWord(0), _registry.GetValue(DisableRealtime));
@@ -250,7 +250,7 @@ public class SecurityTweakTests
             .Apply(SecurityTweaks.DefenderOff.Id, new ApplyOptions(ConfirmWarning: true));
 
         var restarted = new Engine(Catalogue.Default, Adapters(), new ChangeJournal(store), User);
-        var result = restarted.Revert(SecurityTweaks.DefenderOff.Id);
+        var result = restarted.UndoTweak(SecurityTweaks.DefenderOff.Id);
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Null(_registry.GetValue(DisableAntiSpyware));

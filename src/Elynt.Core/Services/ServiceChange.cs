@@ -91,7 +91,7 @@ public sealed record ServiceConfigRecord(string ServiceName, ServiceConfig Befor
         return $"Something else changed {ServiceName} since the app set it to {After.Start}. It now starts {now.Config.Start}.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         // Nothing to write when it already has its old configuration (the change never went through).
         var services = ServiceStartStep.Manager(system);

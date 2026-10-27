@@ -32,7 +32,7 @@ public class UndoHistoryTests
         _clock.Advance(TimeSpan.FromMinutes(5));
         engine.Apply(GameMode.Id);
         _clock.Advance(TimeSpan.FromMinutes(5));
-        engine.Revert(Mouse.Id);
+        engine.UndoTweak(Mouse.Id);
 
         var history = engine.ListHistory();
 
@@ -138,7 +138,7 @@ public class UndoHistoryTests
         var changedByOthers = RegistrySnapshot.Take(_registry, Mouse);
         var change = engine.ListHistory().Single();
 
-        foreach (var result in new[] { engine.UndoChange(change.Id), engine.Revert(Mouse.Id) })
+        foreach (var result in new[] { engine.UndoChange(change.Id), engine.UndoTweak(Mouse.Id) })
         {
             Assert.False(result.Succeeded);
             Assert.Contains(@"HKCU\Control Panel\Mouse\MouseThreshold1", result.Message);

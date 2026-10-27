@@ -21,22 +21,20 @@ internal sealed record StartupDrift(DriftItem Item, string ItemId, bool Enabled)
 /// (destructive); and spotting items added since the last look.
 /// </summary>
 /// <param name="apply">
-/// The Engine's own apply: hard rules, safety net, write-ahead journal and roll-back, for a switch described as a
-/// one-step tweak.
+/// The Engine's own apply: hard rules, then the Undo history's safety net, write-ahead and roll-back, for a switch
+/// described as a one-step tweak. The last argument is the older switch the new one replaces, if any.
 /// </param>
 internal sealed class StartupManager(
     SystemAdapters system,
-    ChangeJournal journal,
+    UndoHistory history,
     string user,
     SafetyNet? safetyNet,
     TimeProvider clock,
     ILogger _log,
-    Func<TweakDefinition, ChangeWording, CommandResult> apply)
+    Func<TweakDefinition, ChangeWording, JournalEntry?, CommandResult> apply)
 {
     /// <summary>Journal entries for startup switches use this prefix before the item id instead of a tweak id.</summary>
     public const string JournalPrefix = "startup:";
-
-    public static bool Owns(string journalId) => journalId.StartsWith(JournalPrefix, StringComparison.Ordinal);
 
     public IReadOnlyList<StartupItemView> List()
     {
@@ -62,19 +60,20 @@ internal sealed class StartupManager(
             // Every flip is journaled, so flipping back is undoing the last flip while it is still in place: that puts
             // back exactly what was there, including a value Task Manager wrote. If something else switched it back
             // or changed it since, take a fresh change, which replaces the last one.
-            var last = journal.LatestUndoable(JournalId(item), user);
-            if (last is not null && SetBy(item, last) == item.Switch.IsEnabled(system) && Conflicts(last).Count == 0)
+            var last = history.Newest(JournalId(item));
+            if (last is not null && SetBy(item, last) == item.Switch.IsEnabled(system))
             {
-                Revert(last);
-                return Done(item, enabled ? "Turned on. It starts at sign-in again." : "Turned off. The previous setting is back.");
+                // Flipping back is the switch the user pressed, so a failure is worded as one.
+                var undone = history.Undo(last, ChangeWording.StartupSwitch with { CouldNotUndo = ChangeWording.StartupSwitch.CouldNot });
+                if (undone.Succeeded)
+                    return Done(item, enabled ? "Turned on. It starts at sign-in again." : "Turned off. The previous setting is back.");
+                if (!undone.ChangedSince)
+                    return Failed(item, undone.Message);
             }
 
-            var result = Change(item, item.Switch.StepFor(enabled, clock.GetUtcNow()), enabled
+            return Change(item, item.Switch.StepFor(enabled, clock.GetUtcNow()), enabled
                 ? "Turned on. It starts at sign-in again."
-                : "Turned off. It won't start at sign-in; switch it back on any time.");
-            if (result.Succeeded && last is not null)
-                journal.Supersede(last, clock.GetUtcNow());
-            return result;
+                : "Turned off. It won't start at sign-in; switch it back on any time.", replacing: last);
         }
         catch (Exception ex)
         {
@@ -144,7 +143,7 @@ internal sealed class StartupManager(
     /// </summary>
     public IReadOnlyList<StartupDrift> Drifted()
     {
-        var switched = journal.UndoableTweakIds(user).Where(Owns).ToList();
+        var switched = history.WithChanges(ChangeKind.StartupSwitch);
         if (switched.Count == 0 || system.Startup is not { } startup)
             return [];
 
@@ -155,7 +154,7 @@ internal sealed class StartupManager(
             foreach (var journalId in switched)
             {
                 var item = items.FirstOrDefault(i => JournalId(i).Equals(journalId, StringComparison.OrdinalIgnoreCase));
-                if (item is null || journal.LatestUndoable(journalId, user) is not { Status: EntryStatus.Applied } entry)
+                if (item is null || history.Newest(journalId) is not { Status: EntryStatus.Applied } entry)
                     continue;
                 if (SetBy(item, entry) is not { } enabled || enabled == item.Switch.IsEnabled(system))
                     continue;
@@ -186,29 +185,11 @@ internal sealed class StartupManager(
         return new ReapplyOutcome(drift.Item.TweakId, drift.Item.Name, result.Succeeded, result.Succeeded ? "Re-applied." : result.Message);
     }
 
-    /// <summary>Undoes one journaled startup switch from the Undo history.</summary>
-    public (bool Succeeded, string Message) Undo(JournalEntry entry)
-    {
-        try
-        {
-            var conflicts = Conflicts(entry);
-            if (conflicts.Count > 0)
-                return (false, $"Didn't undo this. {string.Join(" ", conflicts)} Undoing now would overwrite that, so nothing was changed.");
-            Revert(entry);
-            return (true, "Undone. The previous setting is back.");
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Undoing startup change {Entry} failed", entry.Id);
-            return (false, $"Couldn't undo this: {ex.Message}");
-        }
-    }
-
-    /// <summary>The name the Undo history shows for a startup switch.</summary>
-    public string NameOf(string journalId)
+    /// <summary>The name the Undo history shows for a startup switch, from its journal id.</summary>
+    public static string NameFor(SystemAdapters system, string journalId)
     {
         var itemId = journalId[JournalPrefix.Length..];
-        return Named(Find(itemId)?.Name ?? StartupItems.NameFromId(itemId));
+        return Named(Find(system, itemId)?.Name ?? StartupItems.NameFromId(itemId));
     }
 
     private static string Named(string itemName) => $"Startup item: {itemName}";
@@ -218,28 +199,12 @@ internal sealed class StartupManager(
         entry.Steps is [var record] ? item.Switch.EnabledBy(record) : null;
 
     /// <summary>Makes the switch through the Engine's apply, worded for the Startup page.</summary>
-    private StartupCommandResult Change(StartupItem item, TweakStep step, string message)
+    private StartupCommandResult Change(StartupItem item, TweakStep step, string message, JournalEntry? replacing)
     {
-        var result = apply(AsTweak(item, step), ChangeWording.Tweak with
-        {
-            Done = message,
-            AlreadyDone = "Already set. Nothing was changed.",
-            CouldNot = "Couldn't change this",
-            UndoHint = "undo it from Undo history",
-        });
+        var result = apply(AsTweak(item, step), ChangeWording.StartupSwitch with { Done = message }, replacing);
         if (result.Succeeded)
             _log.LogInformation("Startup item {Item} switched for {User}", item.Id, user);
         return result.Succeeded ? Done(item, result.Message) : Failed(item, result.Message);
-    }
-
-    private List<string> Conflicts(JournalEntry entry) =>
-        entry.Steps.Select(step => step.FindConflict(system)).OfType<string>().ToList();
-
-    private void Revert(JournalEntry entry)
-    {
-        for (var i = entry.Steps.Count - 1; i >= 0; i--)
-            entry.Steps[i].Revert(system);
-        journal.CloseReverted(entry, user, clock.GetUtcNow());
     }
 
     /// <summary>The safety net works on tweaks, so a switch is described as a one-step tweak.</summary>
@@ -248,7 +213,9 @@ internal sealed class StartupManager(
 
     private static string JournalId(StartupItem item) => JournalPrefix + item.Id;
 
-    private StartupItem? Find(string itemId) =>
+    private StartupItem? Find(string itemId) => Find(system, itemId);
+
+    private static StartupItem? Find(SystemAdapters system, string itemId) =>
         system.Startup is { } startup ? Read(startup).FirstOrDefault(i => i.Id.Equals(itemId, StringComparison.OrdinalIgnoreCase)) : null;
 
     /// <summary>Every item in page order: Run keys, Startup folders, sign-in tasks, Store apps, then other tasks.</summary>
@@ -283,7 +250,7 @@ internal sealed class StartupManager(
             item.Switch.CanSwitch(system),
             item.CanDelete)
         {
-            CanUndo = journal.LatestUndoable(JournalId(item), user) is not null,
+            CanUndo = history.Newest(JournalId(item)) is not null,
         };
     }
 

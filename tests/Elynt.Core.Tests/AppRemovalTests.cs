@@ -34,7 +34,7 @@ public class AppRemovalTests
         Assert.False(_apps.IsInstalled("Microsoft.Copilot"));
         Assert.Equal(TweakState.On, removed.Tweak!.State);
 
-        var undone = engine.Revert("debloat.remove-copilot");
+        var undone = engine.UndoTweak("debloat.remove-copilot");
         Assert.True(undone.Succeeded, undone.Message);
         Assert.True(_apps.IsInstalled("Microsoft.Copilot"));
         Assert.Equal(["Microsoft.Copilot"], _apps.Reinstalls);
@@ -60,7 +60,7 @@ public class AppRemovalTests
 
             Assert.True(engine.Apply(view.Id).Succeeded);
             Assert.False(_apps.IsInstalled(package));
-            Assert.True(engine.Revert(view.Id).Succeeded);
+            Assert.True(engine.UndoTweak(view.Id).Succeeded);
             Assert.True(_apps.IsInstalled(package));
         }
     }
@@ -87,14 +87,14 @@ public class AppRemovalTests
         Assert.True(engine.Apply("debloat.remove-copilot").Succeeded);
         _apps.ReinstallFails.Add("Microsoft.Copilot");
 
-        var failed = engine.Revert("debloat.remove-copilot");
+        var failed = engine.UndoTweak("debloat.remove-copilot");
 
         Assert.False(failed.Succeeded);
         Assert.Contains("Couldn't reach the Microsoft Store", failed.Message);
         Assert.True(failed.Tweak!.CanUndo);
 
         _apps.ReinstallFails.Clear();
-        Assert.True(engine.Revert("debloat.remove-copilot").Succeeded);
+        Assert.True(engine.UndoTweak("debloat.remove-copilot").Succeeded);
         Assert.True(_apps.IsInstalled("Microsoft.Copilot"));
     }
 
@@ -132,7 +132,7 @@ public class AppRemovalTests
         Assert.True(applied.Succeeded, applied.Message);
         var change = engine.ListHistory().Single();
 
-        foreach (var undo in new[] { engine.Revert("debloat.deprovision-preinstalled"), engine.UndoChange(change.Id) })
+        foreach (var undo in new[] { engine.UndoTweak("debloat.deprovision-preinstalled"), engine.UndoChange(change.Id) })
         {
             Assert.False(undo.Succeeded);
             Assert.StartsWith("This can't be undone.", undo.Message);
@@ -155,11 +155,11 @@ public class AppRemovalTests
 
         var restarted = NewEngine();
 
-        Assert.True(restarted.Revert("debloat.remove-app.microsoft.bingnews").Succeeded);
+        Assert.True(restarted.UndoTweak("debloat.remove-app.microsoft.bingnews").Succeeded);
         Assert.True(_apps.IsInstalled("Microsoft.BingNews"));
-        Assert.True(restarted.Revert("privacy.remove-recall").Succeeded);
+        Assert.True(restarted.UndoTweak("privacy.remove-recall").Succeeded);
         Assert.True(_features.IsEnabled("Recall"));
-        Assert.StartsWith("This can't be undone.", restarted.Revert("debloat.deprovision-preinstalled").Message);
+        Assert.StartsWith("This can't be undone.", restarted.UndoTweak("debloat.deprovision-preinstalled").Message);
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class AppRemovalTests
         Assert.False(_features.IsEnabled("Recall"));
         Assert.True(applied.Tweak!.PendingReboot);
 
-        Assert.True(engine.Revert("privacy.remove-recall").Succeeded);
+        Assert.True(engine.UndoTweak("privacy.remove-recall").Succeeded);
         Assert.True(_features.IsEnabled("Recall"));
     }
 
@@ -226,7 +226,7 @@ public class AppRemovalTests
             new ChangeJournal(_store), User);
         Assert.True(engine.Apply("debloat.remove-onedrive", new ApplyOptions(ConfirmWarning: true)).Succeeded);
 
-        var undone = engine.Revert("debloat.remove-onedrive");
+        var undone = engine.UndoTweak("debloat.remove-onedrive");
 
         Assert.True(undone.Succeeded, undone.Message);
         Assert.Equal([("Microsoft.OneDrive", "winget")], winget.Installs);
@@ -243,7 +243,7 @@ public class AppRemovalTests
         Assert.Equal(Reversibility.NeedsDownload, view.Reversibility);
         Assert.Contains("wsreset -i", view.Undo);
 
-        Assert.True(engine.Revert("debloat.remove-store").Succeeded);
+        Assert.True(engine.UndoTweak("debloat.remove-store").Succeeded);
         Assert.Equal(["Microsoft.WindowsStore"], _apps.Reinstalls);
     }
 }

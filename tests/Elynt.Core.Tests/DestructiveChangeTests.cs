@@ -51,7 +51,7 @@ public class DestructiveChangeTests
         var change = engine.ListHistory().Single();
         var applied = RegistrySnapshot.Take(_registry, Destructive);
 
-        foreach (var result in new[] { engine.UndoChange(change.Id), engine.Revert(Destructive.Id) })
+        foreach (var result in new[] { engine.UndoChange(change.Id), engine.UndoTweak(Destructive.Id) })
         {
             Assert.False(result.Succeeded);
             Assert.Equal("This can't be undone. The old files are deleted for good. Nothing was changed.", result.Message);
@@ -99,7 +99,7 @@ public class DestructiveChangeTests
         var engine = EngineFor(Plain, Destructive);
         Applied(engine, Destructive);
         Applied(engine, Plain);
-        Assert.True(engine.Revert(Plain.Id).Succeeded);
+        Assert.True(engine.UndoTweak(Plain.Id).Succeeded);
 
         // The window offers Restore everything only while some change in the history can be undone.
         Assert.DoesNotContain(engine.ListHistory(), change => change.CanUndo);

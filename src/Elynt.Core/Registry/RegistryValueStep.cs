@@ -58,7 +58,7 @@ public sealed record RegistryValueRecord(
         return $"Something else changed {Location} since the app set it to {After}. It is now {shown}.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         // A value that did not exist is deleted, never set to zero.
         if (Before is null)

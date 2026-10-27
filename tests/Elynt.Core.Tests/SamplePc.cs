@@ -121,7 +121,7 @@ public static class SamplePc
 
         foreach (var id in AlreadyOn)
             Check(engine.Apply(id).Succeeded, $"turning on {id}");
-        Check(engine.Apply(Undone).Succeeded && engine.Revert(Undone).Succeeded, $"turning {Undone} on and off");
+        Check(engine.Apply(Undone).Succeeded && engine.UndoTweak(Undone).Succeeded, $"turning {Undone} on and off");
         Check(engine.Apply(Destructive, new ApplyOptions(ConfirmDestructive: true)).Succeeded, $"confirming and applying {Destructive}");
         // What a Windows update does: writes its own value over each of the tweak's registry values.
         foreach (var step in Catalogue.Default.Get(Drifted).Steps.OfType<RegistryValueStep>())

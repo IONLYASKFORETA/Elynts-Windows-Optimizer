@@ -1,6 +1,5 @@
 using Elynt.Core.Drift;
 using Elynt.Core.Journal;
-using Elynt.Core.Safety;
 using Elynt.Core.Startup;
 using Elynt.Core.Tweaks;
 using Microsoft.Extensions.Logging;
@@ -175,9 +174,8 @@ public sealed partial class Engine
     }
 
     /// <summary>
-    /// Puts back the parts of a change that something else undid. Those parts get a fresh before-state (what
-    /// Windows set), so undo returns to what this build ships; the parts left alone keep the before-state from the
-    /// original change. Null when nothing drifted.
+    /// Puts back the parts of a change that something else undid, through the Undo history, once the change is still
+    /// allowed. Null when nothing drifted.
     /// </summary>
     private ReapplyOutcome? Reapply(TweakDefinition tweak, JournalEntry previous, bool confirmDestructive)
     {
@@ -188,7 +186,7 @@ public sealed partial class Engine
         }
         catch (Exception ex)
         {
-            return Unsupported(tweak, ex);
+            return Unsupported(tweak, ex.Message);
         }
         if (!undone.Contains(true))
             return null;
@@ -197,82 +195,18 @@ public sealed partial class Engine
         if (Refusal(tweak, new ApplyOptions(ConfirmDestructive: confirmDestructive, ConfirmWarning: true)) is { } refused)
             return new ReapplyOutcome(tweak.Id, tweak.Name, false, refused.Message);
 
-        try
-        {
-            safetyNet?.BeforeChange(tweak);
-        }
-        catch (BackupFailedException ex)
-        {
-            return new ReapplyOutcome(tweak.Id, tweak.Name, false, $"{ex.Message} Nothing was changed.");
-        }
-
-        var reuse = previous.Steps.Count == tweak.Steps.Count;
-        List<StepRecord> fresh = [];
-        List<StepRecord> records = [];
-        JournalEntry entry;
-        try
-        {
-            for (var i = 0; i < tweak.Steps.Count; i++)
-            {
-                if (reuse && !undone[i])
-                {
-                    records.Add(previous.Steps[i]);
-                    continue;
-                }
-                var record = tweak.Steps[i].Capture(system);
-                fresh.Add(record);
-                records.Add(record);
-            }
-        }
-        catch (Exception ex)
-        {
-            return Unsupported(tweak, ex);
-        }
-
-        try
-        {
-            // A per-game profile's change stays temporary, so the game closing still undoes it.
-            entry = journal.Open(tweak.Id, user, system.System.OsBuild, _clock.GetUtcNow(), records, previous.Temporary);
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Couldn't record the prior state of {Tweak} before re-applying it", tweak.Id);
-            return new ReapplyOutcome(tweak.Id, tweak.Name, false, $"Couldn't save the current settings first: {ex.Message} Nothing was changed.");
-        }
-
-        try
-        {
-            for (var i = 0; i < tweak.Steps.Count; i++)
-                if (!reuse || undone[i])
-                    tweak.Steps[i].Apply(system);
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Re-applying {Tweak} failed; putting back what Windows set", tweak.Id);
-            try
-            {
-                RevertSteps(fresh);
-            }
-            catch (Exception rollback)
-            {
-                _log.LogError(rollback, "Couldn't put back what Windows set for {Tweak}", tweak.Id);
-            }
-            journal.Close(entry, EntryStatus.RolledBack, _clock.GetUtcNow());
-            return Unsupported(tweak, ex);
-        }
-
-        journal.Close(entry, EntryStatus.Applied, _clock.GetUtcNow());
-        journal.Supersede(previous, _clock.GetUtcNow());
-        _log.LogInformation("Re-applied drifted {Tweak} for {User}", tweak.Id, user);
-        return new ReapplyOutcome(tweak.Id, tweak.Name, true, "Re-applied.");
+        var made = History.Reapply(tweak, previous, undone);
+        if (made.NotPossibleHere is { } reason)
+            return Unsupported(tweak, reason);
+        return new ReapplyOutcome(tweak.Id, tweak.Name, made.Succeeded, made.Message);
     }
 
     /// <summary>A change that can't be made on this build is reported once, then skipped quietly.</summary>
-    private ReapplyOutcome Unsupported(TweakDefinition tweak, Exception ex)
+    private ReapplyOutcome Unsupported(TweakDefinition tweak, string reason)
     {
-        MarkUnsupported(tweak, ex.Message);
+        MarkUnsupported(tweak, reason);
         return new ReapplyOutcome(tweak.Id, tweak.Name, false,
-            $"Couldn't re-apply this: {ex.Message} It's marked not supported on this Windows build and skipped until Windows or the app updates.");
+            $"Couldn't re-apply this: {reason} It's marked not supported on this Windows build and skipped until Windows or the app updates.");
     }
 
     private UnsupportedChange MarkUnsupported(TweakDefinition tweak, string reason)
@@ -325,12 +259,10 @@ public sealed partial class Engine
     /// </summary>
     private IEnumerable<(TweakDefinition Tweak, JournalEntry Entry)> AppliedChanges()
     {
-        foreach (var id in journal.UndoableTweakIds(user))
+        foreach (var id in History.TweaksWithChanges())
         {
-            if (StartupManager.Owns(id))
-                continue;
-            var entry = journal.LatestUndoable(id, user);
-            if (entry is not { Status: EntryStatus.Applied } || !TryResolve(id, entry, out var tweak) || IsMarked(id) || tweak.Expires)
+            var entry = History.Newest(id);
+            if (entry is not { Status: EntryStatus.Applied } || History.Resolve(id, entry) is not { } tweak || IsMarked(id) || tweak.Expires)
                 continue;
             yield return (tweak, entry);
         }

@@ -42,7 +42,7 @@ public sealed record OptionalFeatureRecord(string Feature, bool? Before, bool Af
             : $"Something else turned the Windows feature {Feature} {(now == true ? "on" : "off")} since the app changed it.";
     }
 
-    public override void Revert(SystemAdapters system)
+    public override void Undo(SystemAdapters system)
     {
         if (Before is not { } before || system.Features.IsEnabled(Feature) == before)
             return;

@@ -110,7 +110,7 @@ public sealed partial class Engine
     /// </summary>
     public ProfileRunResult RecoverTemporaryChanges()
     {
-        var open = journal.OpenTemporary(user).Count;
+        var open = History.Temporary().Count;
         if (open == 0)
             return new(true, "No per-game profile changes were left behind.", []);
 
@@ -125,18 +125,18 @@ public sealed partial class Engine
     private List<string> UndoTemporaryChanges()
     {
         var problems = new List<string>();
-        foreach (var entry in journal.OpenTemporary(user).Reverse())
+        foreach (var entry in History.Temporary().Reverse())
         {
             // A newer change to the same tweak wins: undoing that is the user's to do. (A tweak the user turns on
             // while the profile already has it on takes over the profile's change; see ApplyTweak.)
-            if (!IsUndoable(entry))
+            if (!History.IsNewest(entry))
                 continue;
-            if (!TryResolve(entry.TweakId, entry, out var tweak))
+            if (History.Resolve(entry.TweakId, entry) is not { } tweak)
             {
                 problems.Add($"A change by '{entry.TweakId}' couldn't be undone: this version no longer has it.");
                 continue;
             }
-            var result = Undo(tweak, entry);
+            var result = History.Undo(entry);
             if (!result.Succeeded)
                 problems.Add($"{tweak.Name}: {result.Message}");
         }
