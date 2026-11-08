@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 2 UI Prototype</title>
+<style>
+/* PROTOTYPE, throwaway. Mock-ups for "Mock up the Results page and the UI improvements" (#102).
+   Screens and variants are switched with the bottom bar, the arrow keys, or ?screen=<name>&variant=<A|B|C>.
+   ?shot=1 hides the bar for screenshots. Colours are the app's Theme.xaml tokens, with the #101 changes:
+   TextFaint #85858F, 12 px labels and pills, a danger pill, a lock on locked switches, and a darker
+   orange (#CC4A0A) at the wave's end on button faces only. */
+:root{
+  --bg:#09090B;--surface:#111114;--surface2:#19191E;--hover:#1F1F26;--stroke:#26262D;--strong:#3F3F46;--code:#0C0C0F;
+  --text:#F4F4F5;--body:#D4D4D8;--dim:#A1A1AA;--faint:#85858F;
+  --red:#E5162D;--orange:#FF7A1A;--redtint:rgba(229,22,45,.12);--rededge:rgba(229,22,45,.4);
+  --orangetint:rgba(255,122,26,.10);--orangeedge:rgba(255,122,26,.33);--good:#22C55E;
+  --wave:linear-gradient(90deg,#E5162D 0%,#FF7A1A 50%,#E5162D 100%);
+  --wavebtn:linear-gradient(90deg,#E5162D 0%,#CC4A0A 50%,#E5162D 100%);
+  --font:"Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
+  --mono:"Cascadia Mono",Consolas,"JetBrains Mono",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--body);font:13.5px/1.45 var(--font);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+svg.i.s{width:14px;height:14px}
+.win{position:fixed;inset:0;display:grid;grid-template-columns:232px minmax(0,1fr) 400px;grid-template-rows:2px minmax(0,1fr)}
+.win.nodetail{grid-template-columns:232px minmax(0,1fr)}
+.strip{grid-column:1/-1;background:var(--wave)}
+/* sidebar */
+.side{background:var(--surface);border-right:1px solid var(--stroke);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;gap:11px;padding:20px 20px 14px}
+.logo{width:30px;height:30px;border-radius:7px;background:var(--red);color:#fff;font-weight:700;display:grid;place-items:center;font-size:15px;flex:none}
+.brand small{display:block;font-size:9.5px;letter-spacing:.06em;color:var(--faint);line-height:1.1}
+.brand b{color:var(--text);font-weight:600;font-size:14px}
+.search{margin:0 12px 10px;display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--stroke);border-radius:7px;padding:7px 10px;color:var(--faint);font-size:12.5px}
+.navs{flex:1;overflow:auto;padding:0 10px 10px;min-height:0}
+.glabel{font-size:12px;letter-spacing:.06em;color:var(--faint);padding:12px 12px 4px}
+.nav{position:relative;display:flex;align-items:center;gap:12px;padding:7px 12px;border-radius:7px;color:var(--body);font-size:13.5px;margin:1px 0}
+.nav.sel{background:var(--hover);color:var(--text)}
+.nav.sel::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--wave)}
+.nav .dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--orange)}
+.navfoot{border-top:1px solid var(--stroke);padding:8px 10px}
+.status{margin:6px 4px 4px;display:flex;gap:8px;font-size:12px;color:var(--dim);background:var(--surface2);border-radius:8px;padding:8px 10px;line-height:1.35}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--good);margin-top:5px;flex:none}
+/* page */
+.page{overflow:auto;min-height:0}
+.pin{padding:30px 32px 80px;max-width:1240px}
+.pin.wide{max-width:none}
+h1{font-size:26px;font-weight:600;color:var(--text);margin:0}
+.sub{color:var(--dim);font-size:12.5px;margin:2px 0 18px}
+.lbl{font-size:12px;letter-spacing:.06em;color:var(--faint);margin:22px 0 8px;text-transform:uppercase}
+.card{background:var(--surface);border:1px solid var(--stroke);border-radius:10px;padding:16px 18px}
+.row{background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:12px 16px;display:flex;gap:16px;align-items:center;margin-bottom:6px;position:relative}
+.row.sel{background:var(--surface2);border-color:var(--strong)}
+.row.sel::before{content:"";position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--wave)}
+.rmain{flex:1;min-width:0}
+.rname{color:var(--text);font-weight:600;font-size:13.5px}
+.rdesc{color:var(--dim);font-size:12.5px;margin:1px 0 6px}
+.rctl{flex:none;display:flex;align-items:center;gap:8px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:1;padding:5px 8px;border-radius:10px;border:1px solid var(--stroke);background:var(--surface2);color:var(--body);white-space:nowrap}
+.pill.warn{background:var(--orangetint);border-color:var(--orangeedge);color:var(--orange)}
+.pill.danger{background:var(--redtint);border-color:var(--rededge);color:#FF5C6C}
+.pill.dimp{color:var(--dim)}
+.sw{width:44px;height:22px;border-radius:11px;background:var(--surface2);border:1px solid #6B6B75;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:4px;left:5px;width:12px;height:12px;border-radius:50%;background:#8A8A93}
+.sw.on{background:var(--wave);border-color:transparent}
+.sw.on::after{left:25px;background:#fff}
+.sw.lock{background:var(--surface2);border-color:var(--strong)}
+.sw.lock::after{left:25px;background:var(--dim)}
+.lockg{color:var(--dim);display:flex;align-items:center;gap:5px;font-size:12px}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--stroke);background:var(--surface2);color:var(--text);border-radius:7px;padding:7px 13px;font-size:13.5px;white-space:nowrap}
+.btn.primary{background:var(--wavebtn);background-size:240% 100%;background-position:50% 0;border-color:transparent;color:#fff;font-weight:600}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--stroke);border-radius:7px;padding:2px;gap:2px}
+.seg span{padding:5px 10px;border-radius:5px;font-size:12.5px;color:var(--body);white-space:nowrap}
+.seg span.on{background:var(--wavebtn);background-size:300% 100%;background-position:10% 0;color:#fff;font-weight:600}
+.dim{color:var(--dim)}.faint{color:var(--faint)}.txt{color:var(--text)}
+.note{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--stroke);border-radius:8px;padding:10px 14px;color:var(--body);font-size:12.5px;margin-bottom:12px}
+.warnbox{background:var(--orangetint);border:1px solid var(--orangeedge);border-radius:8px;padding:10px 12px;color:var(--body);font-size:12.5px}
+.fold{display:flex;justify-content:space-between;align-items:center}
+.code{background:var(--code);border:1px solid var(--stroke);border-radius:8px;padding:10px 12px;font:12px/1.5 var(--mono);color:var(--body);white-space:pre-wrap}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stat b{display:block;font-size:28px;font-weight:600;background:var(--wave);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.2}
+.stat span{color:var(--dim);font-size:12.5px}
+.meter{height:3px;border-radius:2px;background:var(--surface2);margin-top:12px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--wave)}
+.link{color:var(--orange)}
+/* detail pane */
+.detail{background:var(--bg);border-left:1px solid var(--stroke);overflow:auto;min-height:0}
+.din{padding:30px 24px 80px}
+.detail h2{font-size:20px;font-weight:600;color:var(--text);margin:0 0 10px;line-height:1.25}
+.detail .lbl{margin-top:20px}
+.detail p{margin:0 0 8px}
+/* verdicts */
+.vd{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:10px;white-space:nowrap;border:1px solid var(--stroke);background:var(--surface2);color:var(--body)}
+.vd.better{border:1px solid transparent;background:linear-gradient(var(--surface2),var(--surface2)) padding-box,var(--wave) border-box;color:var(--text)}
+.vd.worse{background:var(--orangetint);border-color:var(--orangeedge);color:var(--orange)}
+.vd.wait{color:var(--dim);font-weight:500}
+/* ranges */
+.rng{display:grid;grid-template-columns:110px minmax(0,1fr) 150px;gap:6px 12px;align-items:center;font-size:12.5px}
+.rng .bar{position:relative;height:16px}
+.rng .bar::before{content:"";position:absolute;left:0;right:0;top:7px;height:2px;background:var(--surface2)}
+.rng .bar b{position:absolute;top:3px;height:10px;border-radius:5px;background:var(--strong)}
+.rng .bar b.a{background:var(--wave)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:12.5px}
+.kv span:nth-child(odd){color:var(--dim)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--stroke);margin-bottom:14px}
+.tabs span{padding:8px 12px;color:var(--dim);position:relative}
+.tabs span.on{color:var(--text)}
+.tabs span.on::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:1px;background:var(--wave)}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t th{text-align:left;font-weight:400;color:var(--faint);font-size:12px;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--stroke)}
+table.t td{padding:9px 8px;border-bottom:1px solid var(--stroke);vertical-align:top}
+.chk{display:flex;align-items:center;gap:9px;padding:5px 0}
+.box{width:16px;height:16px;border-radius:4px;border:1px solid #6B6B75;flex:none}
+.box.on{background:var(--wavebtn);border-color:transparent;position:relative}
+.box.on::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.state{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none}
+.state.ok{color:var(--dim);border:1px solid var(--stroke)}
+.state.found{color:var(--orange);background:var(--orangetint);border:1px solid var(--orangeedge)}
+.state.q{color:var(--dim);border:1px dashed var(--strong)}
+.spark{width:100%;height:70px;display:block}
+/* the prototype's own switcher bar: not part of the design */
+#bar{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#F4F4F5;color:#111;border-radius:999px;padding:6px 8px;box-shadow:0 6px 24px rgba(0,0,0,.6);font:13px/1 Inter,system-ui,sans-serif;z-index:99}
+#bar button{border:0;background:#111;color:#fff;border-radius:999px;width:28px;height:28px}
+#bar select{font:inherit;border:1px solid #bbb;border-radius:999px;padding:5px 8px;background:#fff;color:#111}
+#bar .lab{padding:0 6px;white-space:nowrap}
+/* compact: below 1200 px the sidebar folds to icons and the detail pane narrows to 320 (docs/ui.md) */
+@media (max-width:1199px){
+  .win{grid-template-columns:64px minmax(0,1fr) 320px}
+  .win.nodetail{grid-template-columns:64px minmax(0,1fr)}
+  .brand{padding:16px 0 10px;justify-content:center}.brand > div:not(.logo){display:none}
+  .search{margin:0 10px 6px;justify-content:center;padding:7px 0}.search span{display:none}
+  .navs{padding:0 8px}
+  .glabel{font-size:0;padding:6px 8px 4px;border-top:1px solid var(--stroke);margin-top:4px}
+  .nav{justify-content:center;padding:8px 0}.nav span{display:none}.nav .dot{position:absolute;right:6px;top:6px;margin:0}
+  .status span{display:none}.status{justify-content:center}
+  .pin{padding:22px 18px 70px}
+  .din{padding:22px 16px 70px}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(1,minmax(0,1fr))}
+  .g2{grid-template-columns:repeat(1,minmax(0,1fr))}
+  .rng{grid-template-columns:80px minmax(0,1fr) 110px}
+  .hide-compact{display:none!important}
+  .row.stack{flex-wrap:wrap}.row.stack .rctl{width:100%}
+}
+@media (min-width:2200px){
+  .g3.wide3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g2.wide3{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="bar">
+  <button id="prev" title="Previous (←)">&#8249;</button>
+  <select id="pick"></select>
+  <span class="lab" id="lab"></span>
+  <button id="next" title="Next (→)">&#8250;</button>
+</div>
+<script>
+// PROTOTYPE, throwaway. Sample data matches the screenshot tour's SamplePc (Ryzen 7 7800X3D, RTX 3080, 32 GB).
+const P = {
+  home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  game:'<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v3.5M5.25 12.25h3.5M15.5 11.5h.01M17.5 13.5h.01"/>',
+  profiles:'<path d="M4 4v16M8 4v16M12 5l5 15M17 4l3 16"/>',
+  results:'<path d="M4 20V11M10 20V5M16 20v-7M2 20h20"/>',
+  checks:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.6 10.6l2 2 3.4-3.6"/>',
+  oc:'<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/>',
+  drivers:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  debloat:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  security:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  update:'<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+  startup:'<path d="M12 3v9M6.3 7.5a8 8 0 1 0 11.4 0"/>',
+  apps:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  cleanup:'<path d="M15 3l-4 9M7 12h9l2 9H5z"/>',
+  repair:'<path d="M15 4a5 5 0 0 0-4.6 6.9L3 18.3 5.7 21l7.4-7.4A5 5 0 0 0 20 9l-3 1-2-2 1-3z"/>',
+  history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  q:'<path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>',
+  down:'<path d="M6 9l6 6 6-6"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  play:'<path d="M8 5l11 7-11 7z"/>',
+  restart:'<path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5M4 4v4.5h4.5"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  dn:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+};
+const I = (n, c='') => `<svg class="i ${c}" viewBox="0 0 24 24">${P[n]}</svg>`;
+
+const NAV = [
+  [null, [['home','Home']]],
+  ['PLAY', [['game','Gaming'],['profiles','Per-game profiles'],['results','Results'],['checks','PC checks'],['oc','Overclocking'],['drivers','Drivers']]],
+  ['WINDOWS', [['debloat','Debloat & Privacy'],['security','Security'],['update','Windows Update'],['startup','Startup & Services']]],
+  ['TOOLS', [['apps','Apps'],['cleanup','Cleanup'],['repair','Repair']]],
+];
+function sidebar(sel){
+  const item = ([ic,name]) => `<div class="nav ${name===sel?'sel':''}" title="${name}">${I(ic)}<span>${name}</span>${name==='Repair'?'<i class="dot" title="Reinstall game runtimes: step 2 of 3"></i>':''}</div>`;
+  return `<aside class="side">
+    <div class="brand"><div class="logo">E</div><div><small>ELYNT'S</small><b>Windows Optimizer</b></div></div>
+    <div class="search">${I('search','s')}<span>Find a tweak, tool or app</span></div>
+    <div class="navs">${NAV.map(([g,items])=>(g?`<div class="glabel">${g}</div>`:'')+items.map(item).join('')).join('')}</div>
+    <div class="navfoot">${item(['history','Undo history'])}${item(['settings','Settings'])}
+      <div class="status"><i></i><span>Connected. Every switch shows the setting as it is on this PC right now.</span></div></div>
+  </aside>`;
+}
+const pills = (...ps) => `<div class="pills">${ps.join('')}</div>`;
+const pill = (t,c='') => `<span class="pill ${c}">${t}</span>`;
+const vd = (k) => ({
+  better:`<span class="vd better">${I('up','s')}Better</span>`,
+  worse:`<span class="vd worse">${I('dn','s')}Worse</span>`,
+  same:`<span class="vd">No clear difference</span>`,
+  wait:`<span class="vd wait">Not enough play yet</span>`,
+  restart:`<span class="vd wait">Started again after an update</span>`,
+}[k]);
+function rng(label, b, a, lo, hi, txt){
+  const pct = v => ((v-lo)/(hi-lo)*100).toFixed(1);
+  return `<span class="dim">${label}</span><span class="bar"><b style="left:${pct(b[0])}%;width:${pct(b[1])-pct(b[0])}%"></b><b class="a" style="left:${pct(a[0])}%;width:${pct(a[1])-pct(a[0])}%"></b></span><span>${txt}</span>`;
+}
+function spark(seed, n=120, base=6.6, spikes=[18,57,91]){
+  let pts=[], x=0, s=seed;
+  for(let i=0;i<n;i++){ s=(s*9301+49297)%233280; let v=base+(s/233280-.5)*1.4; if(spikes.includes(i)) v+=9+(i%3)*3; pts.push(`${(i/(n-1)*100).toFixed(2)},${(70-v*3.2).toFixed(1)}`); }
+  return `<svg class="spark" viewBox="0 0 100 70" preserveAspectRatio="none"><polyline points="${pts.join(' ')}" fill="none" stroke="#A1A1AA" stroke-width=".6" vector-effect="non-scaling-stroke"/><line x1="0" x2="100" y1="${70-6.9*3.2}" y2="${70-6.9*3.2}" stroke="#3F3F46" stroke-dasharray="1.5 1.5" stroke-width=".5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+/* ---------------- data ---------------- */
+const GAMES = [
+  {name:'Fortnite', meta:'Epic · Easy Anti-Cheat', v:'better', line:'1% lows up, average FPS about the same', sessions:'23 play sessions (14 before, 9 after)', last:'Today', gpu:'Graphics card was the limit 35% of the time', profile:true,
+   fps:[[212,224],[215,227],'218 → 221 fps'], low:[[136,146],[149,158],'141 → 153 fps'], st:[[3.6,4.6],[1.9,2.7],'4.1 → 2.3 a minute'], lag:[[19,23],[16,20],'21 → 18 ms (est.)'],
+   changes:'Power mode: Best performance, Turn off Enhance pointer precision, Low Latency Mode: On', net:['1 ms','9 ms','28 ms','3 ms','0%','All steady: nothing to fix on this PC.']},
+  {name:'Counter-Strike 2', meta:'Steam · VAC', v:'wait', line:'About 4 more play sessions after the change', sessions:'11 play sessions (9 before, 2 after)', last:'Yesterday', gpu:'The CPU was the limit, so Windows and CPU tweaks can help here', profile:true,
+   changes:'Power mode: Best performance', net:['1 ms','9 ms','31 ms*','2 ms','0%','*Valve relay: it doesn\u2019t answer ping, so this is the last router before it.']},
+  {name:'Valorant', meta:'Riot · Vanguard', v:'same', line:'No change bigger than normal session-to-session spread', sessions:'17 play sessions', last:'2 days ago', gpu:'Graphics card was the limit 82% of the time, so Windows tweaks can\u2019t raise FPS here', profile:false,
+   changes:'Turn off Enhance pointer precision', net:['1 ms','10 ms','34 ms','12 ms','0.4%','Spikes at the server only: the route or the server, nothing on this PC.']},
+  {name:'Apex Legends', meta:'Steam · Easy Anti-Cheat', v:'worse', line:'Stutters up after Memory compression off', sessions:'12 play sessions', last:'4 days ago', gpu:'Graphics card was the limit 51% of the time', profile:false,
+   changes:'Memory compression off (possible placebo)', net:['1 ms','9 ms','41 ms','4 ms','0%','All steady.']},
+  {name:'Cyberpunk 2077', meta:'Steam · no anti-cheat', v:'restart', line:'Game update 2.31 on 3 Nov: earlier sessions aren\u2019t compared', sessions:'3 play sessions since the update', last:'Last week', gpu:'Graphics card was the limit 94% of the time', profile:false,
+   changes:'Low Latency Mode: On', net:null},
+];
+const THISPC = {v:'better', line:'Boot time and background load both down', rows:[['Boot time','41 s → 33 s (median of 6 restarts each)'],['Programs running','212 → 174'],['Memory in use at idle','6.1 GB → 4.9 GB'],['Idle CPU','2.1% → 1.4%']]};
+
+/* ---------------- screens ---------------- */
+function homeTop(){
+  return `<div class="card" style="display:flex;justify-content:space-between;gap:20px">
+    <div><div class="lbl" style="margin-top:0">THIS PC</div><div class="txt" style="font-weight:600;font-size:15px;margin-bottom:8px">AMD Ryzen 7 7800X3D 8-Core Processor</div>
+      <div class="kv"><span>Board</span><span>ASUSTeK ROG STRIX B650E-F GAMING WIFI</span><span>Graphics</span><span>NVIDIA GeForce RTX 3080</span><span>Memory</span><span>32 GB</span><span>Windows</span><span>Windows 11 Pro 24H2, build 26100.4652</span></div></div>
+    <div style="text-align:right" class="hide-compact"><div class="lbl" style="margin-top:0">TEMPERATURES</div><div><span class="dim">GPU</span> <b class="txt" style="font-size:18px">47 °C</b></div></div></div>`;
+}
+const worth = [
+  ['warn','Resizable BAR is off','NVIDIA measured 2–4% in supported games. A BIOS guide shows how to turn it on.','Open the BIOS guide'],
+  ['warn','Your monitor runs at 60 Hz','It can do 165 Hz. Windows\u2019 display settings change it.','Display settings'],
+  ['up','Turn off Enhance pointer precision','A proven tweak that fits this PC and is off.','Open in Gaming'],
+  ['q','Drivers not checked yet','The newest NVIDIA driver may be newer than 591.74.','Check drivers'],
+  ['q','Driver latency test not run','A 60-second test that names any driver holding up the CPU.','Run the test'],
+];
+function worthList(compact){
+  return worth.map(([ic,t,d,b])=>`<div class="row" style="padding:10px 14px">
+    <span class="state ${ic==='warn'?'found':ic==='up'?'ok':'q'}">${I(ic==='up'?'up':ic,'s')}</span>
+    <div class="rmain"><div class="rname">${t}</div><div class="rdesc" style="margin:0">${d}</div></div>
+    ${compact?'':`<div class="rctl"><span class="btn sm">${b}</span></div>`}</div>`).join('');
+}
+const sections = [
+  ['game','Gaming','9 of 27 on',.33],['debloat','Debloat & Privacy','20 of 31 on',.64],['security','Security','0 of 2 on',0],['update','Windows Update','1 of 7 on',.14],
+  ['results','Results','Fortnite: better',null],['checks','PC checks','3 findings',null],['apps','Apps','2 app updates',null],['startup','Startup & Services','5 apps start at sign-in',null],
+  ['cleanup','Cleanup','About 1.7 GB to clean',null],['repair','Repair','Running: step 2 of 3',null],['drivers','Drivers','Not checked yet',null],['oc','Overclocking','GPU on default settings',null],
+];
+function sectionCards(cols){
+  return `<div class="grid ${cols}">${sections.map(([ic,n,l,m])=>`<div class="card" style="padding:14px 16px">
+    <div style="display:flex;gap:9px;align-items:center;color:var(--orange)">${I(ic)}<span class="txt" style="font-weight:600">${n}</span></div>
+    <div class="dim" style="font-size:12.5px;margin-top:6px">${l}</div>${m!==null?`<div class="meter"><i style="width:${m*100}%"></i></div>`:''}</div>`).join('')}</div>`;
+}
+function newest(){
+  return `<div class="card" style="display:flex;gap:16px;align-items:center">
+    <div class="rmain"><div class="lbl" style="margin-top:0">NEWEST RESULT</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="txt" style="font-weight:600;font-size:15px">Fortnite</span>${vd('better')}</div>
+    <div class="dim" style="font-size:12.5px;margin-top:4px">1% lows 141 → 153 fps after 3 changes, over 23 play sessions. Average FPS about the same.</div></div>
+    <span class="btn sm">Open Results ${I('chev','s')}</span></div>`;
+}
+function homeA(){
+  return {sel:'Home', detail:null, page:`<div class="pin wide">
+    <h1>Home</h1><div class="sub">Your PC at a glance.</div>
+    ${homeTop()}
+    <div class="grid g4" style="margin-top:12px">
+      <div class="card stat"><b>30</b><span>tweaks on, of 61 that fit this PC</span></div>
+      <div class="card stat"><b>1</b><span>change waiting for a restart</span></div>
+      <div class="card stat"><b>3</b><span>findings on PC checks</span></div>
+      <div class="card stat"><b>2</b><span>changes undone outside the app</span></div></div>
+    <div style="margin-top:12px">${newest()}</div>
+    <div class="lbl">WORTH A LOOK</div>${worthList(false)}
+    <div class="lbl">WAITING</div>
+    <div class="row" style="padding:10px 14px"><span style="color:var(--orange)">${I('warn','s')}</span><div class="rmain txt">1 change takes effect after a restart</div><span class="btn sm">${I('restart','s')}Restart now…</span></div>
+    <div class="row" style="padding:10px 14px"><span style="color:var(--orange)">${I('warn','s')}</span><div class="rmain txt">2 changes were undone outside the app</div><span class="dim" style="font-size:12.5px">Undo history ${I('chev','s')}</span></div>
+    <div class="lbl">SECTIONS</div>${sectionCards('g4')}
+  </div>`};
+}
+function homeB(){
+  return {sel:'Home', detail:null, page:`<div class="pin wide">
+    <h1>Home</h1><div class="sub">Your PC at a glance.</div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,420px);gap:20px;align-items:start" class="homeb">
+      <div>
+        ${homeTop()}
+        <div class="lbl">WAITING</div>
+        <div class="row" style="padding:10px 14px"><span style="color:var(--orange)">${I('warn','s')}</span><div class="rmain txt">1 change takes effect after a restart</div><span class="btn sm">${I('restart','s')}Restart now…</span></div>
+        <div class="row" style="padding:10px 14px"><span style="color:var(--orange)">${I('warn','s')}</span><div class="rmain txt">2 changes were undone outside the app</div><span class="dim" style="font-size:12.5px">Undo history ${I('chev','s')}</span></div>
+        <div class="lbl">SECTIONS · 30 TWEAKS ON, OF 61 THAT FIT THIS PC</div>${sectionCards('g3')}
+      </div>
+      <div style="position:sticky;top:0">
+        ${newest()}
+        <div class="lbl">WORTH A LOOK · 5</div>${worthList(true)}
+        <div class="dim" style="font-size:12px;margin-top:6px">Each item opens the page that deals with it. This is a list, never a score.</div>
+      </div>
+    </div>
+    <style>@media (max-width:1199px){.homeb{grid-template-columns:1fr!important}}</style>
+  </div>`};
+}
+function gaming(){
+  const row = (name, desc, ps, ctl, sel='') => `<div class="row ${sel} ${ctl.includes('seg')?'stack':''}"><div class="rmain"><div class="rname">${name}</div><div class="rdesc">${desc}</div>${ps}</div><div class="rctl">${ctl}</div></div>`;
+  const S = on => `<span class="sw ${on?'on':''}"></span>`;
+  const page = `<div class="pin">
+    <h1>Gaming</h1><div class="sub">9 of 27 on</div>
+    <div class="note">${I('info','s')}<span><b class="txt">What to expect.</b> Most of these change a few FPS at most, and only some help on every PC. The Results page shows what they did on this PC.</span></div>
+    ${row('Turn off Enhance pointer precision','Stops Windows speeding the pointer up, so your aim matches how far your hand moves.',pills(pill('Proven'),pill('Reversible')),S(false))}
+    ${row('Run a game on the graphics card','This PC has two graphics chips. Makes Windows use the RTX 3080 for the games you pick.',pills(pill('Proven'),pill('Reversible'),pill('Per game')),'<span class="btn sm">Choose a game…</span>')}
+    ${row('Power plan','Which plan Windows runs. High performance keeps the CPU at full speed sooner.',pills(pill('Situational'),pill('Reversible'),pill('Pick one','dimp')),'<span class="seg"><span>Windows default</span><span class="on">High performance</span><span>Ultimate</span></span>')}
+    ${row('Power mode: Best performance','Windows\u2019 own power slider at its top setting. Instant, so it can go in per-game profiles.',pills(pill('Situational'),pill('Reversible'),pill('Instant')),S(true),'sel')}
+    ${row('Keep Optimizations for windowed games on','Lets windowed games use the faster way of reaching the screen.',pills(pill('Proven'),pill('Reversible'),pill('Already set on this PC')),`<span class="lockg">${I('lock','s')}</span><span class="sw lock"></span>`)}
+    ${row('Make timer resolution requests system-wide','Lets a game\u2019s timer request reach the whole PC, as it did before Windows 11.',pills(pill('Situational'),pill('Reversible'),pill('Needs reboot','warn')),S(false))}
+    <div class="lbl">GRAPHICS DRIVER · NVIDIA GEFORCE RTX 3080</div>
+    ${row('Low Latency Mode: On','Keeps the CPU at most one frame ahead. Helps most when the graphics card is the limit. Use Reflex in the game instead where it\u2019s offered.',pills(pill('Situational'),pill('Reversible'),pill('Next time the game starts'),pill('All games')),S(true))}
+    ${row('Max frame rate','A driver frame cap. Set it a few FPS under your refresh rate with G-SYNC.',pills(pill('Situational'),pill('Reversible'),pill('All games')),'<span class="btn sm" style="min-width:86px;justify-content:space-between">162 fps '+I('down','s')+'</span>'+S(true))}
+    ${row('Vertical sync','Overrides the game\u2019s VSync. Off gives the lowest latency; On with G-SYNC avoids tearing.',pills(pill('Situational'),pill('Reversible'),pill('Pick one','dimp')),'<span class="seg"><span class="on">Let the game decide</span><span>Off</span><span>On</span></span>')}
+    <div class="lbl">NETWORK</div>
+    ${row('Cap Windows Update downloads','Stops Delivery Optimization filling your line while you play.',pills(pill('Situational'),pill('Reversible')),S(false))}
+    ${row('Cap OneDrive bandwidth','Limits OneDrive\u2019s uploads and downloads so a sync can\u2019t fill your line mid-match.',pills(pill('Situational'),pill('Reversible'),pill('When OneDrive restarts')),S(false))}
+    <div class="card fold" style="margin-top:12px"><div><div class="rname">Possible placebo (19)</div><div class="dim" style="font-size:12.5px">Popular tweaks with no reliable evidence they help games. Each one says why.</div></div>${I('down')}</div>
+  </div>`;
+  const detail = `<div class="din">
+    <h2>Power mode: Best performance</h2>
+    ${pills(pill('Situational'),pill('Reversible'),pill('Instant'))}
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px"><span class="sw on"></span><span class="txt">On</span></div>
+    <div class="lbl">ON THIS PC</div>
+    <div class="card" style="padding:12px 14px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${vd('better')}<span class="txt">Fortnite</span></div>
+      <div class="dim" style="font-size:12.5px;margin:4px 0 10px">1% lows 141 → 153 fps over 23 play sessions. Measured together with 2 other changes, so this can\u2019t say which one did it.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${vd('wait')}<span class="txt">Counter-Strike 2</span></div>
+      <div class="dim" style="font-size:12.5px;margin:4px 0 12px">About 4 more play sessions needed.</div>
+      <span class="btn primary">${I('play','s')}Run an on-off test in Fortnite…</span>
+      <div class="faint" style="font-size:12px;margin-top:8px">The profile switches this on in random sessions and off in the rest, to measure it alone.</div>
+    </div>
+    <div class="lbl">WHAT IT DOES</div>
+    <p>Sets Windows\u2019 power mode (the slider in Settings › System › Power) to Best performance on top of the Balanced plan. The CPU ramps up faster and parks fewer cores. X3D parking keeps working, because the plan stays Balanced.</p>
+    <div class="lbl">EVIDENCE</div>
+    <p>Situational. Helps CPU-limited games and frame-time spikes on some PCs; a GPU-limited game won\u2019t change.</p>
+    <div class="lbl">EXACT CHANGE</div>
+    <div class="code">Set the active overlay scheme to
+ded574b5-45a0-4f42-8737-46345c09c238
+(Best performance)</div>
+    <div class="lbl">UNDO</div>
+    <p>Puts back the overlay that was active before.</p>
+  </div>`;
+  return {sel:'Gaming', page, detail};
+}
+function profiles(){
+  const games = [
+    ['Fortnite','Epic · Easy Anti-Cheat','Profile','Played today','sel'],
+    ['Counter-Strike 2','Steam · VAC','Profile','Played yesterday',''],
+    ['Valorant','Riot · Vanguard','','Played 2 days ago',''],
+    ['Apex Legends','Steam · Easy Anti-Cheat','','Played 4 days ago',''],
+    ['Cyberpunk 2077','Steam','','Played last week',''],
+    ['Rocket League','Epic · Easy Anti-Cheat','','Not played yet',''],
+    ['Baldur\u2019s Gate 3','Steam','','Not played yet',''],
+  ];
+  const page = `<div class="pin">
+    <h1>Per-game profiles</h1><div class="sub">Pick a game to set what changes while it runs. 7 games found on this PC.</div>
+    <div class="search" style="margin:0 0 12px;max-width:420px">${I('search','s')}<span>Find a game</span></div>
+    ${games.map(([n,m,p,l,s])=>`<div class="row ${s}"><div class="rmain"><div class="rname">${n}</div><div class="rdesc" style="margin:2px 0 0">${m} · ${l}</div></div><div class="rctl">${p?pill('Profile','warn'):'<span class="faint" style="font-size:12.5px">No profile</span>'}${I('chev','s')}</div></div>`).join('')}
+    <div class="dim" style="font-size:12.5px;margin-top:10px">A profile holds only instant changes. It goes on when the game starts and comes off 15 seconds after it closes.</div>
+  </div>`;
+  const ck = (on,t) => `<div class="chk"><span class="box ${on?'on':''}"></span><span>${t}</span></div>`;
+  const detail = `<div class="din">
+    <h2>Fortnite</h2>
+    <div class="dim" style="font-size:12.5px">Epic · Easy Anti-Cheat · Played today</div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px"><span class="sw on"></span><span class="txt">Profile on</span></div>
+    <div class="lbl">WHILE THIS GAME RUNS</div>
+    <div class="dim" style="font-size:12.5px;margin-bottom:6px">Power plan</div>
+    <span class="seg"><span>No change</span><span class="on">High performance</span><span>Ultimate</span></span>
+    <div style="margin-top:10px">${ck(true,'Power mode: Best performance')}${ck(true,'Keep Game Mode on')}${ck(true,'Lower background apps\u2019 priority')}${ck(false,'Keep the game out of Efficiency mode')}${ck(true,'Raise the timer resolution to 0.5 ms')}${ck(false,'Wi-Fi power saving: Maximum performance')}</div>
+    <div class="dim" style="font-size:12.5px;margin:10px 0 6px">Game priority</div>
+    <span class="btn sm" style="min-width:150px;justify-content:space-between">High ${I('down','s')}</span>
+    <div class="lbl">BACKGROUND APPS TO CLOSE</div>
+    ${[['Discord','C:\\Users\\aden\\AppData\\Local\\Discord\\app-1.0.9170'],['Steam','C:\\Program Files (x86)\\Steam']].map(([n,p])=>`<div class="row" style="padding:8px 12px;margin-bottom:4px"><div class="rmain"><div class="txt">${n}</div><div class="faint" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p}</div></div><span class="dim">${I('x','s')}</span></div>`).join('')}
+    <span class="btn sm" style="margin-top:4px">Add an app…</span>
+    <div class="lbl">CAP UPLOADS</div>
+    <div class="row" style="padding:8px 12px"><div class="rmain"><div class="txt">OneDrive</div><div class="faint" style="font-size:12px">Uploads capped to 1 Mbit/s while Fortnite runs</div></div><span class="dim">${I('x','s')}</span></div>
+    <div class="lbl">ON-OFF TEST</div>
+    <div class="card" style="padding:10px 12px"><div class="txt">Testing: Power mode: Best performance</div><div class="dim" style="font-size:12.5px">6 of about 20 play sessions so far</div><div class="meter"><i style="width:30%"></i></div></div>
+    <div class="lbl">GPU AND CPU TUNING</div>
+    <div class="dim" style="font-size:12.5px">GPU: none, the GPU stays as it is. CPU: none.</div>
+    <div style="display:flex;gap:8px;margin-top:20px"><span class="btn primary">Save profile</span><span class="btn">Delete profile</span></div>
+  </div>`;
+  return {sel:'Per-game profiles', page, detail};
+}
+function gameReport(g){
+  const net = g.net ? `<div class="lbl">CONNECTION, LAST SESSION</div>
+    <div class="grid g3" style="gap:8px">
+      <div class="card" style="padding:10px 12px"><div class="faint" style="font-size:12px">ROUTER</div><div class="txt" style="font-size:17px;font-weight:600">${g.net[0]}</div></div>
+      <div class="card" style="padding:10px 12px"><div class="faint" style="font-size:12px">ISP</div><div class="txt" style="font-size:17px;font-weight:600">${g.net[1]}</div></div>
+      <div class="card" style="padding:10px 12px"><div class="faint" style="font-size:12px">GAME SERVER</div><div class="txt" style="font-size:17px;font-weight:600">${g.net[2]}</div></div></div>
+    <div class="dim" style="font-size:12.5px;margin-top:6px">Jitter ${g.net[3]} · loss ${g.net[4]}. ${g.net[5]}</div>` : '';
+  const ranges = g.fps ? `<div class="lbl">BEFORE <span style="display:inline-block;width:18px;height:6px;border-radius:3px;background:var(--strong);vertical-align:middle"></span> AND AFTER <span style="display:inline-block;width:18px;height:6px;border-radius:3px;background:var(--wave);vertical-align:middle"></span></div>
+    <div class="rng">${rng('Average FPS',g.fps[0],g.fps[1],200,240,g.fps[2])}${rng('1% lows',g.low[0],g.low[1],125,165,g.low[2])}${rng('Stutters',g.st[0],g.st[1],0,6,g.st[2])}${rng('Input lag',g.lag[0],g.lag[1],10,30,g.lag[3]||g.lag[2])}</div>
+    <div class="faint" style="font-size:12px;margin-top:6px">Bars show the likely range. Only 1-minute blocks with the same game build, frame cap and GPU-bound state are compared.</div>` : '';
+  return `<h2>${g.name}</h2><div class="dim" style="font-size:12.5px;margin-bottom:10px">${g.meta}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${vd(g.v)}<span class="dim" style="font-size:12.5px">${g.line}</span></div>
+    <div class="lbl">CHANGES COMPARED</div><p>${g.changes}</p>
+    ${ranges}
+    <div class="lbl">LIMIT</div><p>${g.gpu}.</p>
+    ${g.fps?`<div class="lbl">FRAME TIMES, LAST SESSION</div>${spark(7)}<div class="faint" style="font-size:12px">Dashed line: 6.9 ms (144 fps). Spikes are stutters.</div>`:''}
+    ${net}
+    <div class="lbl">PLAY SESSIONS</div><p class="dim">${g.sessions}</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><span class="btn primary">${I('play','s')}Start a spot test…</span><span class="btn">Measuring on</span></div>`;
+}
+function resultsA(){
+  const card = (g,s) => `<div class="card" style="${s?'border-color:var(--strong);background:var(--surface2)':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div class="txt" style="font-weight:600;font-size:15px">${g.name}</div><div class="faint" style="font-size:12px">${g.meta} · ${g.last}</div></div>${vd(g.v)}</div>
+    <div class="dim" style="font-size:12.5px;margin:8px 0 10px">${g.line}</div>
+    ${g.fps?`<div class="grid g2" style="gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div><div class="faint" style="font-size:12px">1% LOWS</div><div class="txt">${g.low[2]}</div></div>
+      <div><div class="faint" style="font-size:12px">AVERAGE FPS</div><div class="txt">${g.fps[2]}</div></div></div>`:`<div class="faint" style="font-size:12px">${g.sessions}</div>`}
+    ${g.net?`<div class="faint" style="font-size:12px;margin-top:10px">Ping ${g.net[0]} router · ${g.net[1]} ISP · ${g.net[2]} server</div>`:''}
+  </div>`;
+  const page = `<div class="pin wide">
+    <h1>Results</h1><div class="sub">What your changes did, measured in your own games. 5 games, 66 play sessions.</div>
+    <div class="grid g2 wide3">${card(GAMES[0],true)}${GAMES.slice(1).map(g=>card(g)).join('')}
+      <div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div class="txt" style="font-weight:600;font-size:15px">This PC</div><div class="faint" style="font-size:12px">Outside games</div></div>${vd('better')}</div>
+      <div class="dim" style="font-size:12.5px;margin:8px 0 10px">${THISPC.line}</div><div class="kv">${THISPC.rows.map(r=>`<span>${r[0]}</span><span class="txt">${r[1]}</span>`).join('')}</div></div>
+    </div>
+    <div class="faint" style="font-size:12px;margin-top:14px">Verdicts: better, worse, no clear difference, or not enough play yet. Never a score.</div>
+  </div>`;
+  return {sel:'Results', page, detail:`<div class="din">${gameReport(GAMES[0])}</div>`};
+}
+function resultsB(){
+  const page = `<div class="pin">
+    <h1>Results</h1><div class="sub">What your changes did, measured in your own games.</div>
+    <div class="row" style="padding:12px 16px"><div class="rmain"><div class="rname">This PC</div><div class="rdesc" style="margin:2px 0 0">Boot time 41 s → 33 s · 38 fewer programs running at idle</div></div><div class="rctl">${vd('better')}</div></div>
+    <div class="lbl">GAMES</div>
+    ${GAMES.map((g,i)=>`<div class="row ${i===0?'sel':''}"><div class="rmain"><div class="rname">${g.name}</div><div class="rdesc" style="margin:2px 0 0">${g.line}</div></div><div class="rctl"><span class="faint hide-compact" style="font-size:12px">${g.last}</span>${vd(g.v)}</div></div>`).join('')}
+    <div class="lbl">MEASURING</div>
+    <div class="row"><div class="rmain"><div class="rname">Measure every game I play</div><div class="rdesc" style="margin:2px 0 0">PresentMon reads Windows\u2019 own graphics events. Nothing is drawn over the game.</div></div><span class="sw on"></span></div>
+  </div>`;
+  return {sel:'Results', page, detail:`<div class="din">${gameReport(GAMES[0])}</div>`};
+}
+function resultsC(){
+  const ch = [
+    ['Power mode: Best performance','Gaming · instant',[['Fortnite','better'],['Counter-Strike 2','wait']],'sel'],
+    ['Turn off Enhance pointer precision','Gaming',[['Fortnite','better'],['Valorant','same']],''],
+    ['Low Latency Mode: On','Graphics driver',[['Fortnite','better'],['Cyberpunk 2077','restart']],''],
+    ['Memory compression off','Possible placebo',[['Apex Legends','worse']],''],
+    ['Startup: 5 apps turned off','Startup & Services',[['This PC','better']],''],
+  ];
+  const small = k => ({better:'<span class="vd better" style="padding:2px 7px;font-size:11.5px">Better</span>',worse:'<span class="vd worse" style="padding:2px 7px;font-size:11.5px">Worse</span>',same:'<span class="vd" style="padding:2px 7px;font-size:11.5px">No clear difference</span>',wait:'<span class="vd wait" style="padding:2px 7px;font-size:11.5px">Not enough play</span>',restart:'<span class="vd wait" style="padding:2px 7px;font-size:11.5px">Restarted</span>'}[k]);
+  const page = `<div class="pin">
+    <h1>Results</h1><div class="sub">What each change did, game by game.</div>
+    <div class="tabs"><span class="on">By change</span><span>By game</span><span>This PC</span></div>
+    <table class="t"><tr><th>CHANGE</th><th class="hide-compact">WHERE</th><th>RESULT IN EACH GAME</th></tr>
+    ${ch.map(([n,w,rs,s])=>`<tr style="${s?'background:var(--surface2)':''}"><td class="txt" style="${s?'box-shadow:inset 3px 0 0 var(--red)':''}">${n}</td><td class="dim hide-compact">${w}</td><td><div style="display:flex;flex-wrap:wrap;gap:6px 12px">${rs.map(([g,k])=>`<span style="display:inline-flex;gap:6px;align-items:center"><span class="dim">${g}</span>${small(k)}</span>`).join('')}</div></td></tr>`).join('')}
+    </table>
+    <div class="faint" style="font-size:12px;margin-top:10px">Changes made together share one verdict. An on-off test splits them apart.</div>
+  </div>`;
+  const detail = `<div class="din"><h2>Power mode: Best performance</h2>${pills(pill('Situational'),pill('Instant'),pill('On since 1 Nov'))}
+    <div class="lbl">FORTNITE</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${vd('better')}<span class="dim" style="font-size:12.5px">with 2 other changes</span></div>
+    <div class="rng" style="margin-top:10px">${rng('1% lows',[136,146],[149,158],125,165,'141 → 153 fps')}${rng('Average FPS',[212,224],[215,227],200,240,'218 → 221 fps')}</div>
+    <div class="lbl">COUNTER-STRIKE 2</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${vd('wait')}<span class="dim" style="font-size:12.5px">about 4 more play sessions</span></div>
+    <div class="lbl">SPLIT IT FROM THE OTHER CHANGES</div>
+    <p class="dim" style="font-size:12.5px">An on-off test switches only this change on and off across about 20 Fortnite sessions.</p>
+    <span class="btn primary">${I('play','s')}Run an on-off test…</span>
+    <div style="margin-top:10px"><span class="btn">Undo this change</span></div></div>`;
+  return {sel:'Results', page, detail};
+}
+const FOUND = [
+  ['Resizable BAR is off','Graphics card','NVIDIA measured 2–4% on average in supported games (TechPowerUp).','Open the BIOS guide'],
+  ['Your monitor runs at 60 Hz','Display','It can do 165 Hz at this resolution. Frames above 60 a second never reach the screen.','Display settings'],
+  ['OneDrive uploaded 1.2 GB during your last Fortnite match','Network','Big uploads fill your line and add lag.','Close it in Fortnite\u2019s profile'],
+];
+const TESTS = [
+  ['Mouse polling rate','Last: 1000 Hz','Test again'],
+  ['Driver latency','Not run yet','Run 60-second test'],
+  ['Check my connection','Last: router 1 ms, ISP 9 ms','Run'],
+  ['Bufferbloat','Not run yet','Start'],
+];
+function checksDetail(){
+  return `<div class="din"><h2>Resizable BAR is off</h2>${pills(pill('Found','warn'),pill('Graphics card'),pill('Fix: BIOS guide'))}
+    <div class="lbl">WHAT IT READ</div><p>The RTX 3080 shows the CPU a 256 MB window into its 10 GB of memory. With Resizable BAR on, that window covers all of it.</p>
+    <div class="lbl">WHAT IT CAN COST</div><p>NVIDIA turns it on only for games on its own list. In those, TechPowerUp measured 2–4% on average, and about 20% in one game.</p>
+    <div class="lbl">HOW TO FIX IT</div><p>In the BIOS, turn on Above 4G Decoding and Re-Size BAR, and turn CSM off. The guide matches your ASUS board.</p>
+    <span class="btn primary">Open the BIOS guide</span>
+    <div style="margin-top:10px"><span class="btn">This is on purpose</span></div>
+    <div class="faint" style="font-size:12px;margin-top:8px">Hides it until the reading changes. A check only reads; it never changes anything.</div></div>`;
+}
+function checksA(){
+  const page = `<div class="pin">
+    <h1>PC checks</h1><div class="sub">Hidden things that cost performance. Last checked when the app opened, 2 minutes ago.</div>
+    <div class="lbl">TESTS YOU START</div>
+    <div class="grid g4">${TESTS.map(([n,l,b])=>`<div class="card" style="padding:12px 14px"><div class="txt" style="font-weight:600">${n}</div><div class="dim" style="font-size:12.5px;margin:2px 0 10px">${l}</div><span class="btn sm">${b}</span></div>`).join('')}</div>
+    <div class="lbl">FOUND · 3</div>
+    ${FOUND.map(([t,a,d,b],i)=>`<div class="row ${i===0?'sel':''}"><span class="state found">${I('warn','s')}</span><div class="rmain"><div class="rname">${t}</div><div class="rdesc" style="margin:2px 0 0">${a} · ${d}</div></div><div class="rctl hide-compact"><span class="btn sm">${b}</span></div></div>`).join('')}
+    <div class="lbl">CAN\u2019T TELL · 1</div>
+    <div class="row"><span class="state q">${I('q','s')}</span><div class="rmain"><div class="rname">Memory channels</div><div class="rdesc" style="margin:2px 0 0">Two sticks, but the board\u2019s slot names don\u2019t say which channel each is in. Your board manual names the right slots.</div></div></div>
+    <div class="lbl">OK · 13</div>
+    <div class="card fold"><div class="dim" style="font-size:12.5px">Monitor cable on the graphics card · PCIe 4.0 x16 · Games on an SSD · Windows drive 18% free · Power plan not capped · Variable refresh on · Ethernet · Mouse 1000 Hz · and 5 more checked during your last game</div>${I('down')}</div>
+    <div class="lbl">DISMISSED · 1</div>
+    <div class="row"><span class="state ok">${I('check','s')}</span><div class="rmain"><div class="rname dim">Second monitor on the motherboard</div><div class="rdesc" style="margin:2px 0 0">You said this is on purpose.</div></div><span class="btn sm">Show again</span></div>
+  </div>`;
+  return {sel:'PC checks', page, detail:checksDetail()};
+}
+function checksB(){
+  const areas = [
+    ['Display',[['found','Refresh rate: 60 Hz of 165 Hz'],['ok','Cable on the graphics card'],['ok','Variable refresh on']]],
+    ['Graphics card',[['found','Resizable BAR off'],['ok','PCIe 4.0 x16, as fast as the card goes'],['ok','No throttling in your last game'],['ok','Games run on the RTX 3080']]],
+    ['Memory',[['ok','Two sticks, same size'],['q','Channels: can\u2019t tell']]],
+    ['Storage',[['ok','Every game is on an SSD'],['ok','Windows drive 18% free']]],
+    ['Power',[['ok','Power plan not capped'],['ok','Plugged in']]],
+    ['Network',[['ok','Ethernet'],['found','OneDrive uploaded 1.2 GB mid-match'],['ok','Last connection check steady']],'Check my connection'],
+    ['Input',[['ok','Mouse polls at 1000 Hz']],'Test again'],
+    ['Drivers',[['q','Driver latency: not run yet']],'Run 60-second test'],
+  ];
+  const ic = s => s==='found'?`<span class="state found" style="width:18px;height:18px">${I('warn','s')}</span>`:s==='q'?`<span class="state q" style="width:18px;height:18px">${I('q','s')}</span>`:`<span class="state ok" style="width:18px;height:18px">${I('check','s')}</span>`;
+  const page = `<div class="pin wide">
+    <h1>PC checks</h1><div class="sub">3 found · 2 can\u2019t tell · 13 OK. Last checked when the app opened, 2 minutes ago.</div>
+    <div class="grid g3 wide3" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
+    ${areas.map(([n,cs,b])=>`<div class="card" style="${n==='Graphics card'?'border-color:var(--strong);background:var(--surface2)':''}"><div class="txt" style="font-weight:600;margin-bottom:8px">${n}</div>
+      ${cs.map(([s,t])=>`<div style="display:flex;gap:9px;align-items:center;padding:4px 0;font-size:12.5px" class="${s==='ok'?'dim':'txt'}">${ic(s)}<span>${t}</span></div>`).join('')}
+      ${b?`<span class="btn sm" style="margin-top:10px">${b}</span>`:''}</div>`).join('')}
+    </div>
+    <div class="row" style="margin-top:14px"><div class="rmain"><div class="rname">Bufferbloat test</div><div class="rdesc" style="margin:2px 0 0">Pings while you run a free web speed test, then shows how much lag a busy line adds.</div></div><span class="btn sm">Start</span></div>
+  </div>`;
+  return {sel:'PC checks', page, detail:checksDetail()};
+}
+
+const SCREENS = [
+  ['home','A','Home: "Worth a look" in the page',homeA],
+  ['home','B','Home: "Worth a look" in a side column',homeB],
+  ['gaming','A','Gaming: rows with descriptions',gaming],
+  ['results','A','Results: a card per game',resultsA],
+  ['results','B','Results: a list of games',resultsB],
+  ['results','C','Results: by change',resultsC],
+  ['checks','A','PC checks: by state',checksA],
+  ['checks','B','PC checks: by area',checksB],
+  ['profiles','A','Per-game profiles: games first',profiles],
+];
+const qs = new URLSearchParams(location.search);
+let idx = Math.max(0, SCREENS.findIndex(s => s[0]===(qs.get('screen')||'home') && s[1]===(qs.get('variant')||'A')));
+if (qs.get('shot')) document.getElementById('bar').style.display='none';
+const pick = document.getElementById('pick');
+SCREENS.forEach((s,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=`${s[0]} ${s[1]}`; pick.appendChild(o); });
+function render(){
+  const [scr,v,label,fn] = SCREENS[idx];
+  const r = fn();
+  document.getElementById('app').innerHTML = `<div class="win ${r.detail?'':'nodetail'}"><div class="strip"></div>${sidebar(r.sel)}<main class="page">${r.page}</main>${r.detail?`<aside class="detail">${r.detail}</aside>`:''}</div>`;
+  document.getElementById('lab').textContent = `${v} · ${label}`;
+  pick.value = idx;
+  const u = new URL(location); u.searchParams.set('screen',scr); u.searchParams.set('variant',v); history.replaceState(null,'',u);
+}
+const go = d => { idx = (idx + d + SCREENS.length) % SCREENS.length; render(); };
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+pick.onchange = () => { idx = +pick.value; render(); };
+addEventListener('keydown', e => { if (e.target.closest('input,textarea,select,[contenteditable]')) return; if (e.key==='ArrowLeft') go(-1); if (e.key==='ArrowRight') go(1); });
+render();
+</script>
+</body>
+</html>
