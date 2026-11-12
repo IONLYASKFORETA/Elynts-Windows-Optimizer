@@ -17,4 +17,11 @@ public partial class TweakList : UserControl
         if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
             await Model.ApplyForGameAsync(item);
     }
+
+    /// <summary>Sets a pick-one row's choice to the segment pressed.</summary>
+    private async void Choose(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ChoiceOptionViewModel choice)
+            await choice.ChooseAsync();
+    }
 }

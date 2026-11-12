@@ -296,6 +296,14 @@ public static class GamingTweaks
         HardwareNotes = [X3dCoreParking, LaptopPower],
     };
 
+    /// <summary>Only one power plan can be active, so the two plans are one pick-one row.</summary>
+    public static ChoiceGroup PowerPlanChoice { get; } = new(
+        Id: "gaming.power-plan",
+        Name: "Power plan",
+        Summary: "Which plan Windows runs. High performance keeps the CPU at full speed sooner.",
+        DefaultLabel: "Windows default",
+        Options: [new(HighPerformancePlan.Id, "High performance"), new(UltimatePerformancePlan.Id, "Ultimate")]);
+
     public static PerGameTweak FullscreenOptimizationsOff { get; } = new(
         new TweakDefinition(
             Id: "gaming.fullscreen-optimizations-off",

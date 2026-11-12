@@ -3,6 +3,8 @@
 **Tweak**: one described adjustment to Windows, with its own switch, that the app can apply and, unless it is labelled destructive, undo.
 _Avoid_: setting, optimization
 
+**Pick-one choice**: a set of tweaks of which at most one is on, such as the power plan (Windows default, High performance, Ultimate) or the monthly update delay. It shows as one row with a segmented choice, and choosing one undoes the app's change for the one before. Each option is still its own tweak, with its own change in the Undo history. The Engine calls it a choice group.
+
 **Change**: one thing the app did to Windows, saved with exactly what was there before it: a tweak switched on, a startup item switched, a service's start type set, or a background app closed by a per-game profile. Each change is a row in the Undo history. Cleaning, driver installs and tuning aren't changes.
 _Avoid_: global setting, journal entry
 

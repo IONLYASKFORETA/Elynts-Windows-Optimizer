@@ -44,13 +44,14 @@ rather than to the page's resources (CI fails on a colour outside `Theme/`).
   - `Table.Header` + `Table.Row`: a table on the page (Undo history, drift). `Table.List` + `Table.ListRow` for one
     long enough to virtualise (the services).
 - **Controls:** `Switch` (a CheckBox as an on/off switch; give a locked one `theme:Switch.IsLocked="{Binding IsLocked}"`
-  so it shows a lock rather than fading like a busy one), `Button.Primary` (button wave), `Button.Destructive` (red),
-  and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next step:
-  a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain. `SearchBox` (a
-  TextBox with a search glyph) for every search and filter: its `AutomationProperties.Name` is also the hint text shown
-  while it's empty, so give it one, and put the result count just under it ("12 apps"). `Meter` (thin ProgressBar,
-  Maximum 1). `NavItem` (sidebar). Plain TextBox, ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar, ToolTip and
-  ListView already match through FluentColors.xaml.
+  so it shows a lock rather than fading like a busy one), `Segmented` + `Segment` (a pick-one row's choice: an
+  ItemsControl of Buttons, the chosen one in the button wave), `Button.Primary` (button wave), `Button.Destructive`
+  (red), and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next
+  step: a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain.
+  `SearchBox` (a TextBox with a search glyph) for every search and filter: its `AutomationProperties.Name` is also the
+  hint text shown while it's empty, so give it one, and put the result count just under it ("12 apps"). `Meter` (thin
+  ProgressBar, Maximum 1). `NavItem` (sidebar). Plain TextBox, ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar,
+  ToolTip and ListView already match through FluentColors.xaml.
 - Dim text with `Text.Dim` or `Theme.TextDim`, never with Opacity.
 
 ## Sizes

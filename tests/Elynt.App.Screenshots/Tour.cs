@@ -104,6 +104,13 @@ internal static partial class Tour
                 await SettleAsync();
                 Shoot(window, folder, $"{name}-locked-{Slug(locked.LockText!)}", screen);
             }
+            // A pick-one row (the power plan, the update delay), so the detail pane draws its segmented choice too.
+            if (model.IsTweakPage && model.Tweaks.FirstOrDefault(t => t.IsChoice) is { } choice)
+            {
+                model.SelectedTweak = choice;
+                await SettleAsync();
+                Shoot(window, folder, $"{name}-pick-one", screen);
+            }
             if (model.HasRepairSelection && model.RepairTools.Count > 1)
             {
                 model.SelectedRepairTool = model.RepairTools.MaxBy(t => t.View.WhatItDoes.Length + t.View.ExactCommands.Sum(c => c.Length));

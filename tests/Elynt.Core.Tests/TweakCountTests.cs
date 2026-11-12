@@ -41,6 +41,21 @@ public class TweakCountTests
         Assert.Equal("1 of 1 on", count.Text);
     }
 
+    [Fact]
+    public void A_pick_one_choice_is_one_row_so_it_counts_once()
+    {
+        var plain = Tweak("test.plain");
+        var low = Tweak("test.low");
+        var high = Tweak("test.high");
+        var choice = new ChoiceGroup("test.level", "Level", "Picks a level.", "Windows default", [new(low.Id, "Low"), new(high.Id, "High")]);
+        var engine = new Engine(new Catalogue([plain, low, high], choices: [choice]), new SystemAdapters(_registry, _system), _journal, "S-1-5-21-test");
+        Assert.Equal("0 of 2 on", TweakCount.Of(engine.ListTweaks()).Text);
+
+        Assert.True(engine.Choose(choice.Id, high.Id).Succeeded);
+
+        Assert.Equal("1 of 2 on", TweakCount.Of(engine.ListTweaks()).Text);
+    }
+
     private static TweakDefinition Tweak(string id) =>
         LabelTests.TestTweak(id, new RegistryValueStep(ValueOf(id), RegistryValue.DWord(1)));
 
