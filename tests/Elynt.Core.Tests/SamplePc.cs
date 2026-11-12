@@ -149,6 +149,8 @@ public static class SamplePc
         foreach (var step in Catalogue.Default.Get(UpdateDelaySetElsewhere).Steps.OfType<RegistryValueStep>())
             registry.SetValue(step.Location, step.Desired);
 
+        // A service the app changed, so its row on the Services tab shows Undo.
+        Check(engine.SetServiceStart("SysMain", ServiceStart.Manual).Succeeded, "setting SysMain to Manual");
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)
         {

@@ -95,6 +95,12 @@
         <Setter Property="FontSize" Value="16" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- The lock: beside a locked switch, and in place of a protected service's controls. -->
+    <Style x:Key="Text.Lock" TargetType="TextBlock" BasedOn="{StaticResource Text.Icon}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Text" Value="&#xE72E;" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+    </Style>
     <!-- The answer to the last action ("Looking up the latest driver…"): body text in full white, taking no room while
          there is nothing to say. -->
     <Style x:Key="Text.Message" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
@@ -251,8 +257,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal" Background="Transparent">
-                        <TextBlock x:Name="Lock" Style="{StaticResource Text.Icon}" FontSize="12" Margin="0,0,8,0" Text="&#xE72E;"
-                                   Foreground="{StaticResource Theme.TextDim}" Visibility="Collapsed" />
+                        <TextBlock x:Name="Lock" Style="{StaticResource Text.Lock}" Margin="0,0,8,0" Visibility="Collapsed" />
                         <Grid Width="44" Height="22">
                             <Border x:Name="Track" CornerRadius="11" Background="{StaticResource Theme.Surface2}"
                                     BorderBrush="{StaticResource Theme.ControlEdge}" BorderThickness="1" />
@@ -412,6 +417,59 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Surface2}" />
                             <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A search or filter box: a search glyph, then hint text while it is empty. Its AutomationProperties.Name is both
+         the hint and what a screen reader says, so give every one a name. The sidebar search, the Apps filter, winget
+         search and the services filter all use it. -->
+    <Style x:Key="SearchBox" TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+        <Setter Property="CaretBrush" Value="{StaticResource Theme.Text}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource Theme.Red}" />
+        <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.StrokeStrong}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="MinHeight" Value="34" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Box" CornerRadius="6" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource Text.Icon}" FontSize="14" Margin="0,0,8,0" Text="&#xE721;"
+                                       Foreground="{StaticResource Theme.TextDim}" />
+                            <!-- The hint sits where the text goes, a hair right of the caret, and never takes a click. -->
+                            <TextBlock x:Name="Hint" Grid.Column="1" Margin="2,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Foreground="{StaticResource Theme.TextDim}" IsHitTestVisible="False" Visibility="Collapsed"
+                                       Text="{Binding Path=(AutomationProperties.Name), RelativeSource={RelativeSource TemplatedParent}}" />
+                            <ScrollViewer x:Name="PART_ContentHost" Grid.Column="1" VerticalAlignment="Center" Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{StaticResource Theme.Code}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource Theme.Red}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

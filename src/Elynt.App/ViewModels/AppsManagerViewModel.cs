@@ -63,8 +63,10 @@ public sealed class AppsManagerViewModel(
 {
     private string _query = "";
     private string? _searchStatus;
+    private string? _resultsQueueStatus;
     private string? _installedStatus;
     private bool _isSearching;
+    private EnginePipeClient? _installedFrom;
 
     public ObservableCollection<SearchResultViewModel> SearchResults { get; } = [];
 
@@ -76,11 +78,25 @@ public sealed class AppsManagerViewModel(
         set => Set(ref _query, value);
     }
 
+    /// <summary>What the last search found ("3 found, all reviewed."), under the search box.</summary>
     public string? SearchStatus
     {
         get => _searchStatus;
         private set => Set(ref _searchStatus, value);
     }
+
+    /// <summary>The install queue's progress and outcome for the ticked results, under their install button.</summary>
+    public string? ResultsQueueStatus
+    {
+        get => _resultsQueueStatus;
+        private set => Set(ref _resultsQueueStatus, value);
+    }
+
+    /// <summary>The Search tab's install button: "Install 2 apps" for the ticked results.</summary>
+    public string ResultsInstallText => AppCatalogueViewModel.InstallButtonText(SearchResults.Count(r => r.IsTicked));
+
+    /// <summary>The Search tab's install button is off while no result is ticked.</summary>
+    public bool HasResultsToInstall => SearchResults.Any(r => r.IsTicked);
 
     public string? InstalledStatus
     {
@@ -109,7 +125,7 @@ public sealed class AppsManagerViewModel(
             foreach (var kept in ticked)
                 SearchResults.Add(kept);
             foreach (var result in search.Results.Where(r => ticked.All(t => !t.Id.Equals(r.Id, StringComparison.OrdinalIgnoreCase))))
-                SearchResults.Add(new SearchResultViewModel(result.Id, result.Name, result.Version, result.Reviewed, result.Description));
+                SearchResults.Add(NewResult(result.Id, result.Name, result.Version, result.Reviewed, result.Description));
             SearchStatus = search.Message;
         }
         catch (Exception ex)
@@ -123,13 +139,27 @@ public sealed class AppsManagerViewModel(
         }
     }
 
+    /// <summary>A search result whose tick counts towards the Search tab's install button.</summary>
+    private SearchResultViewModel NewResult(string id, string name, string? version, bool reviewed, string? description)
+    {
+        var result = new SearchResultViewModel(id, name, version, reviewed, description);
+        result.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(SearchResultViewModel.IsTicked))
+                return;
+            OnPropertyChanged(nameof(ResultsInstallText));
+            OnPropertyChanged(nameof(HasResultsToInstall));
+        };
+        return result;
+    }
+
     /// <summary>Installs the ticked search results, after the user accepts any that aren't reviewed.</summary>
     public async Task InstallTickedResultsAsync()
     {
         var ticked = SearchResults.Where(r => r.IsTicked).ToList();
         if (ticked.Count == 0)
         {
-            SearchStatus = "Nothing is ticked, so there is nothing to install.";
+            ResultsQueueStatus = "Nothing is ticked, so there is nothing to install.";
             return;
         }
         var notReviewed = ticked.Where(r => r.NotReviewed).Select(r => r.Name).ToList();
@@ -143,7 +173,7 @@ public sealed class AppsManagerViewModel(
             "install",
             (client, progress) => client.InstallAppsAsync(ticked.Select(r => r.Id).ToList(), allRuntimes: false, progress, allowNotReviewed: notReviewed.Count > 0),
             p => { if (p.AppId is { } id && byId.TryGetValue(id, out var item)) item.Status = p.Message; },
-            message => SearchStatus = message);
+            message => ResultsQueueStatus = message);
         if (report is null)
             return;
         foreach (var outcome in report.Apps)
@@ -153,12 +183,23 @@ public sealed class AppsManagerViewModel(
                 if (outcome.Stage != InstallStage.Failed)
                     item.IsTicked = false;
             }
+        // A reviewed result is in the catalogue too, whose row now says it is installed.
+        await RefreshInstalledAsync();
     }
 
+    /// <summary>
+    /// Reads the installed apps the first time the Apps page shows on a connection, so the catalogue can mark them.
+    /// winget takes a few seconds to list them, so connecting doesn't wait for it.
+    /// </summary>
+    public Task ShowInstalledOnceAsync() =>
+        main.Client is { } client && client != _installedFrom ? RefreshInstalledAsync() : Task.CompletedTask;
+
+    /// <summary>Reads what winget lists as installed, for the Installed tab and the catalogue's Installed pills.</summary>
     public async Task RefreshInstalledAsync()
     {
         if (main.Client is not { } client)
             return;
+        _installedFrom = client;
         InstalledStatus = "Reading installed apps and updates from winget…";
         try
         {
@@ -166,6 +207,7 @@ public sealed class AppsManagerViewModel(
             InstalledApps.Clear();
             foreach (var app in installed.Apps.OrderByDescending(a => a.CanUpdate).ThenBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase))
                 InstalledApps.Add(new InstalledAppViewModel(app));
+            main.Catalogue.MarkInstalled(installed.Apps);
             InstalledStatus = installed.Message;
         }
         catch (Exception ex)
@@ -240,7 +282,7 @@ public sealed class AppsManagerViewModel(
     /// <summary>The ticked catalogue apps and ticked search results, as app list file text.</summary>
     public (string Text, int Count) BuildAppList()
     {
-        var entries = main.Apps.Where(a => a.IsTicked).Select(a => new AppListEntry(a.View.Id, a.Name))
+        var entries = main.Catalogue.Apps.Where(a => a.IsTicked).Select(a => new AppListEntry(a.View.Id, a.Name))
             .Concat(SearchResults.Where(r => r.IsTicked).Select(r => new AppListEntry(r.Id, r.Name)))
             .DistinctBy(e => e.Id, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -256,7 +298,7 @@ public sealed class AppsManagerViewModel(
         var list = AppList.Read(text);
         if (!list.Succeeded)
             return list.Message;
-        var catalogue = main.Apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
+        var catalogue = main.Catalogue.Apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
         var others = 0;
         foreach (var entry in list.Apps)
         {
@@ -269,7 +311,7 @@ public sealed class AppsManagerViewModel(
             var existing = SearchResults.FirstOrDefault(r => r.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase));
             if (existing is null)
             {
-                existing = new SearchResultViewModel(entry.Id, entry.Name, null, reviewed: false, null);
+                existing = NewResult(entry.Id, entry.Name, null, reviewed: false, null);
                 SearchResults.Add(existing);
             }
             existing.IsTicked = true;

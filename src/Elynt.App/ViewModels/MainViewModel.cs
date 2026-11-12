@@ -48,7 +48,6 @@ public sealed class MainViewModel(
     private bool _isRestoring;
     private readonly AppUpdater _updater = new();
     private string? _updateReady;
-    private bool _installAllRuntimes;
     private bool _isInstalling;
     private string? _installStatus;
     private BiosPageViewModel? _bios;
@@ -73,8 +72,8 @@ public sealed class MainViewModel(
     /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
     public ObservableCollection<HistoryItemViewModel> History { get; } = [];
 
-    /// <summary>The app catalogue, in group order. The Apps page groups it by <see cref="AppItemViewModel.Group"/>.</summary>
-    public ObservableCollection<AppItemViewModel> Apps { get; } = [];
+    /// <summary>The Apps page's Catalogue tab: the app catalogue, its filter, what is installed and the install count.</summary>
+    public AppCatalogueViewModel Catalogue { get; } = new();
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
 
@@ -95,13 +94,6 @@ public sealed class MainViewModel(
 
     /// <summary>The Startup &amp; Services page, which shows the Startup and Services lists as tabs.</summary>
     public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
-
-    /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
-    public bool InstallAllRuntimes
-    {
-        get => _installAllRuntimes;
-        set => Set(ref _installAllRuntimes, value);
-    }
 
     public bool IsInstalling
     {
@@ -473,10 +465,7 @@ public sealed class MainViewModel(
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
             _allTweaks = TweakItemViewModel.Rows(views, FlipAsync, ChooseAsync);
-            var apps = await _client.ListAppsAsync();
-            Apps.Clear();
-            foreach (var app in apps)
-                Apps.Add(new AppItemViewModel(app));
+            Catalogue.Show(await _client.ListAppsAsync());
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
             if (ServicesPage is not null)
@@ -861,14 +850,16 @@ public sealed class MainViewModel(
         if (_client is null || IsInstalling)
             return;
 
-        var ticked = Apps.Where(a => a.IsTicked).ToList();
-        var byId = Apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
-        foreach (var app in Apps)
+        var apps = Catalogue.Apps;
+        var allRuntimes = Catalogue.InstallAllRuntimes;
+        var ticked = apps.Where(a => a.IsTicked).ToList();
+        var byId = apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var app in apps)
             app.Status = null;
         foreach (var app in ticked)
             app.Status = "Queued";
-        if (InstallAllRuntimes)
-            foreach (var app in Apps.Where(a => a.View.InAllRuntimes))
+        if (allRuntimes)
+            foreach (var app in apps.Where(a => a.View.InAllRuntimes))
                 app.Status = "Queued";
 
         IsInstalling = true;
@@ -882,19 +873,19 @@ public sealed class MainViewModel(
         });
         try
         {
-            var report = await _client.InstallAppsAsync(ticked.Select(a => a.View.Id).ToList(), InstallAllRuntimes, progress);
+            var report = await _client.InstallAppsAsync(ticked.Select(a => a.View.Id).ToList(), allRuntimes, progress);
             Log.Information("Install queue: {Succeeded} {Message}", report.Succeeded, report.Message);
             foreach (var outcome in report.Apps)
                 if (byId.TryGetValue(outcome.AppId, out var item))
                     item.Status = outcome.Stage == InstallStage.Failed ? outcome.Message : StatusText(outcome.Stage, null);
-            foreach (var app in Apps.Where(a => a.Status == "Queued"))
+            foreach (var app in apps.Where(a => a.Status == "Queued"))
                 app.Status = null;
             InstallStatus = report.Message;
             if (report.Succeeded)
             {
                 foreach (var app in ticked)
                     app.IsTicked = false;
-                InstallAllRuntimes = false;
+                Catalogue.InstallAllRuntimes = false;
             }
         }
         catch (EngineServiceException ex)
@@ -913,6 +904,9 @@ public sealed class MainViewModel(
         {
             IsInstalling = false;
         }
+        // The rows' Installed pills, and the Installed tab, follow what winget lists now.
+        if (AppsManager is { } manager)
+            await manager.RefreshInstalledAsync();
     }
 
     private static string StatusText(InstallStage stage, double? percent) => stage switch
