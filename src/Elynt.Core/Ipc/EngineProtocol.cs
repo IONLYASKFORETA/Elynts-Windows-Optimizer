@@ -90,6 +90,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RunCpuStressTestRequest), "runCpuStressTest")]
 [JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
 [JsonDerivedType(typeof(GetPcOverviewRequest), "getPcOverview")]
+[JsonDerivedType(typeof(ChooseRequest), "choose")]
 [JsonDerivedType(typeof(SearchRequest), "search")]
 public abstract record EngineRequest;
 
@@ -276,8 +277,9 @@ public sealed record EngineResponse(
     CpuTuningReport? CpuTuning = null,
     CpuTuningResult? CpuResult = null,
     PcOverview? Overview = null,
-    IReadOnlyList<SearchResult>? SearchResults = null,
-    string? Refused = null)
+    string? Refused = null,
+    ChoiceResult? Choice = null,
+    IReadOnlyList<SearchResult>? SearchResults = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -380,6 +382,7 @@ public static class EngineProtocol
         RunCpuStressTestRequest => new(CpuResult: engine.RunCpuStressTest(cancellation)),
         SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
         GetPcOverviewRequest => new(Overview: engine.GetPcOverview()),
+        ChooseRequest choose => new(Choice: engine.Choose(choose.ChoiceId, choose.TweakId, choose.Options)),
         SearchRequest search => new(SearchResults: engine.Search(search.Query)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };

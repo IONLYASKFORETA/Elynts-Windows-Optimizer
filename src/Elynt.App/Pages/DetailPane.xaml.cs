@@ -55,5 +55,12 @@ public partial class DetailPane : UserControl
             await Model.ApplyForGameAsync(item);
     }
 
+    /// <summary>Sets the selected pick-one row's choice to the segment pressed, as its row's segments do.</summary>
+    private async void Choose(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ChoiceOptionViewModel choice)
+            await choice.ChooseAsync();
+    }
+
     private void OpenLink(object sender, RequestNavigateEventArgs e) => Links.Open(e);
 }
