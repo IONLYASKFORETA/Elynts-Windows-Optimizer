@@ -121,6 +121,12 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
     /// <summary>The switch can't be flipped either way; <see cref="LockText"/> says why.</summary>
     public bool IsLocked => LockText is not null;
 
+    /// <summary>
+    /// The lock is the app's own destructive change, so its label is the red danger pill, like "Destructive". A tweak
+    /// already set on this PC is locked too, but plainly: nothing the app did is beyond undoing.
+    /// </summary>
+    public bool CantBeUndone => LockText == CantBeUndoneText;
+
     private static string AntiCheatName(AntiCheat antiCheat) => antiCheat switch
     {
         AntiCheat.Vanguard => "Riot Vanguard",

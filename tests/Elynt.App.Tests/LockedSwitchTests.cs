@@ -44,6 +44,23 @@ public class LockedSwitchTests
         Assert.Equal((false, "Can't be undone"), (row.IsEnabled, row.LockText));
     }
 
+    [Fact]
+    public void A_destructive_change_in_place_shows_its_lock_in_the_red_danger_pill()
+    {
+        var row = Row(On(canUndo: false) with { Reversibility = Reversibility.Destructive });
+
+        Assert.True(row.CantBeUndone);
+    }
+
+    [Fact]
+    public void A_tweak_already_set_on_this_PC_shows_its_lock_in_the_plain_pill()
+    {
+        // Even a destructive one: Windows set it, so nothing the app did is beyond undoing.
+        var row = Row(AlreadySet with { Reversibility = Reversibility.Destructive });
+
+        Assert.False(row.CantBeUndone);
+    }
+
     // ---- helpers ----
 
     /// <summary>On because Windows set it: the Engine reports it on, already set, with nothing of the app's to undo.</summary>

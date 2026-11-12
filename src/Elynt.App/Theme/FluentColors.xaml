@@ -6,7 +6,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Color x:Key="TextFillColorPrimary">#F4F4F5</Color>
     <Color x:Key="TextFillColorSecondary">#A1A1AA</Color>
-    <Color x:Key="TextFillColorTertiary">#6B6B75</Color>
+    <Color x:Key="TextFillColorTertiary">#85858F</Color>
     <Color x:Key="TextFillColorDisabled">#52525B</Color>
     <Color x:Key="TextFillColorInverse">#09090B</Color>
     <Color x:Key="AccentTextFillColorDisabled">#52525B</Color>
