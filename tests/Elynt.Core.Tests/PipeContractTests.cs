@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Text.Json;
 using Elynt.Core.Apps;
@@ -26,6 +27,8 @@ public sealed class PipeContractTests : IAsyncLifetime
     private readonly StubEngine _engine = new();
     private readonly FakeAdministratorCheck _administrators = new();
     private int _enginesBuilt;
+    // The service's end of each connection that sent a command, in the order they did.
+    private readonly ConcurrentQueue<NamedPipeServerStream> _served = new();
     private readonly CancellationTokenSource _stop = new();
     private Task _server = Task.CompletedTask;
     private EnginePipeClient _client = null!;
@@ -34,9 +37,10 @@ public sealed class PipeContractTests : IAsyncLifetime
     {
         var server = new EnginePipeServer(
             () => new NamedPipeServerStream(_pipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous),
-            _ =>
+            pipe =>
             {
                 Interlocked.Increment(ref _enginesBuilt);
+                _served.Enqueue(pipe);
                 return _engine;
             },
             _administrators);
@@ -46,6 +50,8 @@ public sealed class PipeContractTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
+        // A test that failed while holding a long job mustn't leave the server waiting on it.
+        _engine.HoldLongJob?.TrySetResult();
         await _client.DisposeAsync();
         await _stop.CancelAsync();
         await _server;
@@ -249,7 +255,7 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public async Task Other_commands_still_answer_while_a_repair_runs()
     {
-        _engine.HoldRepair = new TaskCompletionSource();
+        _engine.HoldLongJob = new TaskCompletionSource();
         await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
         var repair = _client.RunRepairAsync("some.repair", confirmed: false, null, TestContext.Current.CancellationToken);
 
@@ -257,18 +263,18 @@ public sealed class PipeContractTests : IAsyncLifetime
 
         Assert.Single(tweaks);
         Assert.False(repair.IsCompleted);
-        _engine.HoldRepair.SetResult();
+        _engine.HoldLongJob.SetResult();
         Assert.True((await repair).Succeeded);
     }
 
     [Fact]
     public async Task An_install_waits_for_a_running_repair_while_tweak_commands_still_answer()
     {
-        _engine.HoldRepair = new TaskCompletionSource();
+        _engine.HoldLongJob = new TaskCompletionSource();
         await using var installer = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
         await using var switches = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
         var repair = _client.RunRepairAsync("some.repair", confirmed: false, null, TestContext.Current.CancellationToken);
-        await _engine.RepairStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await _engine.LongJobStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         var install = installer.InstallAppsAsync(["Valve.Steam"], allRuntimes: false, null, TestContext.Current.CancellationToken);
         var tweaks = await switches.ListTweaksAsync(TestContext.Current.CancellationToken);
@@ -276,9 +282,107 @@ public sealed class PipeContractTests : IAsyncLifetime
         Assert.Single(tweaks);
         Assert.False(install.IsCompleted);
         Assert.Equal("RunRepair some.repair False", _engine.LastCall);
-        _engine.HoldRepair.SetResult();
+        _engine.HoldLongJob.SetResult();
         Assert.True((await repair).Succeeded);
         Assert.True((await install).Succeeded);
+    }
+
+    /// <summary>The long jobs the window used to send on its one connection, making every other click wait (the 2026-10-30 bug).</summary>
+    public static TheoryData<string> LongJobs =>
+        ["driver install", "CPU stress test", "PawnIO install", "PawnIO uninstall", "driver clean", "driver restore"];
+
+    private static Task StartLongJob(EnginePipeClient client, string job, CancellationToken cancellation) => job switch
+    {
+        "driver install" => client.InstallDriverAsync(new DriverRequest(@"PCI\VEN_10DE&DEV_2786"), null, cancellation),
+        "CPU stress test" => client.RunCpuStressTestAsync(cancellation),
+        "PawnIO install" => client.InstallPawnIoAsync(acceptFaceitWarning: true, cancellation),
+        "PawnIO uninstall" => client.UninstallPawnIoAsync(cancellation),
+        "driver clean" => client.CleanDriversAsync(new DriverCleanRequest(GpuVendor.Nvidia, DriverCleanMethod.Pnputil, Confirmed: false), cancellation),
+        "driver restore" => client.RestoreDriversAsync("20261016-120000-Nvidia", cancellation),
+        _ => throw new ArgumentOutOfRangeException(nameof(job), job, null),
+    };
+
+    [Theory(Timeout = 10_000)]
+    [MemberData(nameof(LongJobs))]
+    public async Task A_command_from_the_window_answers_while_a_long_job_runs(string job)
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        _engine.HoldLongJob = new TaskCompletionSource();
+        var running = StartLongJob(_client, job, cancellation);
+        await _engine.LongJobStarted.Task.WaitAsync(cancellation);
+
+        // The same client the long job went through: a wait here runs into the test's timeout.
+        var tweaks = await _client.ListTweaksAsync(cancellation);
+
+        Assert.Single(tweaks);
+        Assert.False(running.IsCompleted);
+        _engine.HoldLongJob.SetResult();
+        await running;
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_long_job_that_loses_its_connection_part_way_says_the_app_cant_tell_whether_anything_was_changed()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        Assert.Single(await _client.ListTweaksAsync(cancellation));
+        _engine.HoldLongJob = new TaskCompletionSource();
+        var install = _client.InstallDriverAsync(new DriverRequest(@"PCI\VEN_10DE&DEV_2786"), null, cancellation);
+        await _engine.LongJobStarted.Task.WaitAsync(cancellation);
+
+        // The service's end of the install's connection goes, as when the service stops in the middle.
+        await _served.Last().DisposeAsync();
+
+        var lost = await Assert.ThrowsAsync<ServiceConnectionLostException>(() => install);
+        Assert.True(lost.MayHaveChanged);
+        Assert.Equal(
+            "The connection to the service was lost part-way through, so the app can't tell whether anything was changed. " +
+            "Close the app and open it again to see where things stand.",
+            lost.Message);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task The_next_long_job_after_a_lost_connection_runs_on_a_new_one()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        _engine.HoldLongJob = new TaskCompletionSource();
+        var clean = _client.CleanDriversAsync(new DriverCleanRequest(GpuVendor.Amd, DriverCleanMethod.Pnputil, Confirmed: false), cancellation);
+        await _engine.LongJobStarted.Task.WaitAsync(cancellation);
+        await _served.Last().DisposeAsync();
+        await Assert.ThrowsAsync<ServiceConnectionLostException>(() => clean);
+        _engine.HoldLongJob.SetResult();
+
+        var restored = await _client.RestoreDriversAsync("20261016-120000-Nvidia", cancellation);
+
+        Assert.True(restored.Succeeded);
+        Assert.Equal("20261016-120000-Nvidia", _engine.LastRestoredBackup);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_long_job_that_cant_reach_the_service_says_nothing_was_changed()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        await using var window = await EnginePipeClient.ConnectAsync(_pipeName, TimeSpan.FromMilliseconds(500), cancellation);
+        await _stop.CancelAsync();
+        await _server;
+
+        var unreached = await Assert.ThrowsAsync<ServiceConnectionLostException>(() => window.RunCpuStressTestAsync(cancellation));
+
+        Assert.False(unreached.MayHaveChanged);
+        Assert.Equal("Couldn't reach the service, so nothing was changed. Close the app and open it again, then try once more.", unreached.Message);
+        Assert.Null(_engine.LastCall);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_command_sent_after_the_service_closed_the_connection_says_nothing_was_changed()
+    {
+        var cancellation = TestContext.Current.CancellationToken;
+        Assert.Single(await _client.ListTweaksAsync(cancellation));
+        await _served.Last().DisposeAsync();
+
+        var unreached = await Assert.ThrowsAsync<ServiceConnectionLostException>(() => _client.ApplyAsync("some.tweak", cancellation: cancellation));
+
+        Assert.False(unreached.MayHaveChanged);
+        Assert.Null(_engine.LastCall);
     }
 
     [Fact]
@@ -357,14 +461,14 @@ public sealed class PipeContractTests : IAsyncLifetime
     [Fact]
     public async Task Other_commands_still_answer_while_a_clean_runs()
     {
-        _engine.HoldRepair = new TaskCompletionSource();
+        _engine.HoldLongJob = new TaskCompletionSource();
 
         var clean = _client.CleanAsync(["cleanup.temp"], false, null, TestContext.Current.CancellationToken);
-        await _engine.RepairStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        await _engine.LongJobStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
         await using var second = await EnginePipeClient.ConnectAsync(_pipeName, cancellation: TestContext.Current.CancellationToken);
         Assert.Single(await second.ListTweaksAsync(TestContext.Current.CancellationToken));
 
-        _engine.HoldRepair.SetResult();
+        _engine.HoldLongJob.SetResult();
         await clean;
     }
 
@@ -858,6 +962,7 @@ public sealed class PipeContractTests : IAsyncLifetime
             LastDriverRequest = request;
             foreach (var step in DriverSteps)
                 progress?.Report(step);
+            HoldLikeALongJob();
             return new DriverInstallResult(true, RebootNeeded: true, "Restart to finish.", "617.42", "https://www.nvidia.com/en-us/drivers/");
         }
 
@@ -872,12 +977,14 @@ public sealed class PipeContractTests : IAsyncLifetime
         public DriverCleanResult CleanDrivers(DriverCleanRequest request)
         {
             LastCleanRequest = request;
+            HoldLikeALongJob();
             return new DriverCleanResult(true, RebootNeeded: true, "Cleaned.", "20261016-120000-Nvidia", "https://www.wagnardsoft.com/");
         }
 
         public DriverCleanResult RestoreDrivers(string backupId)
         {
             LastRestoredBackup = backupId;
+            HoldLikeALongJob();
             return new DriverCleanResult(true, false, "Restored.", backupId);
         }
 
@@ -1026,6 +1133,7 @@ public sealed class PipeContractTests : IAsyncLifetime
         public CpuTuningResult RunCpuStressTest(CancellationToken cancellation = default)
         {
             LastCall = "RunCpuStressTest";
+            HoldLikeALongJob();
             return new CpuTuningResult(false, "Core 3 returned a wrong result.", Cpu);
         }
 
@@ -1043,12 +1151,14 @@ public sealed class PipeContractTests : IAsyncLifetime
         public PawnIoResult InstallPawnIo(bool acceptFaceitWarning)
         {
             LastCall = $"InstallPawnIo {acceptFaceitWarning}";
+            HoldLikeALongJob();
             return new PawnIoResult(true, "Installed PawnIO 2.0.1.", PawnIo, RebootNeeded: true);
         }
 
         public PawnIoResult UninstallPawnIo()
         {
             LastCall = "UninstallPawnIo";
+            HoldLikeALongJob();
             return new PawnIoResult(true, "Uninstalled PawnIO.", PawnIo with { Installed = false, Version = null });
         }
 
@@ -1155,10 +1265,20 @@ public sealed class PipeContractTests : IAsyncLifetime
             },
         ];
 
-        public TaskCompletionSource? HoldRepair { get; set; }
+        /// <summary>When set, a long job (a repair, a clean, a driver install…) runs until this is set too.</summary>
+        public TaskCompletionSource? HoldLongJob { get; set; }
 
-        /// <summary>Set once a repair is running, holding the repair lane.</summary>
-        public TaskCompletionSource RepairStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        /// <summary>Set once a long job is running, holding the long-running lane.</summary>
+        public TaskCompletionSource LongJobStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>For the long jobs IEngine runs synchronously: marks one running, then holds it like a repair.</summary>
+        private void HoldLikeALongJob()
+        {
+            LongJobStarted.TrySetResult();
+            // Bounded, so a failed test can't leave the server waiting for ever.
+            if (HoldLongJob is { } hold && !hold.Task.Wait(TimeSpan.FromSeconds(30)))
+                throw new TimeoutException("The test never let the long job finish.");
+        }
 
         public static readonly IReadOnlyList<RepairProgress> RepairSteps =
         [
@@ -1207,11 +1327,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         public async Task<CleanupReport> CleanAsync(IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default)
         {
             LastCall = $"Clean {string.Join(",", categoryIds)} {confirmDestructive}";
-            RepairStarted.TrySetResult();
+            LongJobStarted.TrySetResult();
             foreach (var p in CleanupSteps)
                 progress?.Report(p);
-            if (HoldRepair is not null)
-                await HoldRepair.Task.WaitAsync(cancellation);
+            if (HoldLongJob is not null)
+                await HoldLongJob.Task.WaitAsync(cancellation);
             return Cleaned;
         }
 
@@ -1250,11 +1370,11 @@ public sealed class PipeContractTests : IAsyncLifetime
         public async Task<RepairResult> RunRepairAsync(string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default)
         {
             LastCall = $"RunRepair {toolId} {confirmed}";
-            RepairStarted.TrySetResult();
+            LongJobStarted.TrySetResult();
             foreach (var p in RepairSteps)
                 progress?.Report(p);
-            if (HoldRepair is not null)
-                await HoldRepair.Task.WaitAsync(cancellation);
+            if (HoldLongJob is not null)
+                await HoldLongJob.Task.WaitAsync(cancellation);
             return Repaired;
         }
     }
