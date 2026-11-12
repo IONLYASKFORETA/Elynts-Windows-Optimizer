@@ -125,7 +125,8 @@ public sealed class DriverCleaningViewModel(Func<EnginePipeClient?> client, Acti
         catch (Exception ex)
         {
             Log.Error(ex, "Driver cleaning command failed");
-            Message = $"The service couldn't do this: {ex.Message}";
+            // A lost connection already says, in full, whether anything was changed.
+            Message = ex is ServiceConnectionLostException ? ex.Message : $"The service couldn't do this: {ex.Message}";
         }
         finally
         {

@@ -148,7 +148,7 @@ public sealed partial class Engine
     {
         try
         {
-            if (_games.List().FirstOrDefault(g => g.ExePath is { } known && WinPath.Same(known, profile.ExePath)) is not { } game)
+            if (GameOf(profile.ExePath) is not { } game)
                 return [];
             return profile.TweakIds
                 .Select(id => catalogue.TryGet(id, out var tweak) ? tweak : null)
@@ -188,7 +188,7 @@ public sealed partial class Engine
     {
         try
         {
-            if (_games.List().FirstOrDefault(g => g.ExePath is { } known && WinPath.Same(known, exePath)) is { } game)
+            if (GameOf(exePath) is { } game)
                 return game.Name;
         }
         catch (Exception ex)
@@ -196,6 +196,17 @@ public sealed partial class Engine
             _log.LogWarning(ex, "Couldn't list installed games");
         }
         return Path.GetFileNameWithoutExtension(WinPath.FileName(exePath));
+    }
+
+    /// <summary>
+    /// The installed game an .exe starts: the game with that .exe, else a game whose launcher gave only its folder
+    /// (Steam, Battle.net) and whose folder holds the .exe. Null when no listed game has it.
+    /// </summary>
+    private InstalledGame? GameOf(string exePath)
+    {
+        var games = _games.List();
+        return games.FirstOrDefault(g => g.ExePath is { } known && WinPath.Same(known, exePath))
+            ?? games.FirstOrDefault(g => g.ExePath is null && WinPath.IsInside(exePath, g.InstallPath));
     }
 
     /// <summary>
@@ -213,6 +224,14 @@ public sealed partial class Engine
                 return $"There is no tweak called '{id}'.";
             if (WhyNotInProfile(tweak) is { } problem)
                 return problem;
+        }
+
+        // Two options of one pick-one choice (two power plans) fight, and the second would win, so only one may go in.
+        foreach (var options in profile.TweakIds.Where(id => catalogue.ChoiceOf(id) is not null).GroupBy(id => catalogue.ChoiceOf(id)!))
+        {
+            if (options.Distinct().Take(2).ToList() is [var first, var second])
+                return $"A profile can set only one {char.ToLowerInvariant(options.Key.Name[0])}{options.Key.Name[1..]}: " +
+                    $"{options.Key.LabelOf(first)} or {options.Key.LabelOf(second)}, not both.";
         }
 
         foreach (var app in profile.AppsToClose)

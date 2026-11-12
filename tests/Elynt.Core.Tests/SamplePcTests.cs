@@ -1,5 +1,6 @@
 using Elynt.Core.Drift;
 using Elynt.Core.Games;
+using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -37,12 +38,33 @@ public sealed class SamplePcTests : IDisposable
     }
 
     [Fact]
+    public void Both_pick_one_rows_have_an_option_on_one_chosen_in_the_app_and_one_already_set_so_the_tour_draws_each()
+    {
+        var tweaks = NewEngine().ListTweaks();
+
+        var plan = Assert.Single(tweaks, t => t.Choice?.Id == GamingTweaks.PowerPlanChoice.Id && t.State == TweakState.On);
+        Assert.Equal((SamplePc.ChosenPowerPlan, true), (plan.Id, plan.CanUndo));
+        var delay = Assert.Single(tweaks, t => t.Choice?.Id == WindowsUpdateTweaks.UpdateDelayChoice.Id && t.State == TweakState.On);
+        Assert.Equal((SamplePc.UpdateDelaySetElsewhere, true), (delay.Id, delay.AlreadySet));
+    }
+
+    [Fact]
     public void Startup_and_services_have_rows()
     {
         var engine = NewEngine();
 
         Assert.True(engine.ListStartupItems().Count >= 2);
         Assert.True(engine.ListServices().Count >= 2);
+    }
+
+    [Fact]
+    public void Services_include_a_protected_one_and_one_the_app_changed_so_the_tour_draws_the_lock_and_undo()
+    {
+        var services = NewEngine().ListServices();
+
+        Assert.Contains(services, s => s.Access == ServiceAccess.Protected);
+        Assert.Contains(services, s => s.Access != ServiceAccess.Protected && s.CanUndo);
+        Assert.Contains(services, s => s.Access != ServiceAccess.Protected && !s.CanUndo);
     }
 
     [Fact]

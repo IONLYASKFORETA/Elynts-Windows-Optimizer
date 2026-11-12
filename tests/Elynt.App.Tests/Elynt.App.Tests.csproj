@@ -12,6 +12,8 @@
     <PackageReference Include="xunit.v3" Version="4.0.2" />
     <!-- Lets CI name a test that hangs (the Test step in ci.yml turns it on). -->
     <PackageReference Include="Microsoft.Testing.Extensions.HangDump" Version="2.5.1" />
+    <!-- The app's log, which the page view models write to. -->
+    <PackageReference Include="Serilog" Version="4.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +24,21 @@
     <Compile Include="..\..\src\Elynt.App\Confirmation.cs" Link="App\Confirmation.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\ObservableObject.cs" Link="App\ViewModels\ObservableObject.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\TweakItemViewModel.cs" Link="App\ViewModels\TweakItemViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\ChoiceOptionViewModel.cs" Link="App\ViewModels\ChoiceOptionViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\CleanupPageViewModel.cs" Link="App\ViewModels\CleanupPageViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\AppItemViewModel.cs" Link="App\ViewModels\AppItemViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\AppCatalogueViewModel.cs" Link="App\ViewModels\AppCatalogueViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\ProfilesPageViewModel.cs" Link="App\ViewModels\ProfilesPageViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\PageTarget.cs" Link="App\ViewModels\PageTarget.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\SidebarSearchViewModel.cs" Link="App\ViewModels\SidebarSearchViewModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- A page that talks to the service talks to the screenshot tour's made-up PC here: the same engine on the same
+         fakes, served over a real pipe. -->
+    <Compile Include="..\Elynt.Core.Tests\**\Fake*.cs" Exclude="..\Elynt.Core.Tests\bin\**;..\Elynt.Core.Tests\obj\**"
+             Link="Fakes\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Elynt.Core.Tests\SamplePc.cs" Link="Fakes\SamplePc.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elynt.Core.Ipc;
 
 /// <summary>
-/// Serves <see cref="IEngine"/> commands over a named pipe, from all clients, in two lanes. Repairs run for
-/// minutes, so they take turns in their own lane and never hold up tweak commands. Every other command takes turns
+/// Serves <see cref="IEngine"/> commands over a named pipe, from all clients, in two lanes. Long jobs (repairs, driver
+/// installs, <see cref="EngineProtocol.IsLongRunning"/>) run for minutes, so they take turns in their own lane and never
+/// hold up tweak commands. Every other command takes turns
 /// in the main lane. An app install queue takes both lanes, so nothing else runs while apps install and no repair's
 /// winget runs alongside it. Only administrator accounts are served; any other account's requests are all refused,
 /// and no engine is ever built for it.

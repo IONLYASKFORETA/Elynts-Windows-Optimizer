@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 using Elynt.App.ViewModels;
 
 namespace Elynt.App.Pages;
@@ -16,5 +18,41 @@ public partial class TweakList : UserControl
     {
         if ((sender as FrameworkElement)?.DataContext is TweakItemViewModel item)
             await Model.ApplyForGameAsync(item);
+    }
+
+    /// <summary>Sets a pick-one row's choice to the segment pressed.</summary>
+    private async void Choose(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ChoiceOptionViewModel choice)
+            await choice.ChooseAsync();
+    }
+
+    /// <summary>
+    /// Brings a row selected from elsewhere (the sidebar's search) into view, opening the possible-placebo fold when
+    /// the row is in it.
+    /// </summary>
+    private void ShowSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox list || list.SelectedItem is not TweakItemViewModel row)
+            return;
+        if (row.IsPlacebo)
+        {
+            foreach (var fold in Descendants<Expander>(list))
+                fold.IsExpanded = true;
+        }
+        // Once the page (and the fold) have been laid out.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => list.ScrollIntoView(row));
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+                yield return match;
+            foreach (var nested in Descendants<T>(child))
+                yield return nested;
+        }
     }
 }

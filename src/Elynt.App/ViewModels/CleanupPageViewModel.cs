@@ -7,12 +7,12 @@ namespace Elynt.App.ViewModels;
 
 /// <summary>
 /// The Cleanup page: scan first, show sizes per category, tick what to clean. Scans and cleans can take minutes, so
-/// they use their own connection and switches keep working meanwhile.
+/// they are long jobs: the client sends them over its long-job connection and switches keep working meanwhile.
 /// </summary>
-public sealed class CleanupPageViewModel : ObservableObject
+/// <param name="client">The current connection to the service, or null while disconnected.</param>
+public sealed class CleanupPageViewModel(Func<EnginePipeClient?> client) : ObservableObject
 {
-    private EnginePipeClient? _client;
-    private Task<EnginePipeClient>? _connecting;
+    private const string NotConnected = "Not connected to the service, so nothing was scanned or cleaned.";
     private bool _isBusy;
     private bool _hasScanned;
     private string _status = "Scan to see how much space each category takes. Nothing is deleted until you press Clean.";
@@ -39,6 +39,9 @@ public sealed class CleanupPageViewModel : ObservableObject
 
     public bool CanScan => !IsBusy;
 
+    /// <summary>The Scan button's words: "Scan again" once the list shows a scan's sizes, even after cleaning.</summary>
+    public string ScanText => Categories.Count > 0 ? "Scan again" : "Scan";
+
     /// <summary>Cleaning is only offered after a scan has shown the sizes.</summary>
     public bool CanClean => !IsBusy && _hasScanned;
 
@@ -61,11 +64,11 @@ public sealed class CleanupPageViewModel : ObservableObject
 
     public async Task OnShownAsync()
     {
-        if (_scheduleLoaded)
+        if (_scheduleLoaded || client() is not { } connection)
             return;
         try
         {
-            var schedule = await (await ClientAsync()).GetCleanupScheduleAsync();
+            var schedule = await connection.GetCleanupScheduleAsync();
             _weeklyEnabled = schedule.WeeklyEnabled;
             OnPropertyChanged(nameof(WeeklyEnabled));
             _scheduleLoaded = true;
@@ -73,7 +76,6 @@ public sealed class CleanupPageViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Warning(ex, "Couldn't read the weekly cleaning setting");
-            await DropClientAsync();
         }
     }
 
@@ -81,11 +83,16 @@ public sealed class CleanupPageViewModel : ObservableObject
     {
         if (IsBusy)
             return;
+        if (client() is not { } connection)
+        {
+            Status = NotConnected;
+            return;
+        }
         IsBusy = true;
         Status = "Scanning…";
         try
         {
-            var scan = await (await ClientAsync()).ScanCleanupAsync(new Progress<CleanupProgress>(p =>
+            var scan = await connection.ScanCleanupAsync(new Progress<CleanupProgress>(p =>
                 Status = $"Scanning {p.CategoryName} ({p.Index} of {p.Count})…"));
             Categories.Clear();
             foreach (var category in scan.Categories)
@@ -101,12 +108,14 @@ public sealed class CleanupPageViewModel : ObservableObject
             _hasScanned = true;
             Status = "Scan done. Safe caches are ticked; shader caches and the extras that can't be undone are up to you.";
             OnPropertyChanged(nameof(TickedSummary));
+            OnPropertyChanged(nameof(ScanText));
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Cleanup scan failed");
-            Status = $"Couldn't scan: {ex.Message}";
-            await DropClientAsync();
+            Status = ex is ServiceConnectionLostException
+                ? "The connection to the service was lost during the scan. A scan changes nothing; close the app and open it again, then scan once more."
+                : $"Couldn't scan: {ex.Message}";
         }
         finally
         {
@@ -152,11 +161,16 @@ public sealed class CleanupPageViewModel : ObservableObject
             }
         }
 
+        if (client() is not { } connection)
+        {
+            Status = NotConnected;
+            return;
+        }
         IsBusy = true;
         Status = "Cleaning…";
         try
         {
-            var report = await (await ClientAsync()).CleanAsync(ticked.Select(c => c.View.Id).ToList(), confirmed,
+            var report = await connection.CleanAsync(ticked.Select(c => c.View.Id).ToList(), confirmed,
                 new Progress<CleanupProgress>(p => Status = $"Cleaning {p.CategoryName} ({p.Index} of {p.Count})…"));
             Log.Information("Cleanup: {Succeeded} {Message}", report.Succeeded, report.Message);
             foreach (var outcome in report.Categories)
@@ -168,8 +182,7 @@ public sealed class CleanupPageViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error(ex, "Cleanup failed");
-            Status = $"Couldn't clean: {ex.Message}";
-            await DropClientAsync();
+            Status = ex is ServiceConnectionLostException ? ex.Message : $"Couldn't clean: {ex.Message}";
         }
         finally
         {
@@ -179,9 +192,21 @@ public sealed class CleanupPageViewModel : ObservableObject
 
     private async Task SaveWeeklyAsync(bool enabled)
     {
+        void PutBack()
+        {
+            _weeklyEnabled = !enabled;
+            OnPropertyChanged(nameof(WeeklyEnabled));
+        }
+
+        if (client() is not { } connection)
+        {
+            Status = "Not connected to the service, so weekly cleaning wasn't changed.";
+            PutBack();
+            return;
+        }
         try
         {
-            var schedule = await (await ClientAsync()).SetWeeklyCleanupAsync(enabled);
+            var schedule = await connection.SetWeeklyCleanupAsync(enabled);
             Status = schedule.WeeklyEnabled
                 ? "Weekly cleaning is on: once a week the service cleans the safe categories only."
                 : "Weekly cleaning is off.";
@@ -190,37 +215,8 @@ public sealed class CleanupPageViewModel : ObservableObject
         {
             Log.Error(ex, "Couldn't change weekly cleaning");
             Status = $"Couldn't change weekly cleaning: {ex.Message}";
-            _weeklyEnabled = !enabled;
-            OnPropertyChanged(nameof(WeeklyEnabled));
-            await DropClientAsync();
+            PutBack();
         }
-    }
-
-    /// <summary>
-    /// The page's own connection. Opening the page and starting a scan at once (Home's Clean up) share one connect
-    /// rather than each opening a connection.
-    /// </summary>
-    private async Task<EnginePipeClient> ClientAsync()
-    {
-        if (_client is { } client)
-            return client;
-        _connecting ??= EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
-        try
-        {
-            return _client = await _connecting;
-        }
-        finally
-        {
-            _connecting = null;
-        }
-    }
-
-    private async Task DropClientAsync()
-    {
-        var client = _client;
-        _client = null;
-        if (client is not null)
-            await client.DisposeAsync();
     }
 }
 

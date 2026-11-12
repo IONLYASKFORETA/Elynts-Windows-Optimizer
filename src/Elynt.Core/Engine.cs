@@ -39,6 +39,12 @@ public sealed record TweakView(
     TweakState State,
     bool CanUndo)
 {
+    /// <summary>One plain sentence for the tweak's row, under its name.</summary>
+    public string? Summary { get; init; }
+
+    /// <summary>The header the tweak's row sits under on its page, or null for the page's ungrouped rows.</summary>
+    public string? Group { get; init; }
+
     public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
 
     /// <summary>For a destructive tweak: what cannot be undone, shown in the confirmation.</summary>
@@ -90,6 +96,12 @@ public sealed record TweakView(
 
     /// <summary>The id of this per-game tweak's instance for one game.</summary>
     public string ForGame(string exePath) => $"{Id}{PerGameTweak.Separator}{exePath}";
+
+    /// <summary>
+    /// The pick-one choice this tweak is an option of (the power plan), or null for a tweak with its own switch. The
+    /// window shows a choice's options as one row, set with <see cref="IEngine.Choose"/>.
+    /// </summary>
+    public ChoiceGroup? Choice { get; init; }
 }
 
 /// <summary>How the user asked for a tweak to be applied.</summary>
@@ -423,8 +435,10 @@ public sealed partial class Engine(
     public IReadOnlyList<TweakView> ListTweaks() => catalogue.Tweaks
         .Concat(GamesWithChanges())
         .Select(Describe)
-        .Where(view => view.Applicable || view.CanUndo || !catalogue.Get(view.Id).Applicability.Hide)
+        .Where(Listed)
         .ToList();
+
+    private bool Listed(TweakView view) => view.Applicable || view.CanUndo || !catalogue.Get(view.Id).Applicability.Hide;
 
     /// <summary>One game's instance of a per-game tweak is listed while it has a change to undo.</summary>
     private IEnumerable<TweakDefinition> GamesWithChanges() => History.WithChanges(ChangeKind.PerGameTweak)
@@ -677,6 +691,8 @@ public sealed partial class Engine(
     {
         // Read from the journal, not from CanUndo: what matters is whether the app made a change of its own here.
         AlreadySet = state == TweakState.On && change is null,
+        Summary = tweak.Summary,
+        Group = tweak.Group,
         Reversibility = tweak.Reversibility,
         DestructiveWarning = tweak.DestructiveWarning,
         ApplyWarning = tweak.ApplyWarning,
@@ -694,6 +710,7 @@ public sealed partial class Engine(
             .ToList(),
         ProfileEligible = tweak.ProfileEligible,
         PerGame = tweak.PerGame,
+        Choice = catalogue.ChoiceOf(tweak.Id),
     };
     }
 

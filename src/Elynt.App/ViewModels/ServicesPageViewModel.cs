@@ -22,7 +22,7 @@ public sealed class ServicesPageViewModel(Func<EnginePipeClient?> client, Func<S
 
     public ObservableCollection<ServiceItemViewModel> Services { get; } = [];
 
-    /// <summary>Unlocks Disabled and services off the reviewed list. Protected services stay locked.</summary>
+    /// <summary>"Show advanced services": unlocks Disabled and services off the reviewed list. Protected services stay locked.</summary>
     public bool Advanced
     {
         get => _advanced;
@@ -182,6 +182,9 @@ public sealed class ServiceItemViewModel : ObservableObject
 
     public bool IsProtected => _view.Access == ServiceAccess.Protected;
 
+    /// <summary>The row offers a start type and Set; a protected one shows the lock in their place.</summary>
+    public bool NotProtected => !IsProtected;
+
     public IReadOnlyList<ServiceStart> Choices => Advanced ? _view.AdvancedChoices : _view.NormalChoices;
 
     public bool CanChange => Choices.Count > 0 && !IsBusy;
@@ -226,7 +229,7 @@ public sealed class ServiceItemViewModel : ObservableObject
         foreach (var name in new[]
                  {
                      nameof(View), nameof(Title), nameof(StartText), nameof(Badge), nameof(RecommendationText),
-                     nameof(HasRecommendation), nameof(IsProtected), nameof(Choices), nameof(CanChange), nameof(CanUndo),
+                     nameof(HasRecommendation), nameof(IsProtected), nameof(NotProtected), nameof(Choices), nameof(CanChange), nameof(CanUndo),
                  })
             OnPropertyChanged(name);
     }

@@ -17,6 +17,7 @@ using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Drift;
 using Elynt.Core.Overview;
+using Elynt.Core.Search;
 
 namespace Elynt.Core.Ipc;
 
@@ -89,6 +90,8 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RunCpuStressTestRequest), "runCpuStressTest")]
 [JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
 [JsonDerivedType(typeof(GetPcOverviewRequest), "getPcOverview")]
+[JsonDerivedType(typeof(ChooseRequest), "choose")]
+[JsonDerivedType(typeof(SearchRequest), "search")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -274,7 +277,9 @@ public sealed record EngineResponse(
     CpuTuningReport? CpuTuning = null,
     CpuTuningResult? CpuResult = null,
     PcOverview? Overview = null,
-    string? Refused = null)
+    string? Refused = null,
+    ChoiceResult? Choice = null,
+    IReadOnlyList<SearchResult>? SearchResults = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -377,10 +382,17 @@ public static class EngineProtocol
         RunCpuStressTestRequest => new(CpuResult: engine.RunCpuStressTest(cancellation)),
         SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
         GetPcOverviewRequest => new(Overview: engine.GetPcOverview()),
+        ChooseRequest choose => new(Choice: engine.Choose(choose.ChoiceId, choose.TweakId, choose.Options)),
+        SearchRequest search => new(SearchResults: engine.Search(search.Query)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
-    /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
+    /// <summary>
+    /// Whether the command is a long job: it can run for minutes, so the service runs it in its own lane and the window
+    /// sends it over its long-job connection (<see cref="EnginePipeClient"/>), and neither holds up other commands. Each
+    /// long job this round adds (the driver latency test, Check my connection, the bufferbloat test, spot test runs)
+    /// goes on this list.
+    /// </summary>
     public static bool IsLongRunning(EngineRequest request) =>
         request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest
             or InstallPawnIoRequest or UninstallPawnIoRequest or CleanDriversRequest or RestoreDriversRequest

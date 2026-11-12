@@ -3,6 +3,8 @@
 **Tweak**: one described adjustment to Windows, with its own switch, that the app can apply and, unless it is labelled destructive, undo.
 _Avoid_: setting, optimization
 
+**Pick-one choice**: a set of tweaks of which at most one is on, such as the power plan (Windows default, High performance, Ultimate) or the monthly update delay. It shows as one row with a segmented choice, and choosing one undoes the app's change for the one before. Each option is still its own tweak, with its own change in the Undo history. The Engine calls it a choice group.
+
 **Change**: one thing the app did to Windows, saved with exactly what was there before it: a tweak switched on, a startup item switched, a service's start type set, or a background app closed by a per-game profile. Each change is a row in the Undo history. Cleaning, driver installs and tuning aren't changes.
 _Avoid_: global setting, journal entry
 
@@ -24,7 +26,7 @@ _Avoid_: user setting, per-user change
 
 **Instant change**: a change that takes effect at once, with no restart or sign-out. Only tweaks that make instant changes can go in a per-game profile, and never destructive or Security ones.
 
-**Per-game profile**: what the user sets for one game, all of it instant: tweaks, background apps to close, the game's priority, the timer resolution and a tuning profile. It goes on when the game starts and comes off 15 seconds after it closes. One runs at a time across the PC: the first game started stays in charge, and another game's profile is skipped meanwhile. Not a preset; presets don't exist.
+**Per-game profile**: what the user sets for one game, all of it instant: tweaks, background apps to close or to lower in priority, the game's priority, keeping the game out of Efficiency mode, the cores it runs on (the V-Cache cores, or Intel P-cores), the timer resolution, an upload cap on one named app, a tuning profile and any on-off test. It goes on when the game starts and comes off 15 seconds after it closes. One runs at a time across the PC: the first game started stays in charge, and another game's profile is skipped meanwhile. It never touches anti-cheat programs. The Per-game profiles page lists the detected games first, and a game's profile opens in the detail pane. Not a preset; presets don't exist.
 
 **Per-game tweak**: a tweak set for one game's .exe or folder (fullscreen optimizations off, a Defender scan exclusion) that stays until it is undone, whether the game is running or not. A separate thing from a per-game profile.
 
@@ -87,8 +89,33 @@ _Avoid_: Advanced mode, expert mode
 
 **Accent wave**: the slow red-to-orange colour wave on the app's accents (the top strip, the selected page's bar, switches that are on, main buttons, meters). It moves only while the window is in front, Windows' animation effects are on and the user hasn't turned off Animated accents on the Settings page; otherwise it holds still. Animated accents starts off when Windows' animation effects are off.
 
-**Detail pane**: the panel on the right of the window that explains the selected tweak or repair tool in full: its labels, warnings, what it does, the evidence, the exact change and how to undo it. It is hidden on pages with nothing selected.
+**Detail pane**: the panel on the right of the window that explains what is selected in full. For a tweak or repair tool: its labels, warnings, what it does, the evidence, the exact change and how to undo it, and for a tweak "On this PC", each game's verdict on it. For a finding: what the check read, what it can cost, the evidence, the fix and "This is on purpose". For a game on Results: its full report. It also holds the per-game profile editor. It is hidden on pages with nothing selected.
 
-**Home page**: the page the app opens on, first in the sidebar. It shows this PC at a glance (board and CPU, GPU, memory, Windows, live temperatures), how many tweaks are on, what is waiting (restarts, driver updates, drift), Clean up and Check drivers, and a card per section. Each waiting item and section card opens the page that deals with it.
+**Home page**: the page the app opens on, first in the sidebar. From the top: the PC facts (board and CPU, GPU, memory, Windows, live temperatures; the hardware is read once per session); four tiles (tweaks on, changes waiting for a restart, findings, and changes undone outside the app); the newest result; WORTH A LOOK (proven tweaks that fit this PC and are off, new findings, and checks not yet run; never a score); WAITING (restarts, with Restart now…, driver updates and drift); and a card per section with a useful line. Each item and card opens the page that deals with it.
 
 **PC overview**: the one Engine query behind the Home page: the PC's hardware and Windows, the tweaks that are on out of those that fit this PC, pending reboots, and each section's on and total counts. Not-applicable tweaks are left out of every count.
+
+**Play session**: one measured run of a game, from its .exe starting to it closing.
+
+**Before-and-after**: comparing play sessions from before a change with sessions after it.
+
+**On-off test**: a per-game profile switching one instant change on in random play sessions and off in the rest, to measure that change alone.
+
+**Spot test**: short, repeated runs in one place in a game, with a change off and then on.
+
+**Verdict**: the result of a comparison: better, worse, no clear difference, or not enough play yet.
+_Avoid_: score, boost, benchmark (for our own measurements)
+
+**Live readout**: the window's view of a running game's numbers, for a second screen. It is never drawn over the game.
+
+**Driver setting**: a tweak that changes a value in the graphics driver's own settings (NVIDIA, AMD or Intel), for all games (a whole-PC change) or for one game (a per-game tweak). The vendor's own app can set the same value.
+
+**Finding**: a hidden performance loss a check detected on this PC, with what it can cost and its fix. A finding only reports; it never changes anything.
+
+**PC checks**: the page that lists every check and its state (OK, found, can't tell or dismissed), and holds the tests the user starts.
+
+**Connection check**: the ping, jitter and loss the app measures to the router, the ISP and the game's server during a play session, with a plain-words diagnosis of where the problem is.
+
+**Pick-one choice**: a set of tweaks of which at most one is on, such as the power plan. It shows as one row, and choosing one undoes the app's change for the one before.
+
+**Long job**: a command that runs for minutes (a driver install, a stress test, a repair). It has its own connection to the service, the long-job connection, so the rest of the window keeps working, and its page shows a dot in the sidebar. The long jobs are driver installs, the CPU stress test, PawnIO installs and uninstalls, driver cleans and restores, repairs, and cleanup scans and cleans; the driver latency test, Check my connection, the bufferbloat test and spot test runs are long jobs too. If the connection is lost part-way, the page says the app can't tell whether anything was changed.

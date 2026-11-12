@@ -9,6 +9,13 @@ namespace Elynt.Core.Tweaks;
 /// </summary>
 public static class DebloatTweaks
 {
+    // The headers the page's rows sit under, app removal's too. The page shows them in the order the catalogue
+    // first lists them, so All below keeps them in this order.
+    public const string TelemetryGroup = "Telemetry";
+    public const string AdsGroup = "Ads & suggestions";
+    public const string BuiltInAppsGroup = "Built-in apps";
+    public const string AiGroup = "AI features";
+
     private const string DataCollectionPolicy = @"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
     private const string ContentDelivery = @"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
     private const string ExplorerAdvanced = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
@@ -66,7 +73,11 @@ public static class DebloatTweaks
         ],
         Tier: EvidenceTier.Proven,
         Undo: PutsBack,
-        Steps: [LocalMachine(DataCollectionPolicy, "AllowTelemetry", 0)]);
+        Steps: [LocalMachine(DataCollectionPolicy, "AllowTelemetry", 0)])
+    {
+        Summary = "Makes Windows send the least diagnostic data your edition allows.",
+        Group = TelemetryGroup,
+    };
 
     public static TweakDefinition DiagTrackServiceOff { get; } = new(
         Id: "privacy.diagtrack-service-off",
@@ -83,6 +94,8 @@ public static class DebloatTweaks
         Undo: "Puts back the service's exact previous start type (normally Automatic). Takes effect after a restart.",
         Steps: [LocalMachine(@"SYSTEM\CurrentControlSet\Services\DiagTrack", "Start", (uint)ServiceStart.Disabled)])
     {
+        Summary = "Stops the Windows telemetry service starting, so it no longer uploads diagnostic data.",
+        Group = TelemetryGroup,
         // The service manager only reads a changed start type at the next boot.
         Risks = RiskFlags.NeedsReboot,
     };
@@ -108,7 +121,11 @@ public static class DebloatTweaks
         [
             LocalMachine(DataCollectionPolicy, "DoNotShowFeedbackNotifications", 1),
             CurrentUser(@"Software\Microsoft\Siuf\Rules", "NumberOfSIUFInPeriod", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows popping up to ask for your feedback.",
+        Group = TelemetryGroup,
+    };
 
     public static TweakDefinition TailoredExperiencesOff { get; } = new(
         Id: "privacy.tailored-experiences-off",
@@ -125,7 +142,11 @@ public static class DebloatTweaks
         [
             CurrentUser(@"Software\Policies\Microsoft\Windows\CloudContent", "DisableTailoredExperiencesWithDiagnosticData", 1),
             CurrentUser(@"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops Microsoft using your diagnostic data to pick the tips, ads and recommendations you see.",
+        Group = TelemetryGroup,
+    };
 
     // ---- Ads and suggestions ----
 
@@ -151,7 +172,11 @@ public static class DebloatTweaks
         [
             CurrentUser(ExplorerAdvanced, "Start_IrisRecommendations", 0),
             CurrentUser(ContentDelivery, "SubscribedContent-338388Enabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops the Start menu recommending tips, shortcuts, new apps and promoted apps.",
+        Group = AdsGroup,
+    };
 
     public static TweakDefinition LockScreenTipsOff { get; } = new(
         Id: "debloat.lock-screen-tips-off",
@@ -174,7 +199,11 @@ public static class DebloatTweaks
         [
             CurrentUser(ContentDelivery, "RotatingLockScreenOverlayEnabled", 0),
             CurrentUser(ContentDelivery, "SubscribedContent-338387Enabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows putting tips, fun facts and promotions on the lock screen.",
+        Group = AdsGroup,
+    };
 
     public static TweakDefinition SettingsSuggestionsOff { get; } = new(
         Id: "debloat.settings-suggestions-off",
@@ -194,7 +223,11 @@ public static class DebloatTweaks
             CurrentUser(ContentDelivery, "SubscribedContent-338393Enabled", 0),
             CurrentUser(ContentDelivery, "SubscribedContent-353694Enabled", 0),
             CurrentUser(ContentDelivery, "SubscribedContent-353696Enabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops the Settings app showing suggested content and offers.",
+        Group = AdsGroup,
+    };
 
     public static TweakDefinition ExplorerPromosOff { get; } = new(
         Id: "debloat.explorer-promos-off",
@@ -208,7 +241,11 @@ public static class DebloatTweaks
         Sources: [WinUtilGuides],
         Tier: EvidenceTier.Proven,
         Undo: PutsBack,
-        Steps: [CurrentUser(ExplorerAdvanced, "ShowSyncProviderNotifications", 0)]);
+        Steps: [CurrentUser(ExplorerAdvanced, "ShowSyncProviderNotifications", 0)])
+    {
+        Summary = "Stops File Explorer showing banners that advertise OneDrive and Microsoft 365.",
+        Group = AdsGroup,
+    };
 
     public static TweakDefinition BingInStartSearchOff { get; } = new(
         Id: "debloat.bing-in-start-search-off",
@@ -227,7 +264,11 @@ public static class DebloatTweaks
         ],
         Tier: EvidenceTier.Proven,
         Undo: PutsBack,
-        Steps: [CurrentUser(@"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1)]);
+        Steps: [CurrentUser(@"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1)])
+    {
+        Summary = "Makes Start search only search your PC, with no Bing web results.",
+        Group = AdsGroup,
+    };
 
     // ---- Widgets and Recall ----
 
@@ -246,7 +287,11 @@ public static class DebloatTweaks
         ],
         Tier: EvidenceTier.Proven,
         Undo: PutsBack,
-        Steps: [LocalMachine(@"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0)]);
+        Steps: [LocalMachine(@"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0)])
+    {
+        Summary = "Removes the Widgets button and news feed from the taskbar.",
+        Group = AdsGroup,
+    };
 
     public static TweakDefinition RecallOff { get; } = new(
         Id: "privacy.recall-off",
@@ -274,6 +319,8 @@ public static class DebloatTweaks
             CurrentUser(@"Software\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", 1),
         ])
     {
+        Summary = "Stops Recall saving snapshots of your screen.",
+        Group = AiGroup,
         // Recall arrived with Windows 11 24H2.
         Applicability = new(MinBuild: 26100),
     };
@@ -297,7 +344,11 @@ public static class DebloatTweaks
         [
             LocalMachine(EdgePolicy, "StartupBoostEnabled", 0),
             LocalMachine(EdgePolicy, "BackgroundModeEnabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops Edge loading itself when you sign in and running in the background after you close it.",
+        Group = BuiltInAppsGroup,
+    };
 
     public static TweakDefinition EdgeNagsOff { get; } = new(
         Id: "debloat.edge-nags-off",
@@ -318,7 +369,11 @@ public static class DebloatTweaks
             LocalMachine(EdgePolicy, "DefaultBrowserSettingsCampaignEnabled", 0),
             LocalMachine(EdgePolicy, "ShowRecommendationsEnabled", 0),
             LocalMachine(EdgePolicy, "PromotionalTabsEnabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops Edge's first-run setup, its \"make Edge your default\" campaigns and its promotional tabs.",
+        Group = AdsGroup,
+    };
 
     // ---- Game DVR ----
 
@@ -346,12 +401,19 @@ public static class DebloatTweaks
             // The Settings switch "Record what happened" (Settings > Gaming > Captures). AppCaptureEnabled and
             // GameDVR_Enabled would turn off all capture, on-demand recording too, so they are left alone.
             CurrentUser(@"Software\Microsoft\Windows\CurrentVersion\GameDVR", "HistoricalCaptureEnabled", 0),
-        ]);
+        ])
+    {
+        Summary = "Stops the background recording that keeps your last few minutes of play; recording on demand still works.",
+        // Built-in apps rather than ads: it is Game Bar's own recording, which stays installed.
+        Group = BuiltInAppsGroup,
+    };
 
     public static IReadOnlyList<TweakDefinition> All { get; } =
     [
         DiagnosticDataMinimum, DiagTrackServiceOff, FeedbackPromptsOff, TailoredExperiencesOff,
         StartRecommendationsOff, LockScreenTipsOff, SettingsSuggestionsOff, ExplorerPromosOff, BingInStartSearchOff,
-        WidgetsOff, RecallOff, EdgeBackgroundOff, EdgeNagsOff, GameDvrBackgroundCaptureOff,
+        WidgetsOff, EdgeNagsOff,
+        EdgeBackgroundOff, GameDvrBackgroundCaptureOff,
+        RecallOff,
     ];
 }

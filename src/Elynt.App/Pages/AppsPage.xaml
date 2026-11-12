@@ -5,7 +5,7 @@
              xmlns:vm="clr-namespace:Elynt.App.ViewModels"
              xmlns:local="clr-namespace:Elynt.App.Pages">
     <UserControl.Resources>
-        <CollectionViewSource x:Key="AppsByGroup" Source="{Binding Apps}">
+        <CollectionViewSource x:Key="AppsByGroup" Source="{Binding Catalogue.Shown}">
             <CollectionViewSource.GroupDescriptions>
                 <PropertyGroupDescription PropertyName="Group" />
             </CollectionViewSource.GroupDescriptions>
@@ -42,12 +42,34 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <!-- What winget says of a catalogue app (its InstalledText): orange "Update available", plain "Installed", and
+             nothing while it isn't installed. -->
+        <Style x:Key="InstalledPill" TargetType="Border" BasedOn="{StaticResource Pill.Warning}">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasUpdate}" Value="False">
+                    <Setter Property="Background" Value="{StaticResource Theme.Surface2}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Theme.Stroke}" />
+                    <Setter Property="TextElement.Foreground" Value="{StaticResource Theme.TextDim}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding InstalledText}" Value="{x:Null}">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <!-- Transparent so the app rows read as cards on the page, as on every other page. -->
-    <TabControl Background="Transparent">
-        <TabItem Header="Catalogue">
-            <DockPanel>
+    <TabControl x:Name="Tabs" Background="Transparent">
+        <TabItem Header="Catalogue" DataContext="{Binding Catalogue}">
+            <DockPanel Margin="0,16,0,0">
+                <!-- The filter, and how many apps it shows just under it. -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <TextBox Style="{StaticResource SearchBox}" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Filter the catalogue" />
+                    <TextBlock Style="{StaticResource Text.Dim}" Margin="0,8,0,0" Text="{Binding ResultCount}" />
+                </StackPanel>
                 <Border DockPanel.Dock="Bottom" Style="{StaticResource ActionBar}">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding InstallAllRuntimes}" HorizontalAlignment="Left"
@@ -56,22 +78,25 @@
                         </CheckBox>
                         <!-- The app list buttons on the left, the install itself on the right; they fit on one line at the smallest window. -->
                         <DockPanel Margin="0,8,0,0" LastChildFill="False">
-                            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Primary}" Content="Install ticked apps"
-                                    Padding="16,7" VerticalAlignment="Center"
-                                    Click="InstallApps" IsEnabled="{Binding CanInstall}" />
+                            <!-- Off while the service is busy or gone (this holder) and while nothing would be installed (the button). -->
+                            <Border DockPanel.Dock="Right" VerticalAlignment="Center"
+                                    IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Button Style="{StaticResource Button.Primary}" Content="{Binding InstallText}" Padding="16,7"
+                                        Click="InstallApps" IsEnabled="{Binding HasAppsToInstall}" />
+                            </Border>
                             <Button Content="Save ticked as app list…" Margin="0,0,8,0"
                                     Click="SaveAppList"
                                     ToolTip="Save the ticked apps (here and on the Search tab) to a file you can load on another PC." />
                             <Button Content="Load app list…" Margin="0,0,8,0"
-                                    Click="LoadAppList" IsEnabled="{Binding CanInstall}"
+                                    Click="LoadAppList" IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}"
                                     ToolTip="Tick every app in a list saved on this or another PC, ready to install." />
                         </DockPanel>
-                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding InstallStatus}" />
+                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding DataContext.InstallStatus, RelativeSource={RelativeSource AncestorType=Window}}" />
                     </StackPanel>
                 </Border>
                 <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
-                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
-                         ScrollViewer.CanContentScroll="False">
+                <ListBox x:Name="CatalogueList" Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         SelectedItem="{Binding Selected}" IsSynchronizedWithCurrentItem="False" ScrollViewer.CanContentScroll="False">
                     <ListBox.GroupStyle>
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
@@ -92,7 +117,13 @@
                                 <CheckBox IsChecked="{Binding IsTicked}" VerticalAlignment="Center" Margin="0,0,6,0"
                                           AutomationProperties.Name="{Binding Name}" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Style="{StaticResource RowName}" Text="{Binding Name}" />
+                                    <!-- The name, and the Installed or Update available pill beside it (under it when the name fills the line). -->
+                                    <WrapPanel>
+                                        <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
+                                        <Border Style="{StaticResource InstalledPill}">
+                                            <TextBlock Text="{Binding InstalledText}" />
+                                        </Border>
+                                    </WrapPanel>
                                     <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Description}" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="2" Style="{StaticResource RowStatus}" MaxWidth="220" Text="{Binding Status}" />
@@ -105,23 +136,27 @@
 
         <TabItem Header="Search winget" DataContext="{Binding AppsManager}">
             <DockPanel Margin="0,16,0,0">
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Dim}" Margin="0,0,0,10"
+                           Text="Searches all of winget's community source. Apps marked Not reviewed aren't in the curated catalogue: install them only if you trust the publisher." />
                 <DockPanel DockPanel.Dock="Top">
                     <Button DockPanel.Dock="Right" Content="Search" Margin="8,0,0,0" Click="SearchApps" />
-                    <TextBox Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center"
-                             AutomationProperties.Name="Search winget" KeyDown="SearchBoxKeyDown" />
+                    <TextBox Style="{StaticResource SearchBox}" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="Search all of winget" KeyDown="SearchBoxKeyDown" />
                 </DockPanel>
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Dim}" Margin="0,8,0,12"
-                           Text="Searches all of winget's community source. Apps marked Not reviewed aren't in the curated catalogue: install them only if you trust the publisher." />
+                <!-- What the search found, just under the box; it takes no room before the first search. -->
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Message}" Margin="0,8,0,0" Text="{Binding SearchStatus}" />
                 <Border DockPanel.Dock="Bottom" Style="{StaticResource ActionBar}">
                     <StackPanel>
-                        <Button Style="{StaticResource Button.Primary}" Content="Install ticked results" Padding="16,7"
-                                HorizontalAlignment="Right"
-                                Click="InstallSearchResults"
-                                IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}" />
-                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding SearchStatus}" />
+                        <!-- Off while the service is busy or gone (this holder) and while no result is ticked (the button). -->
+                        <Border HorizontalAlignment="Right"
+                                IsEnabled="{Binding DataContext.CanInstall, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <Button Style="{StaticResource Button.Primary}" Content="{Binding ResultsInstallText}" Padding="16,7"
+                                    Click="InstallSearchResults" IsEnabled="{Binding HasResultsToInstall}" />
+                        </Border>
+                        <TextBlock Style="{StaticResource QueueStatus}" Text="{Binding ResultsQueueStatus}" />
                     </StackPanel>
                 </Border>
-                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding SearchResults}">
+                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding SearchResults}" Margin="0,12,0,0">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:SearchResultViewModel}">
                             <Grid>
@@ -138,7 +173,7 @@
                                         <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
                                         <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
                                                 Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                                            <TextBlock Text="Not reviewed" />
                                         </Border>
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />
@@ -175,7 +210,7 @@
                                         <TextBlock Style="{StaticResource RowName}" Margin="0,0,8,0" Text="{Binding Name}" />
                                         <Border Style="{StaticResource Pill.Warning}" Margin="0" VerticalAlignment="Center"
                                                 Visibility="{Binding NotReviewed, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="Not reviewed" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                                            <TextBlock Text="Not reviewed" />
                                         </Border>
                                     </WrapPanel>
                                     <TextBlock Style="{StaticResource Text.Dim}" Margin="0,3,0,0" Text="{Binding Details}" />

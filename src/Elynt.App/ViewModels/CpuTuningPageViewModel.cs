@@ -149,7 +149,8 @@ public sealed class CpuTuningPageViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Warning(ex, "A CPU tuning command failed");
-            Message = $"Couldn't reach the service: {ex.Message}";
+            // A lost connection already says, in full, whether anything was changed.
+            Message = ex is ServiceConnectionLostException ? ex.Message : $"Couldn't reach the service: {ex.Message}";
         }
         finally
         {

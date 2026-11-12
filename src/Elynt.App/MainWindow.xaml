@@ -3,7 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Elynt.App.ViewModels"
         xmlns:pages="clr-namespace:Elynt.App.Pages"
+        xmlns:theme="clr-namespace:Elynt.App.Theme"
         Title="Elynt's Windows Optimizer"
+        Icon="/ElyntOptimizer;component/Assets/elynt.ico"
         Width="1600" Height="1000" MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Theme.Bg}">
@@ -24,6 +26,23 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- The sidebar's grouped pages, each group under its header (Sidebar says which page is in which group). -->
+        <theme:SidebarGroupHeader x:Key="SidebarGroupHeader" />
+        <CollectionViewSource x:Key="GroupedPages" Source="{x:Static vm:Sidebar.GroupedPages}">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription Converter="{StaticResource SidebarGroupHeader}" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+
+        <!-- A sidebar entry: the page's icon and name. Folded, only the icon shows, and the name shows on hover. -->
+        <DataTemplate x:Key="NavEntry">
+            <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip="{Binding}"
+                        ToolTipService.IsEnabled="{Binding IsCompact, RelativeSource={RelativeSource AncestorType=Window}}">
+                <TextBlock Style="{StaticResource Text.Icon}" Text="{Binding Converter={StaticResource PageIcon}}" FontSize="15" Width="22" />
+                <TextBlock Margin="10,0,0,0" FontSize="13.5" VerticalAlignment="Center" Text="{Binding}" Style="{StaticResource WideOnly}" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
     <!-- Layout A: the sidebar, the page, and the detail pane on the right when something is selected. -->
     <Grid Background="{StaticResource Theme.Bg}" TextElement.Foreground="{StaticResource Theme.Text}"
@@ -46,17 +65,78 @@
         <!-- The accent strip along the top. -->
         <Border Grid.ColumnSpan="3" Background="{DynamicResource Theme.AccentWave}" />
 
-        <!-- Sidebar: the app mark, the pages, and a footer with the connection and updates. -->
-        <Border Grid.Row="1" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,1,0">
+        <!-- Sidebar: the app mark, the search, the grouped pages, then Undo history and Settings and a footer with the
+             connection and updates. Drawn over the page, so the search's results can drop down past its edge. -->
+        <Border Grid.Row="1" Panel.ZIndex="1" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,1,0">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="21,22,0,18">
-                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Theme.AccentWave}">
+                    <!-- The app's mark, as on its icon. -->
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource Theme.Red}">
                         <TextBlock Text="E" FontWeight="Bold" FontSize="15" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Margin="11,0,0,0" VerticalAlignment="Center" Style="{StaticResource WideOnly}">
                         <TextBlock Text="ELYNT'S" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextFaint}" />
                         <TextBlock Text="Windows Optimizer" FontSize="13.5" FontWeight="SemiBold" />
                     </StackPanel>
+                </StackPanel>
+
+                <!-- App-wide search: wide, the box itself; folded, a button that opens the box over the page. Above the
+                     pages, so its results draw over them. -->
+                <StackPanel DockPanel.Dock="Top" Panel.ZIndex="1" Visibility="{Binding ShowsPages, Converter={StaticResource Visible}}">
+                    <Border Style="{StaticResource WideOnly}" Margin="12,0,12,10">
+                        <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" FontSize="13" Padding="8,0"
+                                 Text="{Binding Search.Query, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Find a tweak, tool or app"
+                                 PreviewKeyDown="SearchBoxKeyDown" GotKeyboardFocus="SearchBoxFocused" />
+                    </Border>
+                    <Border Style="{StaticResource CompactOnly}" Margin="10,0,10,10">
+                        <Button x:Name="SearchButton" Click="OpenSearch" Padding="0,8" HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="Find a tweak, tool or app" ToolTip="Find a tweak, tool or app">
+                            <TextBlock Style="{StaticResource Text.Icon}" FontSize="14" Text="&#xE721;" />
+                        </Button>
+                    </Border>
+                    <!-- The results drop down from here: a canvas takes no room and lets them draw past the sidebar. -->
+                    <Canvas Height="0">
+                        <Border x:Name="SearchFlyout" Canvas.Left="10" Width="360" MaxHeight="380" Padding="6" CornerRadius="8"
+                                Background="{StaticResource Theme.Surface2}" BorderBrush="{StaticResource Theme.StrokeStrong}" BorderThickness="1"
+                                Visibility="{Binding Search.IsOpen, Converter={StaticResource Visible}}">
+                            <DockPanel>
+                                <!-- Folded, the sidebar has no room for the box, so it opens here. -->
+                                <Border DockPanel.Dock="Top" Style="{StaticResource CompactOnly}" Margin="4,4,4,6">
+                                    <TextBox x:Name="CompactSearchBox" Style="{StaticResource SearchBox}" FontSize="13"
+                                             Text="{Binding Search.Query, UpdateSourceTrigger=PropertyChanged}"
+                                             AutomationProperties.Name="Find a tweak, tool or app" PreviewKeyDown="SearchBoxKeyDown" />
+                                </Border>
+                                <!-- Why there is nothing to show; it takes no room otherwise. -->
+                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Message}" Margin="10,6" Text="{Binding Search.Message}" />
+                                <!-- Best match first: the page's icon, the name, then the page and the summary on one line. -->
+                                <ListBox x:Name="SearchResults" ItemsSource="{Binding Search.Results}" Background="Transparent" BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Search results"
+                                         KeyDown="SearchResultsKeyDown">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource NavItem}">
+                                            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="ChooseResult" />
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Left" Style="{StaticResource Text.Icon}" FontSize="15" Width="22" Margin="0,2,0,0"
+                                                           VerticalAlignment="Top" Text="{Binding Page, Converter={StaticResource PageIcon}}" />
+                                                <StackPanel Margin="10,0,0,0">
+                                                    <TextBlock FontSize="13.5" Foreground="{StaticResource Theme.Text}" TextTrimming="CharacterEllipsis"
+                                                               Text="{Binding Name}" />
+                                                    <TextBlock Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Theme.TextDim}" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Page, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </Border>
+                    </Canvas>
                 </StackPanel>
 
                 <Border DockPanel.Dock="Bottom" CornerRadius="8" Background="{StaticResource Theme.Surface2}">
@@ -126,19 +206,45 @@
                     </StackPanel>
                 </Border>
 
-                <ListBox ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage}" Background="Transparent" BorderThickness="0"
-                         ItemContainerStyle="{StaticResource NavItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                <!-- Undo history and Settings, pinned under the groups. -->
+                <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,1,0,0" Padding="0,6,0,0"
+                        Visibility="{Binding ShowsPages, Converter={StaticResource Visible}}">
+                    <ListBox ItemsSource="{x:Static vm:Sidebar.FooterPages}" SelectedItem="{Binding SelectedFooterPage}"
+                             Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource NavItem}"
+                             ItemTemplate="{StaticResource NavEntry}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled" AutomationProperties.Name="Undo history and Settings" />
+                </Border>
+
+                <!-- Home, then the PLAY, WINDOWS and TOOLS groups. It scrolls when the window is too short for them. -->
+                <ListBox ItemsSource="{Binding Source={StaticResource GroupedPages}}" SelectedItem="{Binding SelectedGroupedPage}"
+                         IsSynchronizedWithCurrentItem="False" Background="Transparent" BorderThickness="0"
+                         ItemContainerStyle="{StaticResource NavItem}" ItemTemplate="{StaticResource NavEntry}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="False"
                          AutomationProperties.Name="Pages" Visibility="{Binding ShowsPages, Converter={StaticResource Visible}}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!-- Folded, only the icon shows, and the page's name shows on hover. -->
-                            <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip="{Binding}"
-                                        ToolTipService.IsEnabled="{Binding IsCompact, RelativeSource={RelativeSource AncestorType=Window}}">
-                                <TextBlock Style="{StaticResource Text.Icon}" Text="{Binding Converter={StaticResource PageIcon}}" FontSize="15" Width="22" />
-                                <TextBlock Margin="10,0,0,0" FontSize="13.5" VerticalAlignment="Center" Text="{Binding}" Style="{StaticResource WideOnly}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
+                    <ListBox.GroupStyle>
+                        <GroupStyle>
+                            <GroupStyle.HeaderTemplate>
+                                <!-- Wide, the group's small header; folded, a thin line. Home's group has neither. -->
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Name}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+                                        <Border Style="{StaticResource WideOnly}">
+                                            <TextBlock Style="{StaticResource Text.Label}" Margin="24,14,0,4" Text="{Binding Name}" />
+                                        </Border>
+                                        <Border Style="{StaticResource CompactOnly}" Height="1" Margin="16,6" Background="{StaticResource Theme.Stroke}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </GroupStyle.HeaderTemplate>
+                        </GroupStyle>
+                    </ListBox.GroupStyle>
                 </ListBox>
             </DockPanel>
         </Border>

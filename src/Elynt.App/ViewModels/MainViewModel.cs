@@ -33,9 +33,8 @@ public sealed class MainViewModel(
     public const string UndoHistory = "Undo history";
     public const string Settings = "Settings";
 
+    // Long jobs (repairs, cleanup, driver installs…) go over the client's own long-job connection, so switches keep working meanwhile.
     private EnginePipeClient? _client;
-    // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
-    private EnginePipeClient? _repairClient;
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
     private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
     private RepairToolItemViewModel? _selectedRepairTool;
@@ -49,7 +48,6 @@ public sealed class MainViewModel(
     private bool _isRestoring;
     private readonly AppUpdater _updater = new();
     private string? _updateReady;
-    private bool _installAllRuntimes;
     private bool _isInstalling;
     private string? _installStatus;
     private BiosPageViewModel? _bios;
@@ -59,8 +57,56 @@ public sealed class MainViewModel(
     private SensorsPageViewModel? _sensors;
     private CpuTuningPageViewModel? _cpu;
 
-    /// <summary>The sidebar: Home (the page the app opens on), the ten sections, then per-game profiles, the undo history and Settings.</summary>
-    public IReadOnlyList<string> Pages { get; } = [Home, .. Sections.All, PerGameProfiles, UndoHistory, Settings];
+    /// <summary>Every page in sidebar order: Home (the page the app opens on), the PLAY, WINDOWS and TOOLS groups, then the undo history and Settings.</summary>
+    public IReadOnlyList<string> Pages { get; } = Sidebar.Pages;
+
+    /// <summary>
+    /// The selected page when the sidebar's groups list it, else null. The sidebar's groups and its pinned footer are
+    /// two lists, so each shows the selection only when it holds the page.
+    /// </summary>
+    public string? SelectedGroupedPage
+    {
+        get => Sidebar.GroupedPages.Contains(SelectedPage) ? SelectedPage : null;
+        set
+        {
+            if (value is not null)
+                SelectedPage = value;
+        }
+    }
+
+    /// <summary>The selected page when it is one of the footer's (Undo history, Settings), else null.</summary>
+    public string? SelectedFooterPage
+    {
+        get => Sidebar.FooterPages.Contains(SelectedPage) ? SelectedPage : null;
+        set
+        {
+            if (value is not null)
+                SelectedPage = value;
+        }
+    }
+
+    private SidebarSearchViewModel? _search;
+
+    /// <summary>The search box at the top of the sidebar, which opens a tweak, repair tool or app on its page.</summary>
+    public SidebarSearchViewModel Search => _search ??= new SidebarSearchViewModel(() => IsConnected ? _client : null, Open);
+
+    /// <summary>
+    /// Opens a page with one of its rows selected: a search result, or a tweak, repair tool or app another page links
+    /// to. A row the page doesn't list leaves the page's own selection.
+    /// </summary>
+    public void Open(PageTarget target)
+    {
+        // Switching pages selects the page's first row, so the target's row is selected after.
+        SelectedPage = target.Page;
+        if (target.RowId is not { } id)
+            return;
+        if (IsTweakPage && Tweaks.FirstOrDefault(t => t.Lists(id)) is { } tweak)
+            SelectedTweak = tweak;
+        else if (IsRepairPage && RepairTools.FirstOrDefault(t => t.View.Id == id) is { } tool)
+            SelectedRepairTool = tool;
+        else if (IsAppsPage)
+            Catalogue.Select(id);
+    }
 
     private HomeViewModel? _home;
 
@@ -74,8 +120,8 @@ public sealed class MainViewModel(
     /// <summary>The Undo history page: every change the app made for this user, newest first.</summary>
     public ObservableCollection<HistoryItemViewModel> History { get; } = [];
 
-    /// <summary>The app catalogue, in group order. The Apps page groups it by <see cref="AppItemViewModel.Group"/>.</summary>
-    public ObservableCollection<AppItemViewModel> Apps { get; } = [];
+    /// <summary>The Apps page's Catalogue tab: the app catalogue, its filter, what is installed and the install count.</summary>
+    public AppCatalogueViewModel Catalogue { get; } = new();
 
     public bool IsAppsPage => SelectedPage == Sections.Apps;
 
@@ -96,13 +142,6 @@ public sealed class MainViewModel(
 
     /// <summary>The Startup &amp; Services page, which shows the Startup and Services lists as tabs.</summary>
     public bool IsStartupPage => SelectedPage == Sections.StartupAndServices;
-
-    /// <summary>Adds every Visual C++, DirectX legacy and .NET runtime to the install queue.</summary>
-    public bool InstallAllRuntimes
-    {
-        get => _installAllRuntimes;
-        set => Set(ref _installAllRuntimes, value);
-    }
 
     public bool IsInstalling
     {
@@ -143,8 +182,10 @@ public sealed class MainViewModel(
 
     public bool IsRepairPage => SelectedPage == Sections.Repair;
 
+    private CleanupPageViewModel? _cleanup;
+
     /// <summary>The Cleanup page's scan and clean, shown above its tweaks (the hibernation file).</summary>
-    public CleanupPageViewModel Cleanup { get; } = new();
+    public CleanupPageViewModel Cleanup => _cleanup ??= new CleanupPageViewModel(() => IsConnected ? _client : null);
 
     public bool IsCleanupPage => SelectedPage == Sections.Cleanup && IsConnected;
 
@@ -155,6 +196,8 @@ public sealed class MainViewModel(
         {
             if (Set(ref _selectedPage, value))
             {
+                OnPropertyChanged(nameof(SelectedGroupedPage));
+                OnPropertyChanged(nameof(SelectedFooterPage));
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsHomePage));
                 OnPropertyChanged(nameof(IsAppsPage));
@@ -196,7 +239,7 @@ public sealed class MainViewModel(
         Sections.Repair => "Windows' own repair tools, each saying up front whether it needs a restart.",
         Sections.Drivers => "Your GPU and chipset drivers, the latest from each vendor, and a silent install.",
         Sections.Overclocking => "GPU and CPU tuning, temperatures, and your BIOS settings with guides for this PC.",
-        PerGameProfiles => "Instant changes made while a game runs, and the games found on this PC.",
+        PerGameProfiles => "Pick a game to set what changes while it runs.",
         UndoHistory => "Every change the app made, newest first, with undo for each one.",
         // Settings opens with its own line.
         _ => "",
@@ -246,21 +289,38 @@ public sealed class MainViewModel(
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    /// <summary>Shows the right-hand detail pane: only a tweak or repair tool has details, so other pages get the width.</summary>
-    public bool HasDetail => HasSelection || HasRepairSelection;
+    /// <summary>
+    /// Shows the right-hand detail pane: only a tweak, a repair tool or a game's profile has details, so other pages
+    /// get the width.
+    /// </summary>
+    public bool HasDetail => HasSelection || HasRepairSelection || HasGameSelection;
+
+    /// <summary>A game is selected on Per-game profiles, so the detail pane shows its profile editor.</summary>
+    public bool HasGameSelection => IsGamesPage && Profiles.HasGame;
 
     /// <summary>Shows the "nothing here yet" note: a tweak page with no tweaks, or a panel page whose panel isn't available.</summary>
     public bool IsEmpty =>
         (IsTweakPage && Tweaks.Count == 0) ||
         (IsPanelPage && !IsOverclockingPage && !IsDriversPage && !IsGamesPage);
 
-    /// <summary>Installed games, shown on the per-game profiles page.</summary>
-    public GamesPageViewModel Games { get; } = new();
-
     private ProfilesPageViewModel? _profiles;
 
-    /// <summary>The per-game profile editor on the Per-game profiles page.</summary>
-    public ProfilesPageViewModel Profiles => _profiles ??= new ProfilesPageViewModel(() => IsConnected ? _client : null);
+    /// <summary>The Per-game profiles page: the games found, and the selected game's profile editor.</summary>
+    public ProfilesPageViewModel Profiles => _profiles ??= NewProfiles();
+
+    private ProfilesPageViewModel NewProfiles()
+    {
+        var profiles = new ProfilesPageViewModel(() => IsConnected ? _client : null);
+        profiles.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProfilesPageViewModel.HasGame))
+            {
+                OnPropertyChanged(nameof(HasGameSelection));
+                OnPropertyChanged(nameof(HasDetail));
+            }
+        };
+        return profiles;
+    }
 
     public bool IsGamesPage => IsConnected && SelectedPage == PerGameProfiles;
 
@@ -356,6 +416,8 @@ public sealed class MainViewModel(
                 OnPropertyChanged(nameof(IsDisconnected));
                 OnPropertyChanged(nameof(CanRetry));
                 OnPropertyChanged(nameof(IsGamesPage));
+                OnPropertyChanged(nameof(HasGameSelection));
+                OnPropertyChanged(nameof(HasDetail));
                 OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
                 OnPropertyChanged(nameof(CanInstall));
@@ -471,17 +533,13 @@ public sealed class MainViewModel(
                 return;
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
-            _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
-            var apps = await _client.ListAppsAsync();
-            Apps.Clear();
-            foreach (var app in apps)
-                Apps.Add(new AppItemViewModel(app));
+            _allTweaks = TweakItemViewModel.Rows(views, FlipAsync, ChooseAsync);
+            Catalogue.Show(await _client.ListAppsAsync());
             _allRepairTools = (await _client.ListRepairToolsAsync()).Select(v => new RepairToolItemViewModel(v)).ToList();
             Bios = await LoadBiosAsync(_client);
             if (ServicesPage is not null)
                 await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
-            Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
             Sensors = await LoadSensorsAsync(_client);
             Cpu = await LoadCpuAsync(_client);
@@ -618,10 +676,6 @@ public sealed class MainViewModel(
         _client = null;
         if (client is not null)
             await client.DisposeAsync();
-        var repairClient = _repairClient;
-        _repairClient = null;
-        if (repairClient is not null)
-            await repairClient.DisposeAsync();
     }
 
     /// <summary>Undoes one change from the history. A refusal (e.g. something else changed it since) shows on that row.</summary>
@@ -692,7 +746,7 @@ public sealed class MainViewModel(
     private async Task ReloadAsync(EnginePipeClient client)
     {
         var views = await client.ListTweaksAsync();
-        _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+        _allTweaks = TweakItemViewModel.Rows(views, FlipAsync, ChooseAsync);
         await LoadHistoryAsync(client);
         if (!IsHistoryPage)
             ShowPage();
@@ -753,8 +807,8 @@ public sealed class MainViewModel(
             _ = Profiles.LoadAsync();
 
         Tweaks.Clear();
-        // The possible-placebo group goes last; within each group, tweaks that fit this PC come first.
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsPlacebo).ThenBy(t => t.IsNotApplicable))
+        // Plain rows, then each header's rows, then the possible-placebo fold; tweaks that fit this PC first in each.
+        foreach (var tweak in TweakItemViewModel.InPageOrder(_allTweaks.Where(t => t.View.Section == SelectedPage)))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
 
@@ -777,6 +831,7 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
+        OnPropertyChanged(nameof(HasGameSelection));
         OnPropertyChanged(nameof(HasDetail));
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsWindowsUpdatePage));
@@ -794,10 +849,14 @@ public sealed class MainViewModel(
 
     public Task AddGameAsync(string exePath) => ChangeGamesAsync(client => client.AddGameAsync(exePath));
 
-    public Task RemoveGameAsync(GamesPageViewModel.GameItem item) =>
-        ChangeGamesAsync(client => client.RemoveGameAsync(item.Game.ExePath ?? item.Game.InstallPath));
+    public Task RemoveGameAsync(ProfilesPageViewModel.GameRow row) => row.Game is { } game
+        ? ChangeGamesAsync(client => client.RemoveGameAsync(game.ExePath ?? game.InstallPath))
+        : Task.CompletedTask;
 
-    /// <summary>Adds or removes a game, then refreshes the games and every tweak's warning, which names them.</summary>
+    /// <summary>
+    /// Adds or removes a game, then refreshes the games (selecting one just added) and every tweak's warning, which
+    /// names them.
+    /// </summary>
     private async Task ChangeGamesAsync(Func<EnginePipeClient, Task<Elynt.Core.Games.GameCommandResult>> change)
     {
         if (_client is null)
@@ -805,22 +864,21 @@ public sealed class MainViewModel(
         try
         {
             var result = await change(_client);
-            Games.Message = result.Message;
-            Games.Show(await _client.ListGamesAsync());
+            await Profiles.LoadAsync(select: result.Game);
+            Profiles.GamesMessage = result.Message;
             var views = (await _client.ListTweaksAsync()).ToDictionary(v => v.Id);
             foreach (var item in _allTweaks)
-                if (views.TryGetValue(item.View.Id, out var view))
-                    item.View = view;
+                item.ShowLatest(views);
         }
         catch (EngineServiceException ex)
         {
             Log.Error(ex, "The service couldn't change the game list");
-            Games.Message = $"The service couldn't do this: {ex.Message}";
+            Profiles.GamesMessage = $"The service couldn't do this: {ex.Message}";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Changing the game list failed");
-            Games.Message = $"Couldn't reach the service: {ex.Message}";
+            Profiles.GamesMessage = $"Couldn't reach the service: {ex.Message}";
             await DisconnectAsync();
             Status = "Lost the connection to the service. Press Retry.";
         }
@@ -865,14 +923,16 @@ public sealed class MainViewModel(
         if (_client is null || IsInstalling)
             return;
 
-        var ticked = Apps.Where(a => a.IsTicked).ToList();
-        var byId = Apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
-        foreach (var app in Apps)
+        var apps = Catalogue.Apps;
+        var allRuntimes = Catalogue.InstallAllRuntimes;
+        var ticked = apps.Where(a => a.IsTicked).ToList();
+        var byId = apps.ToDictionary(a => a.View.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var app in apps)
             app.Status = null;
         foreach (var app in ticked)
             app.Status = "Queued";
-        if (InstallAllRuntimes)
-            foreach (var app in Apps.Where(a => a.View.InAllRuntimes))
+        if (allRuntimes)
+            foreach (var app in apps.Where(a => a.View.InAllRuntimes))
                 app.Status = "Queued";
 
         IsInstalling = true;
@@ -886,19 +946,19 @@ public sealed class MainViewModel(
         });
         try
         {
-            var report = await _client.InstallAppsAsync(ticked.Select(a => a.View.Id).ToList(), InstallAllRuntimes, progress);
+            var report = await _client.InstallAppsAsync(ticked.Select(a => a.View.Id).ToList(), allRuntimes, progress);
             Log.Information("Install queue: {Succeeded} {Message}", report.Succeeded, report.Message);
             foreach (var outcome in report.Apps)
                 if (byId.TryGetValue(outcome.AppId, out var item))
                     item.Status = outcome.Stage == InstallStage.Failed ? outcome.Message : StatusText(outcome.Stage, null);
-            foreach (var app in Apps.Where(a => a.Status == "Queued"))
+            foreach (var app in apps.Where(a => a.Status == "Queued"))
                 app.Status = null;
             InstallStatus = report.Message;
             if (report.Succeeded)
             {
                 foreach (var app in ticked)
                     app.IsTicked = false;
-                InstallAllRuntimes = false;
+                Catalogue.InstallAllRuntimes = false;
             }
         }
         catch (EngineServiceException ex)
@@ -917,6 +977,9 @@ public sealed class MainViewModel(
         {
             IsInstalling = false;
         }
+        // The rows' Installed pills, and the Installed tab, follow what winget lists now.
+        if (AppsManager is { } manager)
+            await manager.RefreshInstalledAsync();
     }
 
     private static string StatusText(InstallStage stage, double? percent) => stage switch
@@ -931,26 +994,22 @@ public sealed class MainViewModel(
     /// <param name="confirmed">The user confirmed the tool's opt-in warning.</param>
     public async Task RunRepairAsync(RepairToolItemViewModel item, string toolId, bool confirmed)
     {
-        if (_client is null || item.IsRunning)
+        if (_client is not { } client || item.IsRunning)
             return;
 
         item.Start();
         try
         {
-            _repairClient ??= await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             // Progress<T> posts back to the window's thread.
-            var result = await _repairClient.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
+            var result = await client.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
             Log.Information("Repair {Tool}: {Succeeded} {Summary} (log: {Log})", toolId, result.Succeeded, result.Summary, result.LogLocation);
             item.Finish(result);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Running repair {Tool} failed", toolId);
-            var repairClient = _repairClient;
-            _repairClient = null;
-            if (repairClient is not null)
-                await repairClient.DisposeAsync();
-            item.Finish(new RepairResult(toolId, false, $"Couldn't run this through the service: {ex.Message}", false, null, null, ""));
+            var summary = ex is ServiceConnectionLostException ? ex.Message : $"Couldn't run this through the service: {ex.Message}";
+            item.Finish(new RepairResult(toolId, false, summary, false, null, null, ""));
         }
     }
 
@@ -1017,6 +1076,57 @@ public sealed class MainViewModel(
             item.IsBusy = false;
             item.RefreshSwitch();
             // The title's "N of M on" follows the switch.
+            OnPropertyChanged(nameof(PageSummary));
+        }
+    }
+
+    /// <summary>
+    /// Sets a pick-one row's choice: an option's tweak id, or null for the default. The service undoes the app's change
+    /// for the option that was on, so the row then shows every option as the service reports it.
+    /// </summary>
+    private async Task ChooseAsync(TweakItemViewModel row, string? tweakId)
+    {
+        if (_client is null || row.View.Choice is not { } choice)
+            return;
+
+        row.IsBusy = true;
+        try
+        {
+            // A warning the user must read first, as a switch asks; without a way to ask, the service refuses and says why.
+            var warningConfirmed = false;
+            if (tweakId is not null && confirmWarning is not null && row.Option(tweakId) is { ApplyWarning: not null } option)
+            {
+                warningConfirmed = confirmWarning(option);
+                if (!warningConfirmed)
+                {
+                    row.Message = "Not changed.";
+                    return;
+                }
+            }
+
+            var result = await _client.ChooseAsync(choice.Id, tweakId, new ApplyOptions(ConfirmWarning: warningConfirmed));
+            Log.Information("Choose {Choice} {Tweak}: {Succeeded} {Message}", choice.Id, tweakId ?? "default", result.Succeeded, result.Message);
+            row.ShowChoice(result.Tweaks);
+            row.Message = result.Message;
+
+            if (result.Succeeded && result.Tweaks.Any(t => t.Refresh == SessionRefresh.MouseSettings))
+                MouseSettings.ReloadFromRegistry();
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Error(ex, "The service couldn't set the choice {Choice}", choice.Id);
+            row.Message = $"The service couldn't do this: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Setting the choice {Choice} failed", choice.Id);
+            row.Message = $"Couldn't reach the service: {ex.Message}";
+            await DisconnectAsync();
+            Status = "Lost the connection to the service. Press Retry.";
+        }
+        finally
+        {
+            row.IsBusy = false;
             OnPropertyChanged(nameof(PageSummary));
         }
     }

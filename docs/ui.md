@@ -12,32 +12,51 @@ only. Spec: issue #60. Read this before changing anything under `src/Elynt.App/`
   3. `Theme/Theme.xaml`: every colour token and named style. The single source of truth for the look.
 - `MainWindow.xaml` hosts every page: a sidebar, the page, and the detail pane on the right (layout A). Pages are
   UserControls under `Pages/`, each with the window's `MainViewModel` as DataContext (code-behind reads it as `Model`).
+- `ViewModels/Sidebar.cs` lists the sidebar's pages in their groups (PLAY, WINDOWS, TOOLS) and the pinned footer: a
+  new page joins its group with one line there, and gets an icon in `Theme/PageIcon.cs`. The search box at the top
+  of the sidebar opens a page with a row selected through `MainViewModel.Open(PageTarget)`, which a link from one
+  page to a tweak, repair tool or app on another can use too.
 - `Theme/AccentWave.cs` moves the wave; `Theme/TitleBar.cs` paints the title bar.
+- `Assets/elynt.ico` is the app's red "E" icon (the window, taskbar, tray and Start menu). `build/gen_icon.py` draws it
+  (usage in its header). Redraw it there; never edit the .ico by hand.
 
 ## Using the theme
 
 Take colours and styles from `Theme.xaml`. When a page needs a style another page could use, add it to `Theme.xaml`
 rather than to the page's resources (CI fails on a colour outside `Theme/`).
 
-- **Colours:** `Theme.Bg` `Theme.Surface` `Theme.Surface2` `Theme.Hover` `Theme.Stroke` `Theme.StrokeStrong` `Theme.Code`
-  `Theme.Text` `Theme.TextBody` `Theme.TextDim` `Theme.TextFaint` `Theme.Red` `Theme.RedHover` `Theme.Orange`
-  `Theme.RedTint` `Theme.RedEdge` `Theme.OrangeTint` `Theme.OrangeEdge`, and `Theme.Good` for the connection dot only.
+- **Colours:** `Theme.Bg` `Theme.Surface` `Theme.Surface2` `Theme.Hover` `Theme.Stroke` `Theme.StrokeStrong`
+  `Theme.ControlEdge` (an off switch's edge) `Theme.Code` `Theme.Text` `Theme.TextBody` `Theme.TextDim` `Theme.TextFaint`
+  `Theme.Red` `Theme.RedHover` `Theme.RedText` (red text on `RedTint`) `Theme.Orange` `Theme.RedTint` `Theme.RedEdge`
+  `Theme.OrangeTint` `Theme.OrangeEdge`, and `Theme.Good` for the connection dot only. Text reads at 4.5:1 or better on
+  every background, `TextFaint` included; keep it that way.
 - **Accent wave:** `{DynamicResource Theme.AccentWave}`, always DynamicResource (AccentWave swaps in the moving brush at
-  run time; a StaticResource keeps the still one). Only on accents: switches that are on, primary buttons, meters, the
-  selected row's edge, Home's big numbers. Text, backgrounds and cards stay plain.
+  run time; a StaticResource keeps the still one). Only on accents: switches that are on, meters, the selected row's
+  edge, the top strip, Home's big numbers. Button faces use its twin `Theme.ButtonWave` (through `Button.Primary`),
+  which turns a darker orange so white labels stay readable; it moves in step. Text, backgrounds and cards stay plain.
 - **Text:** `Text.H1` (page title, set by the window), `Text.H2`, `Text.Body`, `Text.Dim`, `Text.Label` (small-caps
-  heading: write the text in CAPITALS), `Text.Icon` (Segoe Fluent Icons glyphs), `Text.Message` (the answer to the last
-  action; takes no room while empty), `Link` (a Hyperlink).
-- **Boxes:** `Card`, `Pill`, `Pill.Warning`, `RestartPill` + `RestartPillText` (a repair tool's restart need),
-  `WarningBox` (orange: read this first), `DangerBox` (red: can't be undone), `CodeBox` (monospace).
+  heading: write the text in CAPITALS), `Text.Icon` (Segoe Fluent Icons glyphs), `Text.Lock` (the lock glyph a locked
+  switch and a protected service show), `Text.Message` (the answer to the last action; takes no room while empty),
+  `Link` (a Hyperlink). Nothing smaller than 12 px, Windows' smallest text.
+- **Boxes:** `Card`, `Pill` (sets its text to 12 px: leave the TextBlock's size unset), `Pill.Warning` (orange: a risk),
+  `Pill.Danger` (red: "Destructive", "Can't be undone"), `ReversibilityPill` + `LockPill` (a tweak's reversibility and
+  lock, danger or plain), `RestartPill` + `RestartPillText` (a repair tool's restart need), `WarningBox` (orange: read
+  this first), `DangerBox` (red: can't be undone), `CodeBox` (monospace).
 - **Lists:**
   - `CardList`: a ListBox of `Row` cards (hover shade, red edge when selected, text wraps). Any list of things.
   - `CardRows` + `CardRow`: readouts inside one card, split by faint lines (sensor values, BIOS settings).
   - `Table.Header` + `Table.Row`: a table on the page (Undo history, drift). `Table.List` + `Table.ListRow` for one
     long enough to virtualise (the services).
-- **Controls:** `Switch` (a CheckBox as an on/off switch), `Button.Primary` (wave), `Button.Destructive` (red), and a
-  plain Button as the secondary form. `Meter` (thin ProgressBar, Maximum 1). `NavItem` (sidebar). Plain TextBox,
-  ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar, ToolTip and ListView already match through FluentColors.xaml.
+- **Controls:** `Switch` (a CheckBox as an on/off switch; give a locked one `theme:Switch.IsLocked="{Binding IsLocked}"`
+  so it shows a lock rather than fading like a busy one), `Segmented` + `Segment` (a pick-one row's choice: an
+  ItemsControl of Buttons, the chosen one in the button wave), `Button.Primary` (button wave), `Button.Destructive`
+  (red), `Button.Icon` (a quiet glyph button on a row, such as the "×" that takes an app off a profile; give it an
+  `AutomationProperties.Name`, which is also its tooltip), and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next
+  step: a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain.
+  `SearchBox` (a TextBox with a search glyph) for every search and filter: its `AutomationProperties.Name` is also the
+  hint text shown while it's empty, so give it one, and put the result count just under it ("12 apps"). `Meter` (thin
+  ProgressBar, Maximum 1). `NavItem` (sidebar). Plain TextBox, ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar,
+  ToolTip and ListView already match through FluentColors.xaml.
 - Dim text with `Text.Dim` or `Theme.TextDim`, never with Opacity.
 
 ## Sizes

@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Elynt.App.ViewModels;
 using Elynt.Core.Apps;
 
@@ -10,7 +11,33 @@ namespace Elynt.App.Pages;
 /// <summary>The Apps page: catalogue, winget search and installed apps. Its DataContext is the <see cref="MainViewModel"/>.</summary>
 public partial class AppsPage : UserControl
 {
-    public AppsPage() => InitializeComponent();
+    public AppsPage()
+    {
+        InitializeComponent();
+        // The catalogue's Installed pills need winget's installed list, which takes it seconds: read it when the page
+        // first shows on a connection rather than while connecting.
+        IsVisibleChanged += async (_, e) =>
+        {
+            if (e.NewValue is true && DataContext is MainViewModel { AppsManager: { } apps })
+                await apps.ShowInstalledOnceAsync();
+        };
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is MainViewModel old)
+                old.Catalogue.PropertyChanged -= ShowSelectedApp;
+            if (e.NewValue is MainViewModel model)
+                model.Catalogue.PropertyChanged += ShowSelectedApp;
+        };
+    }
+
+    /// <summary>An app opened from elsewhere (the sidebar's search) shows on the Catalogue tab, its row in view.</summary>
+    private void ShowSelectedApp(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppCatalogueViewModel.Selected) || Model.Catalogue.Selected is not { } app)
+            return;
+        Tabs.SelectedIndex = 0;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => CatalogueList.ScrollIntoView(app));
+    }
 
     private MainViewModel Model => (MainViewModel)DataContext;
 

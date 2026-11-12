@@ -63,6 +63,7 @@ public static class WindowsUpdateTweaks
             PauseValue("PauseQualityUpdatesEndTime", isEnd: true),
         ])
     {
+        Summary = "Pauses Windows updates for 35 days, the longest Windows allows.",
         Risks = RiskFlags.SecurityRisk,
         AntiCheat = OutdatedWindowsConflicts,
         // Windows ends the pause itself; putting it back would turn a bounded pause into an endless one.
@@ -77,6 +78,14 @@ public static class WindowsUpdateTweaks
     public static TweakDefinition DeferQuality7 { get; } = DeferQuality(7);
 
     public static TweakDefinition DeferQuality30 { get; } = DeferQuality(30);
+
+    /// <summary>Both delays write the same policy, so they are one pick-one row.</summary>
+    public static ChoiceGroup UpdateDelayChoice { get; } = new(
+        Id: "update.quality-delay",
+        Name: "Monthly update delay",
+        Summary: "How long Windows waits before installing each monthly update, so a bad patch is usually fixed first.",
+        DefaultLabel: "Windows default",
+        Options: [new(DeferQuality7.Id, "7 days"), new(DeferQuality30.Id, "30 days")]);
 
     public static TweakDefinition ExcludeDrivers { get; } = new(
         Id: "update.exclude-drivers",
@@ -101,7 +110,10 @@ public static class WindowsUpdateTweaks
             new RegistryValueStep(
                 new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching", "SearchOrderConfig"),
                 RegistryValue.DWord(0)),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows Update replacing the graphics and chipset drivers you installed.",
+    };
 
     public static TweakDefinition ActiveHours { get; } = new(
         Id: "update.active-hours",
@@ -121,7 +133,10 @@ public static class WindowsUpdateTweaks
             Ux("ActiveHoursStart", RegistryValue.DWord(8)),
             Ux("ActiveHoursEnd", RegistryValue.DWord(2)),
             Ux("SmartActiveHoursState", RegistryValue.DWord(0)),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows restarting for updates between 8 AM and 2 AM.",
+    };
 
     public static TweakDefinition NoAutoRestart { get; } = new(
         Id: "update.no-auto-restart",
@@ -141,7 +156,10 @@ public static class WindowsUpdateTweaks
         [
             Au("NoAutoRebootWithLoggedOnUsers", 1),
             Au("AUOptions", 4),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows restarting for updates while you're signed in, so it never restarts mid-game.",
+    };
 
     public static TweakDefinition DeliveryOptimizationSharingOff { get; } = new(
         Id: "update.delivery-optimization-sharing-off",
@@ -169,7 +187,10 @@ public static class WindowsUpdateTweaks
             new RegistryValueStep(
                 new(RegistryRoot.LocalMachine, @"SOFTWARE\Microsoft\Windows\DeliveryOptimization\Config", "DODownloadMode"),
                 RegistryValue.DWord(0)),
-        ]);
+        ])
+    {
+        Summary = "Stops Windows uploading updates to other PCs, so updates don't use your upload while you play.",
+    };
 
     public static IReadOnlyList<TweakDefinition> All { get; } =
     [
@@ -198,6 +219,7 @@ public static class WindowsUpdateTweaks
             new RegistryValueStep(new(RegistryRoot.LocalMachine, Policies, "ProductVersion"), RegistryValue.String("Windows 11")),
         ])
     {
+        Summary = $"Keeps this PC on Windows 11 {version}, while the monthly security updates keep coming.",
         // Only the version this PC runs is offered; the others are hidden, not greyed out.
         Applicability = BusinessEditions with { MinBuild = build, MaxBuild = build, Hide = true },
     };
@@ -222,6 +244,7 @@ public static class WindowsUpdateTweaks
             Policy("DeferQualityUpdatesPeriodInDays", days),
         ])
     {
+        Summary = $"Installs each monthly update {days} days after it comes out, so a bad patch is usually fixed first.",
         Applicability = BusinessEditions,
         AntiCheat = OutdatedWindowsConflicts,
     };

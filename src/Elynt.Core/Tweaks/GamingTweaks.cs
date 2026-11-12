@@ -37,6 +37,7 @@ public static class GamingTweaks
         ],
         Refresh: SessionRefresh.MouseSettings)
     {
+        Summary = "Stops Windows speeding the pointer up, so your aim matches how far your hand moves.",
         Reversibility = Reversibility.Reversible,
         Risks = RiskFlags.None,
         Applicability = Applicability.Always,
@@ -87,6 +88,7 @@ public static class GamingTweaks
             new RegistryValueStep(new(RegistryRoot.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"), RegistryValue.DWord(1)),
         ])
     {
+        Summary = "Keeps Game Mode on, so Windows holds back update installs and restart notifications while you play.",
         ProfileEligible = true,
         HardwareNotes = [X3dCoreParking],
     };
@@ -132,6 +134,7 @@ public static class GamingTweaks
                 RegistryValue.DWord(2)),
         ])
     {
+        Summary = "Lets the graphics card schedule its own work instead of Windows doing it on the CPU.",
         Risks = RiskFlags.NeedsReboot,
         Applicability = new(RequiresAny: HardwareTraits.NvidiaGpu | HardwareTraits.AmdGpu | HardwareTraits.IntelGpu),
         HardwareNotes = [FrameGenerationNeedsHags],
@@ -167,6 +170,7 @@ public static class GamingTweaks
                 RegistryValue.DWord(1)),
         ])
     {
+        Summary = "Lets a finer timer that a game or timer tool asks for apply to the whole PC, as before Windows 10 2004.",
         Risks = RiskFlags.NeedsReboot,
         HardwareNotes = [LaptopPower],
     };
@@ -200,7 +204,10 @@ public static class GamingTweaks
             new RegistryListItemStep(
                 new(RegistryRoot.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings"),
                 RegistryListFormat.SemicolonPairs, "SwapEffectUpgradeEnable", "1"),
-        ]);
+        ])
+    {
+        Summary = "Gives older windowed and borderless games lower latency, variable refresh rate and Auto HDR.",
+    };
 
     public static TweakDefinition UsePlatformClockRemoved { get; } = new(
         Id: "gaming.useplatformclock-removed",
@@ -225,6 +232,7 @@ public static class GamingTweaks
         Undo: "Sets useplatformclock back to exactly the value it had before, then needs a restart.",
         Steps: [new BootSettingStep("useplatformclock", null)])
     {
+        Summary = "Removes a boot setting some guides force, so Windows goes back to choosing its own faster timer.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -256,6 +264,7 @@ public static class GamingTweaks
         Undo: "Switches back to exactly the plan that was active before.",
         Steps: [new PowerPlanStep(PowerPlans.HighPerformance, "High performance")])
     {
+        Summary = "Switches to the High performance power plan, which keeps the CPU at higher clocks between bursts of work.",
         ProfileEligible = true,
         HardwareNotes = [X3dCoreParking, LaptopPower],
     };
@@ -282,9 +291,18 @@ public static class GamingTweaks
             new PowerPlanStep(PowerPlans.ElyntUltimatePerformance, "Ultimate Performance", PowerPlans.UltimatePerformanceTemplate),
         ])
     {
+        Summary = "Adds Windows' hidden Ultimate Performance power plan, made for workstations, and switches to it.",
         ProfileEligible = true,
         HardwareNotes = [X3dCoreParking, LaptopPower],
     };
+
+    /// <summary>Only one power plan can be active, so the two plans are one pick-one row.</summary>
+    public static ChoiceGroup PowerPlanChoice { get; } = new(
+        Id: "gaming.power-plan",
+        Name: "Power plan",
+        Summary: "Which plan Windows runs. High performance keeps the CPU at full speed sooner.",
+        DefaultLabel: "Windows default",
+        Options: [new(HighPerformancePlan.Id, "High performance"), new(UltimatePerformancePlan.Id, "Ultimate")]);
 
     public static PerGameTweak FullscreenOptimizationsOff { get; } = new(
         new TweakDefinition(
@@ -309,7 +327,10 @@ public static class GamingTweaks
             Undo:
                 "Puts back exactly what the game's compatibility settings were. If you changed other compatibility " +
                 "settings since, those are kept.",
-            Steps: []),
+            Steps: [])
+        {
+            Summary = "Runs one game in true exclusive fullscreen instead of Windows' optimized borderless mode.",
+        },
         exePath =>
         [
             new RegistryListItemStep(

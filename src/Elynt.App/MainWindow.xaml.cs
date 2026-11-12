@@ -1,9 +1,13 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using Elynt.App.Theme;
 using Elynt.App.ViewModels;
 using Elynt.Core;
 using Elynt.Core.Drivers;
+using Elynt.Core.Search;
 using Elynt.Core.Startup;
 
 namespace Elynt.App;
@@ -40,9 +44,16 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) => TitleBar.Paint(this);
         AccentWave.Follow(this);
         SizeChanged += (_, e) => IsCompact = e.NewSize.Width < CompactBelow;
+        // A click anywhere but the search or its results closes the results, as a drop-down does.
+        PreviewMouseDown += (_, _) =>
+        {
+            if (_model.Search.IsOpen && !SearchFlyout.IsMouseOver && !SearchBox.IsMouseOver && !SearchButton.IsMouseOver)
+                _model.Search.IsOpen = false;
+        };
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         _model.Profiles.PickApp = PickApp;
+        _model.Profiles.PickGameExe = folder => FilePickers.Game(this, folder);
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
@@ -61,6 +72,65 @@ public partial class MainWindow : Window
     {
         SidebarColumn.Width = new GridLength(IsCompact ? 72 : 232);
         Detail.Width = IsCompact ? 320 : 400;
+        // The results hang off the search of the sidebar it was opened in.
+        _model.Search.IsOpen = false;
+    }
+
+    /// <summary>Folded, the search button opens the box over the page, ready to type in.</summary>
+    private void OpenSearch(object sender, RoutedEventArgs e)
+    {
+        _model.Search.IsOpen = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => Keyboard.Focus(CompactSearchBox));
+    }
+
+    /// <summary>Coming back to a box that still holds a query shows its results again.</summary>
+    private void SearchBoxFocused(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_model.Search.Query.Trim().Length > 0)
+            _model.Search.IsOpen = true;
+    }
+
+    /// <summary>In the box: Enter opens the best match, Down moves to the results, Escape closes them.</summary>
+    private void SearchBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter when _model.Search.Results.FirstOrDefault() is { } best:
+                _model.Search.Choose(best);
+                e.Handled = true;
+                break;
+            case Key.Down when SearchResults.Items.Count > 0:
+                SearchResults.SelectedIndex = 0;
+                (SearchResults.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem)?.Focus();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                _model.Search.IsOpen = false;
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>In the results: Enter opens the one picked with the arrow keys, Escape goes back to the box.</summary>
+    private void SearchResultsKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && SearchResults.SelectedItem is SearchResult chosen)
+        {
+            _model.Search.Choose(chosen);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            _model.Search.IsOpen = false;
+            Keyboard.Focus(IsCompact ? SearchButton : SearchBox);
+            e.Handled = true;
+        }
+    }
+
+    private void ChooseResult(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is SearchResult chosen)
+            _model.Search.Choose(chosen);
     }
 
     private void RestartIntoUpdate(object sender, RoutedEventArgs e) => _model.RestartIntoUpdate();
