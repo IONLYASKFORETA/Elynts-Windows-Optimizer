@@ -153,15 +153,15 @@ internal static partial class Tour
                 ?? throw new InvalidOperationException($"Searching for \"{query}\" found no {kind}.");
             model.Search.Choose(result);
             await SettleAsync();
-            var selected = kind switch
+            var rowSelected = kind switch
             {
-                SearchResultKind.Tweak => model.SelectedTweak?.View.Id,
-                SearchResultKind.RepairTool => model.SelectedRepairTool?.View.Id,
-                _ => model.Catalogue.Selected?.View.Id,
+                SearchResultKind.Tweak => model.SelectedTweak?.Lists(result.Id) == true,
+                SearchResultKind.RepairTool => model.SelectedRepairTool?.View.Id == result.Id,
+                _ => model.Catalogue.Selected?.View.Id == result.Id,
             };
-            if (model.SelectedPage != result.Page || selected != result.Id || model.Search.IsOpen)
+            if (model.SelectedPage != result.Page || !rowSelected || model.Search.IsOpen)
                 throw new InvalidOperationException(
-                    $"Opening the search result {result.Name} showed {model.SelectedPage} with {selected ?? "nothing"} selected.");
+                    $"Opening the search result {result.Name} showed {model.SelectedPage} without its row selected.");
             Shoot(window, folder, $"search-opened-{Slug(kind.ToString())}", screen: false);
         }
     }

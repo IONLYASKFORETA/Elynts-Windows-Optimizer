@@ -100,7 +100,7 @@ public sealed class MainViewModel(
         SelectedPage = target.Page;
         if (target.RowId is not { } id)
             return;
-        if (IsTweakPage && Tweaks.FirstOrDefault(t => t.View.Id == id) is { } tweak)
+        if (IsTweakPage && Tweaks.FirstOrDefault(t => t.Lists(id)) is { } tweak)
             SelectedTweak = tweak;
         else if (IsRepairPage && RepairTools.FirstOrDefault(t => t.View.Id == id) is { } tool)
             SelectedRepairTool = tool;
