@@ -82,7 +82,7 @@ public sealed class TrayNotes : IDisposable
         _client = client;
         _icon = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = AppIcon(),
             Text = "Elynt's Windows Optimizer",
             Visible = true,
         };
@@ -198,11 +198,20 @@ public sealed class TrayNotes : IDisposable
         _icon.ShowBalloonTip(5_000, "Startup", message, failed.Count == 0 ? Forms.ToolTipIcon.Info : Forms.ToolTipIcon.Warning);
     }
 
+    /// <summary>The app's red "E" at the tray's size, from the same icon file as the window's.</summary>
+    private static System.Drawing.Icon AppIcon()
+    {
+        using var file = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/ElyntOptimizer;component/Assets/elynt.ico")).Stream;
+        return new System.Drawing.Icon(file, Forms.SystemInformation.SmallIconSize);
+    }
+
     public void Dispose()
     {
         _timer.Stop();
         _profileTimer.Stop();
         _icon.Visible = false;
+        _icon.Icon?.Dispose();
         _icon.Dispose();
     }
 }

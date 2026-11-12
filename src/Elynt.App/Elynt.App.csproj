@@ -16,7 +16,14 @@
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
     <!-- Program.Main runs Velopack's hooks before WPF starts, so App.xaml must not generate its own Main. -->
     <StartupObject>Elynt.App.Program</StartupObject>
+    <!-- The red "E" (drawn by build/gen_icon.py) on the .exe, so the taskbar and the Start menu shortcut show it. -->
+    <ApplicationIcon>Assets\elynt.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The same icon inside the app, for the window's title bar and the tray. -->
+    <Resource Include="Assets\elynt.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Keep WinForms out of the global usings so WPF names (Application, UserControl) stay unambiguous. -->

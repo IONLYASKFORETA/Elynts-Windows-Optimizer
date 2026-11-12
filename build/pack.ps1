@@ -41,6 +41,7 @@ Invoke-Checked {
         --packVersion $Version `
         --packDir $pack `
         --mainExe ElyntOptimizer.exe `
+        --icon "$root/src/Elynt.App/Assets/elynt.ico" `
         --channel $Channel `
         --outputDir $releases
 }
