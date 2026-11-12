@@ -47,6 +47,7 @@ public static class SecurityTweaks
             new RegistryValueStep(new(RegistryRoot.LocalMachine, HvciKey, "Enabled"), RegistryValue.DWord(0)),
         ])
     {
+        Summary = "Turns off a Windows security protection that can cost FPS, though VALORANT and League of Legends need it.",
         Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,
         AntiCheat =
         [
@@ -84,6 +85,7 @@ public static class SecurityTweaks
             Undo: "Removes the folder from the exclusions again, unless it was already excluded before the app added it.",
             Steps: [])
         {
+            Summary = "Stops Microsoft Defender scanning one game's folder, for smoother loading but less protection there.",
             Risks = RiskFlags.SecurityRisk,
             ProfileEligible = false,
         },
@@ -137,6 +139,7 @@ public static class SecurityTweaks
             PolicyOne(RealTimeKey, "DisableScanOnRealtimeEnable"),
         ])
     {
+        Summary = "Turns off Microsoft Defender's real-time antivirus, so nothing scans your files unless you run another one.",
         Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,
         ApplyWarning =
             "This turns Microsoft Defender's real-time antivirus off. Your PC will have no antivirus scanning unless " +

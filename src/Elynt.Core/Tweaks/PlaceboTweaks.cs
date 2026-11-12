@@ -44,6 +44,7 @@ public static class PlaceboTweaks
         Undo: "Puts back exactly the values that plan had before, plugged in and on battery.",
         Steps: [new PowerSettingStep(PowerSettings.ProcessorSubgroup, PowerSettings.CoreParkingMinCores, "core parking min cores (CPMINCORES)", 100)])
     {
+        Summary = "Stops Windows idling spare CPU cores, which can make games slower on dual-CCD Ryzen X3D CPUs.",
         HardwareNotes = [GamingTweaks.X3dCoreParking, GamingTweaks.LaptopPower],
     };
 
@@ -81,6 +82,7 @@ public static class PlaceboTweaks
             new RegistryEachKeyStep(RegistryRoot.LocalMachine, TcpipInterfaces, null, null, "TCPNoDelay", RegistryValue.DWord(1)),
         ])
     {
+        Summary = "Makes Windows answer each TCP packet straight away, though most game traffic uses UDP instead.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -117,6 +119,7 @@ public static class PlaceboTweaks
                 @"Device Parameters\Interrupt Management\MessageSignaledInterruptProperties", "MSISupported", RegistryValue.DWord(1)),
         ])
     {
+        Summary = "Changes how the graphics card signals the CPU, which can stop Windows starting if its driver can't do it.",
         Risks = RiskFlags.NeedsReboot | RiskFlags.CanStopBoot,
     };
 
@@ -149,6 +152,7 @@ public static class PlaceboTweaks
                 new RegistryKeyFilter("*InterruptModeration"), null, "*InterruptModeration", RegistryValue.String("0")),
         ])
     {
+        Summary = "Makes network adapters interrupt the CPU for every packet instead of batching them.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -174,6 +178,7 @@ public static class PlaceboTweaks
         Undo: "Puts back exactly the value that was there before (Windows' default is 10), then needs a restart.",
         Steps: [new RegistryValueStep(new(RegistryRoot.LocalMachine, SystemProfile, "NetworkThrottlingIndex"), RegistryValue.DWord(0xFFFFFFFF))])
     {
+        Summary = "Lifts a network limit Windows sets while audio or video plays, which is far above what games send.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -207,6 +212,7 @@ public static class PlaceboTweaks
             new RegistryValueStep(new(RegistryRoot.LocalMachine, SystemProfile + @"\Tasks\Games", "SFIO Priority"), RegistryValue.String("High")),
         ])
     {
+        Summary = "Raises the priority Windows' multimedia scheduler gives games, which only reaches games that sign up for it.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -233,7 +239,10 @@ public static class PlaceboTweaks
             new RegistryValueStep(
                 new(RegistryRoot.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"),
                 RegistryValue.DWord(0x26)),
-        ]);
+        ])
+    {
+        Summary = "Gives the program in front a bigger CPU boost, on top of the one Windows already gives it.",
+    };
 
     public static TweakDefinition DynamicTickOff { get; } = new(
         Id: "gaming.placebo.dynamic-tick-off",
@@ -254,6 +263,7 @@ public static class PlaceboTweaks
         Undo: "Sets disabledynamictick back to exactly what it was (normally not set), then needs a restart.",
         Steps: [new BootSettingStep("disabledynamictick", "Yes")])
     {
+        Summary = "Keeps Windows' timer ticking even while the CPU is idle, which costs idle power.",
         Risks = RiskFlags.NeedsReboot,
         HardwareNotes = [GamingTweaks.LaptopPower],
     };
@@ -281,6 +291,7 @@ public static class PlaceboTweaks
         Undo: "Enables the device again if it was enabled before, then needs a restart.",
         Steps: [new DeviceEnabledStep(@"ACPI\PNP0103", "High precision event timer", Enabled: false)])
     {
+        Summary = "Disables the High precision event timer device, a timer games on modern PCs usually don't read anyway.",
         Risks = RiskFlags.NeedsReboot,
     };
 
@@ -304,7 +315,10 @@ public static class PlaceboTweaks
         ],
         Tier: EvidenceTier.PossiblePlacebo,
         Undo: "Stops the checks by putting the app's own switch back as it was.",
-        Steps: [new RegistryValueStep(Memory.StandbyListCleaner.Switch, RegistryValue.DWord(1))]);
+        Steps: [new RegistryValueStep(Memory.StandbyListCleaner.Switch, RegistryValue.DWord(1))])
+    {
+        Summary = "Empties Windows' standby list, its cache of recently used files, whenever free memory runs low.",
+    };
 
     public static TweakDefinition VisualEffectsPerformance { get; } = new(
         Id: "gaming.placebo.visual-effects-performance",
@@ -348,6 +362,7 @@ public static class PlaceboTweaks
             new RegistryValueStep(new(RegistryRoot.CurrentUser, @"Software\Microsoft\Windows\DWM", "EnableAeroPeek"), RegistryValue.DWord(0)),
         ])
     {
+        Summary = "Turns off desktop animations, shadows and fading, which cost nothing while you play.",
         Risks = RiskFlags.NeedsReboot,
     };
 

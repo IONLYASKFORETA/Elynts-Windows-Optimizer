@@ -41,6 +41,8 @@ public static class AppRemovalTweaks
         Undo: StoreUndo,
         Steps: [new AppRemovalStep(Copilot)])
     {
+        Summary = "Uninstalls the Copilot app for your account.",
+        Group = DebloatTweaks.AiGroup,
         Reversibility = Reversibility.NeedsDownload,
     };
 
@@ -66,6 +68,8 @@ public static class AppRemovalTweaks
             "connection. Sign in again to start syncing.",
         Steps: [new AppRemovalStep(OneDrive)])
     {
+        Summary = "Uninstalls OneDrive for your account, while your files in the cloud stay on onedrive.com.",
+        Group = DebloatTweaks.BuiltInAppsGroup,
         Reversibility = Reversibility.NeedsDownload,
         ApplyWarning =
             "Files that are only in the cloud (\"online-only\", with a cloud icon in File Explorer) are not on this PC. " +
@@ -96,6 +100,8 @@ public static class AppRemovalTweaks
             "internet connection. Store apps then update normally again.",
         Steps: [new AppRemovalStep(MicrosoftStore)])
     {
+        Summary = "Uninstalls the Microsoft Store for your account, which stops Game Pass and the Xbox app installing games.",
+        Group = DebloatTweaks.BuiltInAppsGroup,
         Reversibility = Reversibility.NeedsDownload,
         ApplyWarning =
             "Without the Store, Game Pass and the Xbox app stop working: they can't install or update games. Store " +
@@ -144,6 +150,8 @@ public static class AppRemovalTweaks
         Undo: StoreUndo,
         Steps: [new AppRemovalStep(app)])
     {
+        Summary = $"Uninstalls {app.Name} for your account.",
+        Group = DebloatTweaks.BuiltInAppsGroup,
         Reversibility = Reversibility.NeedsDownload,
     };
 
@@ -175,6 +183,8 @@ public static class AppRemovalTweaks
                 Missing: "Recall only comes with Copilot+ PCs, and this PC doesn't have it."),
         ])
     {
+        Summary = "Turns off the Recall feature on this Copilot+ PC for every account, so it can't run at all.",
+        Group = DebloatTweaks.AiGroup,
         Risks = RiskFlags.NeedsReboot,
         // Copilot+ PCs only: on every other PC there is nothing to remove, so it isn't shown.
         Applicability = new(MinBuild: 26100, Hide: true),
@@ -207,6 +217,8 @@ public static class AppRemovalTweaks
             "Windows repair install or a feature update brings them back for new accounts.",
         Steps: [new AppDeprovisionStep(Copilot), .. Preinstalled.Select(app => new AppDeprovisionStep(app))])
     {
+        Summary = "Stops Windows installing Copilot and the preinstalled apps above for accounts made later.",
+        Group = DebloatTweaks.BuiltInAppsGroup,
         Reversibility = Reversibility.Destructive,
         DestructiveWarning =
             "Windows keeps no copy to put these apps back for new accounts. Undo can't restore them; only a Windows " +
