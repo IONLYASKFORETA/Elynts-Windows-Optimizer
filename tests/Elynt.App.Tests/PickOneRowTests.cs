@@ -101,6 +101,17 @@ public class PickOneRowTests
         Assert.Equal("gaming.ultimate", row.View.Id);
     }
 
+    [Fact]
+    public void Each_option_finds_the_row_it_shares_so_search_can_open_it()
+    {
+        var rows = Rows(Tweak("gaming.plain"), Option("gaming.high"), Option("gaming.ultimate"));
+
+        // The row shows High performance's details, yet Ultimate's result opens it too.
+        Assert.Equal(["Power plan"], rows.Where(r => r.Lists("gaming.ultimate")).Select(r => r.Name));
+        Assert.Equal(["Power plan"], rows.Where(r => r.Lists("gaming.high")).Select(r => r.Name));
+        Assert.Equal(["Some tweak"], rows.Where(r => r.Lists("gaming.plain")).Select(r => r.Name));
+    }
+
     // ---- helpers ----
 
     private static TweakView Tweak(string id, TweakState state = TweakState.Off) => new(

@@ -290,6 +290,12 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
     /// <summary>One of a pick-one row's options, as the service last sent it, or null when the row has no such option.</summary>
     public TweakView? Option(string tweakId) => _options.FirstOrDefault(o => o.Id == tweakId);
 
+    /// <summary>
+    /// Whether this is the tweak's row: its own, or the pick-one row it is an option of. The sidebar's search opens a
+    /// tweak by finding it.
+    /// </summary>
+    public bool Lists(string tweakId) => View.Id == tweakId || Option(tweakId) is not null;
+
     /// <summary>Sends a choice, unless it is already the one in place, can't be chosen, or another is on its way.</summary>
     public Task ChooseAsync(ChoiceOptionViewModel choice) =>
         _choose is null || IsBusy || choice.IsSelected || !choice.IsEnabled ? Task.CompletedTask : _choose(this, choice.TweakId);

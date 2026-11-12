@@ -17,6 +17,7 @@ using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Drift;
 using Elynt.Core.Overview;
+using Elynt.Core.Search;
 
 namespace Elynt.Core.Ipc;
 
@@ -90,6 +91,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
 [JsonDerivedType(typeof(GetPcOverviewRequest), "getPcOverview")]
 [JsonDerivedType(typeof(ChooseRequest), "choose")]
+[JsonDerivedType(typeof(SearchRequest), "search")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -276,7 +278,8 @@ public sealed record EngineResponse(
     CpuTuningResult? CpuResult = null,
     PcOverview? Overview = null,
     string? Refused = null,
-    ChoiceResult? Choice = null)
+    ChoiceResult? Choice = null,
+    IReadOnlyList<SearchResult>? SearchResults = null)
 {
     [JsonIgnore]
     public bool IsEvent => Event is not null;
@@ -380,7 +383,8 @@ public static class EngineProtocol
         SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
         GetPcOverviewRequest => new(Overview: engine.GetPcOverview()),
         ChooseRequest choose => new(Choice: engine.Choose(choose.ChoiceId, choose.TweakId, choose.Options)),
-        _ =>new(Error: $"Unknown command {request.GetType().Name}."),
+        SearchRequest search => new(SearchResults: engine.Search(search.Query)),
+        _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
     /// <summary>

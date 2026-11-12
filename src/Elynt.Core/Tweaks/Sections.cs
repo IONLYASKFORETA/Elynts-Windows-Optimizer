@@ -14,9 +14,11 @@ public static class Sections
     public const string Drivers = "Drivers";
     public const string Overclocking = "Overclocking";
 
+    /// <summary>In the sidebar's groups: PLAY's sections, then WINDOWS', then TOOLS'. Home's section cards follow it.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
-        Gaming, DebloatAndPrivacy, Security, Apps, WindowsUpdate,
-        StartupAndServices, Cleanup, Repair, Drivers, Overclocking,
+        Gaming, Overclocking, Drivers,
+        DebloatAndPrivacy, Security, WindowsUpdate, StartupAndServices,
+        Apps, Cleanup, Repair,
     ];
 }

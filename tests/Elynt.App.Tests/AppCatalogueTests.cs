@@ -171,4 +171,27 @@ public class AppCatalogueTests
         Assert.Contains(nameof(AppCatalogueViewModel.InstallText), changed);
         Assert.Contains(nameof(AppCatalogueViewModel.HasAppsToInstall), changed);
     }
+
+    [Fact]
+    public void Opening_an_app_the_filter_hides_clears_the_filter_and_selects_its_row()
+    {
+        var catalogue = Tab(NewEngine());
+        catalogue.Filter = "firefox";
+
+        catalogue.Select("Valve.Steam");
+
+        Assert.Equal(("", "Valve.Steam"), (catalogue.Filter, catalogue.Selected?.View.Id));
+        Assert.Contains(catalogue.Selected, catalogue.Shown);
+    }
+
+    [Fact]
+    public void Opening_an_app_the_filter_shows_keeps_the_filter()
+    {
+        var catalogue = Tab(NewEngine());
+        catalogue.Filter = "steam";
+
+        catalogue.Select("Valve.Steam");
+
+        Assert.Equal(("steam", "Valve.Steam"), (catalogue.Filter, catalogue.Selected?.View.Id));
+    }
 }

@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Elynt.App.Theme;
 using Elynt.App.ViewModels;
+using Elynt.Core.Search;
 using Elynt.Core.Tests;
 using Elynt.Core.Tweaks;
 
@@ -50,6 +51,7 @@ internal static partial class Tour
             Directory.CreateDirectory(folder);
             // Real screen pixels too (title bar, backdrop, leftover drawing), once per page.
             await ShootPagesAsync(window, model, folder, screen: size.Name == "default");
+            await ShootSearchAsync(window, model, folder);
         }
 
         await ShootConfirmationAsync(window, model, output);
@@ -126,6 +128,56 @@ internal static partial class Tour
                 Shoot(window, folder, $"{name}-fullest-repair-tool", screen);
             }
         }
+    }
+
+    /// <summary>
+    /// The sidebar's search: the results for a query and a query nothing matches, then a tweak (one in the folded
+    /// possible-placebo group), a repair tool and an app, each opened from its result, which must show its page with
+    /// that row selected. None of them is its page's first row, which the page selects by itself.
+    /// </summary>
+    private static async Task ShootSearchAsync(MainWindow window, MainViewModel model, string folder)
+    {
+        model.SelectedPage = MainViewModel.Home;
+        // Tweaks, repair tools and apps all match.
+        await SearchForAsync(model, "network");
+        if (model.Search.Results.Select(r => r.Kind).Distinct().Count() < 3 || !model.Search.IsOpen)
+            throw new InvalidOperationException($"Searching for \"network\" didn't show a tweak, a repair tool and an app ({model.Search.Message}).");
+        Shoot(window, folder, "search-results", screen: false);
+
+        await SearchForAsync(model, "zzqx");
+        if (model.Search.Message is null)
+            throw new InvalidOperationException("A search nothing matches didn't say so.");
+        Shoot(window, folder, "search-nothing-matches", screen: false);
+
+        foreach (var (query, kind) in new[]
+                 {
+                     ("core parking", SearchResultKind.Tweak),
+                     ("Windows Security", SearchResultKind.RepairTool),
+                     ("steam", SearchResultKind.App),
+                 })
+        {
+            await SearchForAsync(model, query);
+            var result = model.Search.Results.FirstOrDefault(r => r.Kind == kind)
+                ?? throw new InvalidOperationException($"Searching for \"{query}\" found no {kind}.");
+            model.Search.Choose(result);
+            await SettleAsync();
+            var rowSelected = kind switch
+            {
+                SearchResultKind.Tweak => model.SelectedTweak?.Lists(result.Id) == true,
+                SearchResultKind.RepairTool => model.SelectedRepairTool?.View.Id == result.Id,
+                _ => model.Catalogue.Selected?.View.Id == result.Id,
+            };
+            if (model.SelectedPage != result.Page || !rowSelected || model.Search.IsOpen)
+                throw new InvalidOperationException(
+                    $"Opening the search result {result.Name} showed {model.SelectedPage} without its row selected.");
+            Shoot(window, folder, $"search-opened-{Slug(kind.ToString())}", screen: false);
+        }
+    }
+
+    private static async Task SearchForAsync(MainViewModel model, string query)
+    {
+        model.Search.Query = query;
+        await SettleAsync();
     }
 
     /// <summary>

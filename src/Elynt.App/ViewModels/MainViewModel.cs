@@ -57,8 +57,56 @@ public sealed class MainViewModel(
     private SensorsPageViewModel? _sensors;
     private CpuTuningPageViewModel? _cpu;
 
-    /// <summary>The sidebar: Home (the page the app opens on), the ten sections, then per-game profiles, the undo history and Settings.</summary>
-    public IReadOnlyList<string> Pages { get; } = [Home, .. Sections.All, PerGameProfiles, UndoHistory, Settings];
+    /// <summary>Every page in sidebar order: Home (the page the app opens on), the PLAY, WINDOWS and TOOLS groups, then the undo history and Settings.</summary>
+    public IReadOnlyList<string> Pages { get; } = Sidebar.Pages;
+
+    /// <summary>
+    /// The selected page when the sidebar's groups list it, else null. The sidebar's groups and its pinned footer are
+    /// two lists, so each shows the selection only when it holds the page.
+    /// </summary>
+    public string? SelectedGroupedPage
+    {
+        get => Sidebar.GroupedPages.Contains(SelectedPage) ? SelectedPage : null;
+        set
+        {
+            if (value is not null)
+                SelectedPage = value;
+        }
+    }
+
+    /// <summary>The selected page when it is one of the footer's (Undo history, Settings), else null.</summary>
+    public string? SelectedFooterPage
+    {
+        get => Sidebar.FooterPages.Contains(SelectedPage) ? SelectedPage : null;
+        set
+        {
+            if (value is not null)
+                SelectedPage = value;
+        }
+    }
+
+    private SidebarSearchViewModel? _search;
+
+    /// <summary>The search box at the top of the sidebar, which opens a tweak, repair tool or app on its page.</summary>
+    public SidebarSearchViewModel Search => _search ??= new SidebarSearchViewModel(() => IsConnected ? _client : null, Open);
+
+    /// <summary>
+    /// Opens a page with one of its rows selected: a search result, or a tweak, repair tool or app another page links
+    /// to. A row the page doesn't list leaves the page's own selection.
+    /// </summary>
+    public void Open(PageTarget target)
+    {
+        // Switching pages selects the page's first row, so the target's row is selected after.
+        SelectedPage = target.Page;
+        if (target.RowId is not { } id)
+            return;
+        if (IsTweakPage && Tweaks.FirstOrDefault(t => t.Lists(id)) is { } tweak)
+            SelectedTweak = tweak;
+        else if (IsRepairPage && RepairTools.FirstOrDefault(t => t.View.Id == id) is { } tool)
+            SelectedRepairTool = tool;
+        else if (IsAppsPage)
+            Catalogue.Select(id);
+    }
 
     private HomeViewModel? _home;
 
@@ -148,6 +196,8 @@ public sealed class MainViewModel(
         {
             if (Set(ref _selectedPage, value))
             {
+                OnPropertyChanged(nameof(SelectedGroupedPage));
+                OnPropertyChanged(nameof(SelectedFooterPage));
                 OnPropertyChanged(nameof(IsHistoryPage));
                 OnPropertyChanged(nameof(IsHomePage));
                 OnPropertyChanged(nameof(IsAppsPage));

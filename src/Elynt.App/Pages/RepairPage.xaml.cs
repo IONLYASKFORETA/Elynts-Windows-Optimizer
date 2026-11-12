@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Elynt.Core.Diagnostics;
 
 namespace Elynt.App.Pages;
@@ -9,6 +10,13 @@ namespace Elynt.App.Pages;
 public partial class RepairPage : UserControl
 {
     public RepairPage() => InitializeComponent();
+
+    /// <summary>Brings a tool selected from elsewhere (the sidebar's search) into view, once the page is laid out.</summary>
+    private void ShowSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ListBox { SelectedItem: { } tool } list)
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => list.ScrollIntoView(tool));
+    }
 
     /// <summary>Copies the newest app, service and repair logs, so a friend can paste them into a bug report.</summary>
     private void CopyAppLog(object sender, RoutedEventArgs e)

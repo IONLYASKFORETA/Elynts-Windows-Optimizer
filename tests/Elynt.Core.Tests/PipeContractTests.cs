@@ -13,6 +13,7 @@ using Elynt.Core.Sensors;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Startup;
 using Elynt.Core.Repair;
+using Elynt.Core.Search;
 using Elynt.Core.Services;
 using Elynt.Core.Tuning;
 using Elynt.Core.Tweaks;
@@ -509,6 +510,15 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Search_arrives_unchanged()
+    {
+        var results = await _client.SearchAsync("steam", TestContext.Current.CancellationToken);
+
+        Assert.Equal("Search steam", _engine.LastCall);
+        AssertSameJson(_engine.Search("steam"), results);
+    }
+
+    [Fact]
     public async Task ListStartupItems_arrives_unchanged()
     {
         var items = await _client.ListStartupItemsAsync(TestContext.Current.CancellationToken);
@@ -960,6 +970,17 @@ public sealed class PipeContractTests : IAsyncLifetime
             new Overview.WindowsRelease(WindowsEdition.Pro, "24H2", "26100.4652"),
             TweaksOn: 12, TweaksApplicable: 58, PendingReboots: 2,
             [new Overview.SectionCount(Sections.Gaming, 5, 20), new Overview.SectionCount(Sections.Repair, 0, 0)]);
+
+        public IReadOnlyList<SearchResult> Search(string query)
+        {
+            LastCall = $"Search {query}";
+            return
+            [
+                new(SearchResultKind.Tweak, "some.tweak", "Some tweak", Sections.Gaming, "Does a thing in one line."),
+                new(SearchResultKind.RepairTool, RepairToolIds.SystemFiles, "Repair Windows system files", Sections.Repair, "Runs DISM, then SFC."),
+                new(SearchResultKind.App, "Valve.Steam", "Steam", Sections.Apps, null),
+            ];
+        }
 
         public DriverReport GetDrivers() => new(
             [new InstalledGpu("NVIDIA GeForce RTX 4070", @"PCI\VEN_10DE&DEV_2786", GpuVendor.Nvidia, "591.74", "32.0.15.9174")],

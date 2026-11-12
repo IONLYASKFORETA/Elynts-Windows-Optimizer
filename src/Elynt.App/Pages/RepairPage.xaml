@@ -13,7 +13,7 @@
 
         <!-- Pixel scrolling, so a tall card at the smallest window scrolls smoothly rather than a whole card at a time. -->
         <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding RepairTools}" SelectedItem="{Binding SelectedRepairTool}"
-                 ScrollViewer.CanContentScroll="False">
+                 ScrollViewer.CanContentScroll="False" SelectionChanged="ShowSelected">
             <!-- A row: the name, then the restart need and the opt-in mark as labels, then why it can't run here, if so. -->
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:RepairToolItemViewModel}">
