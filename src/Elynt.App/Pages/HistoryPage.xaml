@@ -17,9 +17,10 @@
     </UserControl.Resources>
 
     <DockPanel>
-        <!-- The page's name and one-line summary, where every other page has them, with Restore everything beside them. -->
+        <!-- The page's name and one-line summary, where every other page has them, with Restore everything beside them:
+             a plain button, as it is rare and has its own confirmation. -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,18">
-            <Button DockPanel.Dock="Right" Style="{StaticResource Button.Destructive}" Content="Restore everything" Padding="16,7"
+            <Button DockPanel.Dock="Right" Content="Restore everything" Padding="16,7"
                     VerticalAlignment="Top" Margin="16,0,0,0" Click="RestoreEverything"
                     IsEnabled="{Binding CanRestoreEverything}"
                     ToolTip="Undo every change still in place, newest first. Anything something else changed since is left alone and listed, and changes that can't be undone are left as they are." />
@@ -121,9 +122,9 @@
                                         <TextBlock Style="{StaticResource Text.Body}" Foreground="{StaticResource Theme.Text}" Text="{Binding TweakName}" />
                                         <!-- Why the row has no Undo button (a destructive change), as the tweak's locked switch says it;
                                              its words come from the view model. -->
-                                        <Border Style="{StaticResource Pill}" Margin="0,6,0,0" HorizontalAlignment="Left"
+                                        <Border Style="{StaticResource Pill.Danger}" Margin="0,6,0,0" HorizontalAlignment="Left"
                                                 Visibility="{Binding CantBeUndone, Converter={StaticResource Visible}}">
-                                            <TextBlock Text="{Binding CantBeUndoneText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
+                                            <TextBlock Text="{Binding CantBeUndoneText}" TextWrapping="Wrap" />
                                         </Border>
                                         <!-- Why the last undo of this row didn't happen. -->
                                         <Border Margin="0,6,0,0">

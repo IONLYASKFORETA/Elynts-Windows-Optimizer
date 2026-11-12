@@ -17,7 +17,7 @@ OVERRIDES = {
     # Text
     "TextFillColorPrimary": "#F4F4F5",
     "TextFillColorSecondary": "#A1A1AA",
-    "TextFillColorTertiary": "#6B6B75",
+    "TextFillColorTertiary": "#85858F",  # Theme.TextFaint
     "TextFillColorDisabled": "#52525B",
     "TextFillColorInverse": "#09090B",
     "AccentTextFillColorDisabled": "#52525B",

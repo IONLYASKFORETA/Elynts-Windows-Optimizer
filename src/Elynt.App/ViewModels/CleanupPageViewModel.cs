@@ -39,6 +39,9 @@ public sealed class CleanupPageViewModel(Func<EnginePipeClient?> client) : Obser
 
     public bool CanScan => !IsBusy;
 
+    /// <summary>The Scan button's words: "Scan again" once the list shows a scan's sizes, even after cleaning.</summary>
+    public string ScanText => Categories.Count > 0 ? "Scan again" : "Scan";
+
     /// <summary>Cleaning is only offered after a scan has shown the sizes.</summary>
     public bool CanClean => !IsBusy && _hasScanned;
 
@@ -105,6 +108,7 @@ public sealed class CleanupPageViewModel(Func<EnginePipeClient?> client) : Obser
             _hasScanned = true;
             Status = "Scan done. Safe caches are ticked; shader caches and the extras that can't be undone are up to you.";
             OnPropertyChanged(nameof(TickedSummary));
+            OnPropertyChanged(nameof(ScanText));
         }
         catch (Exception ex)
         {
