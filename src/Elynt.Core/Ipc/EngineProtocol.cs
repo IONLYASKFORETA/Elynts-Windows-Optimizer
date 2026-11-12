@@ -17,6 +17,7 @@ using Elynt.Core.Tuning;
 using Elynt.Core.Tuning.Cpu;
 using Elynt.Core.Drift;
 using Elynt.Core.Overview;
+using Elynt.Core.Search;
 
 namespace Elynt.Core.Ipc;
 
@@ -89,6 +90,7 @@ namespace Elynt.Core.Ipc;
 [JsonDerivedType(typeof(RunCpuStressTestRequest), "runCpuStressTest")]
 [JsonDerivedType(typeof(SetCpuAutoApplyRequest), "setCpuAutoApply")]
 [JsonDerivedType(typeof(GetPcOverviewRequest), "getPcOverview")]
+[JsonDerivedType(typeof(SearchRequest), "search")]
 public abstract record EngineRequest;
 
 public sealed record ListTweaksRequest : EngineRequest;
@@ -274,6 +276,7 @@ public sealed record EngineResponse(
     CpuTuningReport? CpuTuning = null,
     CpuTuningResult? CpuResult = null,
     PcOverview? Overview = null,
+    IReadOnlyList<SearchResult>? SearchResults = null,
     string? Refused = null)
 {
     [JsonIgnore]
@@ -377,6 +380,7 @@ public static class EngineProtocol
         RunCpuStressTestRequest => new(CpuResult: engine.RunCpuStressTest(cancellation)),
         SetCpuAutoApplyRequest autoApply => new(CpuResult: engine.SetCpuAutoApply(autoApply.On)),
         GetPcOverviewRequest => new(Overview: engine.GetPcOverview()),
+        SearchRequest search => new(SearchResults: engine.Search(search.Query)),
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
