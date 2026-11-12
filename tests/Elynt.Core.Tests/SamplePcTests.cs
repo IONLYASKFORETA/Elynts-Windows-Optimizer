@@ -1,5 +1,6 @@
 using Elynt.Core.Drift;
 using Elynt.Core.Games;
+using Elynt.Core.Services;
 using Elynt.Core.Tweaks;
 
 namespace Elynt.Core.Tests;
@@ -43,6 +44,16 @@ public sealed class SamplePcTests : IDisposable
 
         Assert.True(engine.ListStartupItems().Count >= 2);
         Assert.True(engine.ListServices().Count >= 2);
+    }
+
+    [Fact]
+    public void Services_include_a_protected_one_and_one_the_app_changed_so_the_tour_draws_the_lock_and_undo()
+    {
+        var services = NewEngine().ListServices();
+
+        Assert.Contains(services, s => s.Access == ServiceAccess.Protected);
+        Assert.Contains(services, s => s.Access != ServiceAccess.Protected && s.CanUndo);
+        Assert.Contains(services, s => s.Access != ServiceAccess.Protected && !s.CanUndo);
     }
 
     [Fact]

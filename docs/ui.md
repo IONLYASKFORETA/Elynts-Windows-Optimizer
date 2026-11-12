@@ -31,8 +31,9 @@ rather than to the page's resources (CI fails on a colour outside `Theme/`).
   edge, the top strip, Home's big numbers. Button faces use its twin `Theme.ButtonWave` (through `Button.Primary`),
   which turns a darker orange so white labels stay readable; it moves in step. Text, backgrounds and cards stay plain.
 - **Text:** `Text.H1` (page title, set by the window), `Text.H2`, `Text.Body`, `Text.Dim`, `Text.Label` (small-caps
-  heading: write the text in CAPITALS), `Text.Icon` (Segoe Fluent Icons glyphs), `Text.Message` (the answer to the last
-  action; takes no room while empty), `Link` (a Hyperlink). Nothing smaller than 12 px, Windows' smallest text.
+  heading: write the text in CAPITALS), `Text.Icon` (Segoe Fluent Icons glyphs), `Text.Lock` (the lock glyph a locked
+  switch and a protected service show), `Text.Message` (the answer to the last action; takes no room while empty),
+  `Link` (a Hyperlink). Nothing smaller than 12 px, Windows' smallest text.
 - **Boxes:** `Card`, `Pill` (sets its text to 12 px: leave the TextBlock's size unset), `Pill.Warning` (orange: a risk),
   `Pill.Danger` (red: "Destructive", "Can't be undone"), `ReversibilityPill` + `LockPill` (a tweak's reversibility and
   lock, danger or plain), `RestartPill` + `RestartPillText` (a repair tool's restart need), `WarningBox` (orange: read
@@ -45,8 +46,11 @@ rather than to the page's resources (CI fails on a colour outside `Theme/`).
 - **Controls:** `Switch` (a CheckBox as an on/off switch; give a locked one `theme:Switch.IsLocked="{Binding IsLocked}"`
   so it shows a lock rather than fading like a busy one), `Button.Primary` (button wave), `Button.Destructive` (red),
   and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next step:
-  a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain. `Meter` (thin ProgressBar, Maximum 1). `NavItem` (sidebar). Plain TextBox,
-  ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar, ToolTip and ListView already match through FluentColors.xaml.
+  a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain. `SearchBox` (a
+  TextBox with a search glyph) for every search and filter: its `AutomationProperties.Name` is also the hint text shown
+  while it's empty, so give it one, and put the result count just under it ("12 apps"). `Meter` (thin ProgressBar,
+  Maximum 1). `NavItem` (sidebar). Plain TextBox, ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar, ToolTip and
+  ListView already match through FluentColors.xaml.
 - Dim text with `Text.Dim` or `Theme.TextDim`, never with Opacity.
 
 ## Sizes

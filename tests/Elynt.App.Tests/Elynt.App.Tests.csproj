@@ -25,6 +25,8 @@
     <Compile Include="..\..\src\Elynt.App\ViewModels\ObservableObject.cs" Link="App\ViewModels\ObservableObject.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\TweakItemViewModel.cs" Link="App\ViewModels\TweakItemViewModel.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\CleanupPageViewModel.cs" Link="App\ViewModels\CleanupPageViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\AppItemViewModel.cs" Link="App\ViewModels\AppItemViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\AppCatalogueViewModel.cs" Link="App\ViewModels\AppCatalogueViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

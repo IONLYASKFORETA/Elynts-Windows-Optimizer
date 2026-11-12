@@ -10,7 +10,17 @@ namespace Elynt.App.Pages;
 /// <summary>The Apps page: catalogue, winget search and installed apps. Its DataContext is the <see cref="MainViewModel"/>.</summary>
 public partial class AppsPage : UserControl
 {
-    public AppsPage() => InitializeComponent();
+    public AppsPage()
+    {
+        InitializeComponent();
+        // The catalogue's Installed pills need winget's installed list, which takes it seconds: read it when the page
+        // first shows on a connection rather than while connecting.
+        IsVisibleChanged += async (_, e) =>
+        {
+            if (e.NewValue is true && DataContext is MainViewModel { AppsManager: { } apps })
+                await apps.ShowInstalledOnceAsync();
+        };
+    }
 
     private MainViewModel Model => (MainViewModel)DataContext;
 
