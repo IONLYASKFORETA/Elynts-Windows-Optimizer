@@ -153,6 +153,9 @@
                         <Border Style="{StaticResource Pill}">
                             <TextBlock Text="{Binding ReversibilityText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.TextDim}" />
                         </Border>
+                        <Border Style="{StaticResource Pill}" Visibility="{Binding IsChoice, Converter={StaticResource Visible}}">
+                            <TextBlock Text="Pick one" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Theme.TextDim}" />
+                        </Border>
                         <ItemsControl ItemsSource="{Binding RiskBadges}" Focusable="False">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -172,6 +175,18 @@
                         </Border>
                     </WrapPanel>
 
+                    <!-- A pick-one row's choice, as on its row, in place of the switch. Its details below are the option it shows:
+                         the one that is on, else the first. -->
+                    <ItemsControl Style="{StaticResource Segmented}" ItemsSource="{Binding Choices}" IsEnabled="{Binding IsEnabled}"
+                                  Margin="0,4,0,0" AutomationProperties.Name="{Binding Name}"
+                                  Visibility="{Binding IsChoice, Converter={StaticResource Visible}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ChoiceOptionViewModel}">
+                                <Button Style="{StaticResource Segment}" Content="{Binding Label}" IsEnabled="{Binding IsEnabled}"
+                                        Click="Choose" AutomationProperties.Name="{Binding Label}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                     <!-- The same switch as the tweak's row, so the user can act while reading, and its state. -->
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <CheckBox Style="{StaticResource Switch}" Margin="0,0,10,0"

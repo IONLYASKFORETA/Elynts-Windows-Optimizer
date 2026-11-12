@@ -22,6 +22,7 @@
     <Compile Include="..\..\src\Elynt.App\Confirmation.cs" Link="App\Confirmation.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\ObservableObject.cs" Link="App\ViewModels\ObservableObject.cs" />
     <Compile Include="..\..\src\Elynt.App\ViewModels\TweakItemViewModel.cs" Link="App\ViewModels\TweakItemViewModel.cs" />
+    <Compile Include="..\..\src\Elynt.App\ViewModels\ChoiceOptionViewModel.cs" Link="App\ViewModels\ChoiceOptionViewModel.cs" />
   </ItemGroup>
 
   <ItemGroup>

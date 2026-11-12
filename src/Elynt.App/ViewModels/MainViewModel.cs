@@ -472,7 +472,7 @@ public sealed class MainViewModel(
                 return;
             _client = await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             var views = await _client.ListTweaksAsync();
-            _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+            _allTweaks = TweakItemViewModel.Rows(views, FlipAsync, ChooseAsync);
             var apps = await _client.ListAppsAsync();
             Apps.Clear();
             foreach (var app in apps)
@@ -689,7 +689,7 @@ public sealed class MainViewModel(
     private async Task ReloadAsync(EnginePipeClient client)
     {
         var views = await client.ListTweaksAsync();
-        _allTweaks = views.Select(v => new TweakItemViewModel(v, FlipAsync)).ToList();
+        _allTweaks = TweakItemViewModel.Rows(views, FlipAsync, ChooseAsync);
         await LoadHistoryAsync(client);
         if (!IsHistoryPage)
             ShowPage();
@@ -806,8 +806,7 @@ public sealed class MainViewModel(
             Games.Show(await _client.ListGamesAsync());
             var views = (await _client.ListTweaksAsync()).ToDictionary(v => v.Id);
             foreach (var item in _allTweaks)
-                if (views.TryGetValue(item.View.Id, out var view))
-                    item.View = view;
+                item.ShowLatest(views);
         }
         catch (EngineServiceException ex)
         {
@@ -1010,6 +1009,57 @@ public sealed class MainViewModel(
             item.IsBusy = false;
             item.RefreshSwitch();
             // The title's "N of M on" follows the switch.
+            OnPropertyChanged(nameof(PageSummary));
+        }
+    }
+
+    /// <summary>
+    /// Sets a pick-one row's choice: an option's tweak id, or null for the default. The service undoes the app's change
+    /// for the option that was on, so the row then shows every option as the service reports it.
+    /// </summary>
+    private async Task ChooseAsync(TweakItemViewModel row, string? tweakId)
+    {
+        if (_client is null || row.View.Choice is not { } choice)
+            return;
+
+        row.IsBusy = true;
+        try
+        {
+            // A warning the user must read first, as a switch asks; without a way to ask, the service refuses and says why.
+            var warningConfirmed = false;
+            if (tweakId is not null && confirmWarning is not null && row.Option(tweakId) is { ApplyWarning: not null } option)
+            {
+                warningConfirmed = confirmWarning(option);
+                if (!warningConfirmed)
+                {
+                    row.Message = "Not changed.";
+                    return;
+                }
+            }
+
+            var result = await _client.ChooseAsync(choice.Id, tweakId, new ApplyOptions(ConfirmWarning: warningConfirmed));
+            Log.Information("Choose {Choice} {Tweak}: {Succeeded} {Message}", choice.Id, tweakId ?? "default", result.Succeeded, result.Message);
+            row.ShowChoice(result.Tweaks);
+            row.Message = result.Message;
+
+            if (result.Succeeded && result.Tweaks.Any(t => t.Refresh == SessionRefresh.MouseSettings))
+                MouseSettings.ReloadFromRegistry();
+        }
+        catch (EngineServiceException ex)
+        {
+            Log.Error(ex, "The service couldn't set the choice {Choice}", choice.Id);
+            row.Message = $"The service couldn't do this: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Setting the choice {Choice} failed", choice.Id);
+            row.Message = $"Couldn't reach the service: {ex.Message}";
+            await DisconnectAsync();
+            Status = "Lost the connection to the service. Press Retry.";
+        }
+        finally
+        {
+            row.IsBusy = false;
             OnPropertyChanged(nameof(PageSummary));
         }
     }

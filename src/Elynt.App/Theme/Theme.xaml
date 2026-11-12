@@ -239,6 +239,70 @@
         </Setter>
     </Style>
 
+    <!-- A pick-one choice (the power plan): its options as segments of one box, the one in place in the accent wave, as a
+         switch that is on. An ItemsControl of the row's Choices, each a Button with Segment, which reads the choice's
+         IsSelected. The segments wrap where the box is too narrow for them. -->
+    <Style x:Key="Segmented" TargetType="ItemsControl">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ItemsControl">
+                    <Border Background="{StaticResource Theme.Surface2}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="1"
+                            CornerRadius="7" Padding="1">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="Segment" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextBody}" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="Margin" Value="1" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="Bg" CornerRadius="5" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <!-- Keyboard focus: a ring around the segment. -->
+                        <Border x:Name="Focus" CornerRadius="5" BorderThickness="1" BorderBrush="{StaticResource Theme.Text}"
+                                Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Focus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource Theme.AccentWave}" />
+                            <Setter Property="Foreground" Value="White" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </DataTrigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Buttons. A plain button is the secondary form (Fluent's, recoloured); these are the other two. -->
     <Style x:Key="Button.Primary" TargetType="Button">
         <Setter Property="Foreground" Value="White" />

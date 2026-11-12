@@ -35,7 +35,8 @@ rather than to the page's resources (CI fails on a colour outside `Theme/`).
   - `CardRows` + `CardRow`: readouts inside one card, split by faint lines (sensor values, BIOS settings).
   - `Table.Header` + `Table.Row`: a table on the page (Undo history, drift). `Table.List` + `Table.ListRow` for one
     long enough to virtualise (the services).
-- **Controls:** `Switch` (a CheckBox as an on/off switch), `Button.Primary` (wave), `Button.Destructive` (red), and a
+- **Controls:** `Switch` (a CheckBox as an on/off switch), `Segmented` + `Segment` (a pick-one row's choice: an
+  ItemsControl of Buttons, the chosen one in the wave), `Button.Primary` (wave), `Button.Destructive` (red), and a
   plain Button as the secondary form. `Meter` (thin ProgressBar, Maximum 1). `NavItem` (sidebar). Plain TextBox,
   ComboBox, CheckBox, TabControl, ProgressBar, ScrollBar, ToolTip and ListView already match through FluentColors.xaml.
 - Dim text with `Text.Dim` or `Theme.TextDim`, never with Opacity.

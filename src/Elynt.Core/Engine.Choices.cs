@@ -49,7 +49,7 @@ public sealed partial class Engine
         }
 
         // Nothing of the app's to undo first: the chosen option goes on (or over the one Windows set, which its undo puts back).
-        if (on is null || on == chosen || setElsewhere)
+        if (on is null || on.Id == chosen.Id || setElsewhere)
             return Answer(choice, ApplyTweak(chosen, applyOptions, wording: wording));
 
         // Undone before the new option goes on: afterwards, its undo would find the setting changed and refuse, or put

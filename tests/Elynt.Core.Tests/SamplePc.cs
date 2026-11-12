@@ -18,7 +18,8 @@ namespace Elynt.Core.Tests;
 /// <summary>
 /// A made-up gaming PC on the test fakes, for the screenshot tour: Windows 11 Pro 24H2, an ASUS B650 board with a Ryzen 7
 /// 7800X3D, 32 GB of DDR5 and an RTX 3080, with a few tweaks already on (one waiting for a restart, one that Windows
-/// set by itself, so it is already set and its switch is locked, and one that can't be undone). Every list the app
+/// set by itself, so it is already set and its switch is locked, and one that can't be undone), a power plan chosen in
+/// the app and a monthly update delay another tool set, so both pick-one rows have an option on. Every list the app
 /// shows has at least two rows and every state a page handles has an example (drift, an undone change, a driver
 /// backup), so the tour draws each row template and a binding error in any of them fails CI. Nothing is real.
 /// <see cref="SamplePcTests"/> keeps it that way.
@@ -60,6 +61,15 @@ public static class SamplePc
     /// history shows its row with no Undo button.
     /// </summary>
     public const string Destructive = "debloat.deprovision-preinstalled";
+
+    /// <summary>Chosen on Gaming's power plan row, so the row shows an option the app set, with the default still free.</summary>
+    public const string ChosenPowerPlan = "gaming.high-performance-plan";
+
+    /// <summary>
+    /// Left behind by another tweak tool, with no change of the app's: Windows Update's delay row shows the option as
+    /// already set, and its default can't undo it.
+    /// </summary>
+    public const string UpdateDelaySetElsewhere = "update.defer-quality-7";
 
     /// <summary>The query the tour types into Apps' winget search.</summary>
     public const string AppSearch = "player";
@@ -134,6 +144,10 @@ public static class SamplePc
         // What Windows writes when Auto HDR is switched on in Settings: windowed games optimizations come on with it.
         foreach (var step in Catalogue.Default.Get(SetByWindows).Steps.OfType<RegistryListItemStep>())
             registry.SetValue(step.Location, RegistryValue.String("SwapEffectUpgradeEnable=1;AutoHDREnable=1;"));
+        Check(engine.Choose(GamingTweaks.PowerPlanChoice.Id, ChosenPowerPlan).Succeeded, $"choosing {ChosenPowerPlan}");
+        // What another tweak tool left behind: the delay's own policy values, written straight to the registry.
+        foreach (var step in Catalogue.Default.Get(UpdateDelaySetElsewhere).Steps.OfType<RegistryValueStep>())
+            registry.SetValue(step.Location, step.Desired);
 
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)
