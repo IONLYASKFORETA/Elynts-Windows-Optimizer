@@ -424,6 +424,41 @@
         </Setter>
     </Style>
 
+    <!-- A small glyph button on a row ("×" to take the row off a list): no face until hovered, so the row stays quiet.
+         Set Content to a Segoe Fluent Icons glyph and give it an AutomationProperties.Name, which is also its tooltip. -->
+    <Style x:Key="Button.Icon" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextDim}" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.IconFont}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="ToolTip" Value="{Binding Path=(AutomationProperties.Name), RelativeSource={RelativeSource Self}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" CornerRadius="5" Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource Theme.Hover}" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="BorderBrush" Value="{StaticResource Theme.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextFaint}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- A search or filter box: a search glyph, then hint text while it is empty. Its AutomationProperties.Name is both
          the hint and what a screen reader says, so give every one a name. The sidebar search, the Apps filter, winget
          search and the services filter all use it. -->

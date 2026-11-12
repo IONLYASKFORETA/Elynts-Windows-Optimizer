@@ -6,8 +6,8 @@ using Elynt.App.ViewModels;
 namespace Elynt.App.Pages;
 
 /// <summary>
-/// The detail pane: the selected tweak, or the selected repair tool with its run, progress and log. Its DataContext
-/// is the window's <see cref="MainViewModel"/>.
+/// The detail pane: the selected tweak, the selected repair tool with its run, progress and log, or the selected
+/// game's profile editor. Its DataContext is the window's <see cref="MainViewModel"/>.
 /// </summary>
 public partial class DetailPane : UserControl
 {

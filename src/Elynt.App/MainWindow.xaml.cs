@@ -53,6 +53,7 @@ public partial class MainWindow : Window
         DataContext = _model;
         _model.Startup.ConfirmDelete = ConfirmDeleteStartupItem;
         _model.Profiles.PickApp = PickApp;
+        _model.Profiles.PickGameExe = folder => FilePickers.Game(this, folder);
         Loaded += async (_, _) =>
         {
             await _model.ConnectAsync();
