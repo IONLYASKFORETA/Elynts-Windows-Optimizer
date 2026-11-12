@@ -72,6 +72,54 @@ public class ProfileTests
         Assert.Empty(NewEngine().ListProfiles());
     }
 
+    [Fact]
+    public void A_profile_holds_one_option_of_a_pick_one_choice_at_most()
+    {
+        // The real catalogue, with its power plan choice.
+        var engine = new Engine(
+            Catalogue.Default,
+            new SystemAdapters(_registry, _system) { Power = _power, Processes = _processes, Timer = _timer },
+            _journal,
+            User,
+            profiles: _profiles);
+
+        var result = engine.SaveProfile(new GameProfile(Game)
+        {
+            TweakIds = [GamingTweaks.HighPerformancePlan.Id, GamingTweaks.GameModeOn.Id, GamingTweaks.UltimatePerformancePlan.Id],
+        });
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("A profile can set only one power plan: High performance or Ultimate, not both. The profile wasn't saved.", result.Message);
+        Assert.Empty(engine.ListProfiles());
+    }
+
+    [Fact]
+    public void A_profile_for_an_exe_in_the_folder_of_a_game_its_launcher_gave_no_exe_for_belongs_to_that_game()
+    {
+        const string Folder = @"C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive";
+        // Steam records a game's folder, never its .exe.
+        var steam = new FakeGameSources()
+            .Key(@"SOFTWARE\WOW6432Node\Valve\Steam", ("InstallPath", @"C:\Program Files (x86)\Steam"))
+            .File(@"C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf", """
+                "libraryfolders" { "0" { "path" "C:\\Program Files (x86)\\Steam" "apps" { "730" "1" } } }
+                """)
+            .File(@"C:\Program Files (x86)\Steam\steamapps\appmanifest_730.acf", """
+                "AppState" { "appid" "730" "name" "Counter-Strike 2" "installdir" "Counter-Strike Global Offensive" }
+                """)
+            .File($@"{Folder}\game\bin\win64\cs2.exe");
+        var engine = new Engine(
+            Catalogue.Default,
+            new SystemAdapters(_registry, _system, Games: steam) { Power = _power, Processes = _processes, Timer = _timer },
+            _journal,
+            User,
+            profiles: _profiles);
+
+        var result = engine.SaveProfile(new GameProfile($@"{Folder}\game\bin\win64\cs2.exe") { TweakIds = [GamingTweaks.GameModeOn.Id] });
+
+        Assert.True(result.Succeeded, result.Message);
+        Assert.Equal("Saved the profile for Counter-Strike 2.", result.Message);
+    }
+
     private const string Discord = @"C:\Users\Aden\AppData\Local\Discord\Discord.exe";
     private static readonly RegistryLocation GameMode = new(RegistryRoot.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled");
 
