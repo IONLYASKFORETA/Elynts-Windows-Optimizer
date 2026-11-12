@@ -17,19 +17,30 @@ using Elynt.Core.Sensors;
 
 namespace Elynt.Core.Ipc;
 
-/// <summary>The UI's side of the pipe: one async method per <see cref="IEngine"/> command.</summary>
+/// <summary>
+/// The UI's side of the pipe: one async method per <see cref="IEngine"/> command. A connection to the service carries
+/// one command at a time, so a long job (<see cref="EngineProtocol.IsLongRunning"/>: a driver install, the CPU stress
+/// test, a PawnIO install or uninstall, a driver clean or restore, a repair, a cleanup scan or clean) goes over a
+/// connection of its own, the long-job connection, and every other command keeps answering on the main one while it
+/// runs. Each long job added later (the driver latency test, Check my connection, the bufferbloat test, spot test runs)
+/// joins <see cref="EngineProtocol.IsLongRunning"/> and so goes over the long-job connection too. Long jobs take turns
+/// on it, as the service runs them one at a time anyway.
+/// </summary>
 public sealed partial class EnginePipeClient : IAsyncDisposable
 {
-    private readonly NamedPipeClientStream _pipe;
-    private readonly StreamReader _reader;
-    private readonly StreamWriter _writer;
-    private readonly SemaphoreSlim _oneAtATime = new(1, 1);
+    private readonly string _pipeName;
+    private readonly TimeSpan _timeout;
+    private readonly Connection _main;
+    // Opened by the first long job, and again by the next one after a long job loses it.
+    private Connection? _longJobs;
+    private readonly SemaphoreSlim _longJobTurn = new(1, 1);
+    private volatile bool _disposed;
 
-    private EnginePipeClient(NamedPipeClientStream pipe)
+    private EnginePipeClient(string pipeName, TimeSpan timeout, Connection main)
     {
-        _pipe = pipe;
-        _reader = new StreamReader(pipe, leaveOpen: true);
-        _writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+        _pipeName = pipeName;
+        _timeout = timeout;
+        _main = main;
     }
 
     public static async Task<EnginePipeClient> ConnectAsync(
@@ -37,17 +48,8 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
         TimeSpan? timeout = null,
         CancellationToken cancellation = default)
     {
-        var pipe = NewPipe(pipeName);
-        try
-        {
-            await pipe.ConnectAsync(timeout ?? TimeSpan.FromSeconds(5), cancellation);
-            return new EnginePipeClient(pipe);
-        }
-        catch
-        {
-            await pipe.DisposeAsync();
-            throw;
-        }
+        var wait = timeout ?? TimeSpan.FromSeconds(5);
+        return new EnginePipeClient(pipeName, wait, await Connection.OpenAsync(pipeName, wait, cancellation));
     }
 
     /// <summary>
@@ -116,8 +118,8 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
         (await SendAsync(new ListRepairToolsRequest(), cancellation)).RepairTools ?? throw Missing("repair tools");
 
     /// <summary>
-    /// Runs a repair tool; <paramref name="progress"/> gets every progress line as it arrives. Holds this connection
-    /// until the tool finishes, so the UI uses a second connection for other commands meanwhile.
+    /// Runs a repair tool; <paramref name="progress"/> gets every progress line as it arrives. A long job, so it goes over
+    /// the long-job connection and other commands keep answering meanwhile.
     /// </summary>
     public async Task<RepairResult> RunRepairAsync(
         string toolId, bool confirmed, IProgress<RepairProgress>? progress = null, CancellationToken cancellation = default) =>
@@ -150,13 +152,13 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
     public async Task<IReadOnlyList<StartupItemView>> CheckNewStartupItemsAsync(CancellationToken cancellation = default) =>
         (await SendAsync(new CheckNewStartupItemsRequest(), cancellation)).StartupItems ?? throw Missing("startup items");
 
-    /// <summary>Measures every cleanup category; holds this connection until done, like a repair.</summary>
+    /// <summary>Measures every cleanup category. A long job, like a repair.</summary>
     public async Task<CleanupScan> ScanCleanupAsync(IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
         (await SendAsync(new ScanCleanupRequest(), cancellation,
             e => { if (e is CleanupProgressEvent p) progress?.Report(p.Progress); })).CleanupScan
         ?? throw Missing("cleanup scan");
 
-    /// <summary>Cleans the ticked categories; holds this connection until done, like a repair.</summary>
+    /// <summary>Cleans the ticked categories. A long job, like a repair.</summary>
     public async Task<CleanupReport> CleanAsync(
         IReadOnlyList<string> categoryIds, bool confirmDestructive, IProgress<CleanupProgress>? progress = null, CancellationToken cancellation = default) =>
         (await SendAsync(new CleanRequest(categoryIds, confirmDestructive), cancellation,
@@ -265,7 +267,7 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
     public Task<CpuTuningResult> ResetCpuTuningAsync(CancellationToken cancellation = default) =>
         CpuAsync(new ResetCpuTuningRequest(), cancellation);
 
-    /// <summary>Takes minutes: the service runs the stress test before replying.</summary>
+    /// <summary>Takes minutes: the service runs the stress test before replying. A long job, like a repair.</summary>
     public Task<CpuTuningResult> RunCpuStressTestAsync(CancellationToken cancellation = default) =>
         CpuAsync(new RunCpuStressTestRequest(), cancellation);
 
@@ -277,48 +279,193 @@ public sealed partial class EnginePipeClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _reader.Dispose();
-        await _writer.DisposeAsync();
-        await _pipe.DisposeAsync();
+        _disposed = true;
+        await _main.DisposeAsync();
+        if (Interlocked.Exchange(ref _longJobs, null) is { } longJobs)
+            await longJobs.DisposeAsync();
     }
 
-    private async Task<EngineResponse> SendAsync(
+    private Task<EngineResponse> SendAsync(
         EngineRequest request,
         CancellationToken cancellation,
-        Action<EngineEvent>? onEvent = null)
+        Action<EngineEvent>? onEvent = null) =>
+        EngineProtocol.IsLongRunning(request)
+            ? SendLongJobAsync(request, cancellation, onEvent)
+            : _main.SendAsync(request, cancellation, onEvent);
+
+    private async Task<EngineResponse> SendLongJobAsync(EngineRequest request, CancellationToken cancellation, Action<EngineEvent>? onEvent)
     {
-        await _oneAtATime.WaitAsync(cancellation);
+        await _longJobTurn.WaitAsync(cancellation);
         try
         {
-            await _writer.WriteLineAsync(EngineProtocol.Serialize(request).AsMemory(), cancellation);
-            EngineResponse response;
-            while (true)
+            var connection = _longJobs ??= await OpenLongJobConnectionAsync(cancellation);
+            try
             {
-                var line = await _reader.ReadLineAsync(cancellation) ?? throw new IOException("The service closed the connection.");
-                response = EngineProtocol.Deserialize<EngineResponse>(line);
-                if (!response.IsEvent)
-                    break;
-                onEvent?.Invoke(response.Event!);
+                return await connection.SendAsync(request, cancellation, onEvent);
             }
-            if (response.Refused is not null)
-                throw new AccountRefusedException(response.Refused);
-            if (response.Error is not null)
-                throw new EngineServiceException(response.Error);
-            return response;
+            catch (Exception ex) when (ex is not (EngineServiceException or AccountRefusedException))
+            {
+                // Lost, or cancelled with the reply still to come: either way the next long job needs a new connection.
+                if (Interlocked.CompareExchange(ref _longJobs, null, connection) == connection)
+                    await connection.DisposeAsync();
+                throw;
+            }
         }
         finally
         {
-            _oneAtATime.Release();
+            _longJobTurn.Release();
         }
+    }
+
+    private async Task<Connection> OpenLongJobConnectionAsync(CancellationToken cancellation)
+    {
+        Connection connection;
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            connection = await Connection.OpenAsync(_pipeName, _timeout, cancellation);
+        }
+        catch (Exception ex) when (!cancellation.IsCancellationRequested)
+        {
+            throw ServiceConnectionLostException.BeforeSending(ex);
+        }
+        if (!_disposed)
+            return connection;
+        // The window let go of this client while the connection opened, so nothing is left to close it later.
+        await connection.DisposeAsync();
+        throw ServiceConnectionLostException.BeforeSending(null);
     }
 
     private async Task<TuningResult> TuneAsync(EngineRequest request, CancellationToken cancellation) =>
         (await SendAsync(request, cancellation)).Tuning ?? throw Missing("result");
 
     private static EngineServiceException Missing(string what) => new($"The service's reply had no {what}.");
+
+    /// <summary>One pipe to the service. It carries one command at a time: a command's reply is read before the next is written.</summary>
+    private sealed class Connection : IAsyncDisposable
+    {
+        private readonly NamedPipeClientStream _pipe;
+        private readonly StreamReader _reader;
+        private readonly StreamWriter _writer;
+        private readonly SemaphoreSlim _oneAtATime = new(1, 1);
+
+        private Connection(NamedPipeClientStream pipe)
+        {
+            _pipe = pipe;
+            _reader = new StreamReader(pipe, leaveOpen: true);
+            _writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+        }
+
+        public static async Task<Connection> OpenAsync(string pipeName, TimeSpan timeout, CancellationToken cancellation)
+        {
+            var pipe = NewPipe(pipeName);
+            try
+            {
+                await pipe.ConnectAsync(timeout, cancellation);
+                return new Connection(pipe);
+            }
+            catch
+            {
+                await pipe.DisposeAsync();
+                throw;
+            }
+        }
+
+        public async Task<EngineResponse> SendAsync(EngineRequest request, CancellationToken cancellation, Action<EngineEvent>? onEvent)
+        {
+            await _oneAtATime.WaitAsync(cancellation);
+            try
+            {
+                try
+                {
+                    await _writer.WriteLineAsync(EngineProtocol.Serialize(request).AsMemory(), cancellation);
+                }
+                catch (Exception ex) when (IsLost(ex, cancellation))
+                {
+                    throw ServiceConnectionLostException.BeforeSending(ex);
+                }
+                EngineResponse response;
+                while (true)
+                {
+                    string? line;
+                    try
+                    {
+                        line = await _reader.ReadLineAsync(cancellation);
+                    }
+                    catch (Exception ex) when (IsLost(ex, cancellation))
+                    {
+                        throw ServiceConnectionLostException.PartWay(ex);
+                    }
+                    if (line is null)
+                        throw ServiceConnectionLostException.PartWay(null);
+                    response = EngineProtocol.Deserialize<EngineResponse>(line);
+                    if (!response.IsEvent)
+                        break;
+                    onEvent?.Invoke(response.Event!);
+                }
+                if (response.Refused is not null)
+                    throw new AccountRefusedException(response.Refused);
+                if (response.Error is not null)
+                    throw new EngineServiceException(response.Error);
+                return response;
+            }
+            finally
+            {
+                _oneAtATime.Release();
+            }
+        }
+
+        /// <summary>
+        /// The pipe broke or closed: the service went, or the window let go of the client. A cancel the caller didn't
+        /// ask for is the pipe closing under a read too.
+        /// </summary>
+        private static bool IsLost(Exception ex, CancellationToken cancellation) =>
+            ex is IOException or ObjectDisposedException || (ex is OperationCanceledException && !cancellation.IsCancellationRequested);
+
+        public async ValueTask DisposeAsync()
+        {
+            _reader.Dispose();
+            try
+            {
+                await _writer.DisposeAsync();
+            }
+            catch (IOException)
+            {
+                // A command the service never got is still waiting to go; there's nowhere left to send it.
+            }
+            await _pipe.DisposeAsync();
+        }
+    }
 }
 
 public sealed class EngineServiceException(string message) : Exception(message);
+
+/// <summary>
+/// The window's connection to the service went, or couldn't be opened, before a command's reply came. The message says
+/// so in plain words, including whether anything was changed, for the page that sent the command to show as it is.
+/// </summary>
+public sealed class ServiceConnectionLostException : Exception
+{
+    private ServiceConnectionLostException(string message, bool mayHaveChanged, Exception? cause) : base(message, cause) =>
+        MayHaveChanged = mayHaveChanged;
+
+    /// <summary>
+    /// The command had reached the service when the connection went, so the service may have run some or all of it.
+    /// False when it never got there, so nothing was changed.
+    /// </summary>
+    public bool MayHaveChanged { get; }
+
+    /// <summary>The command never reached the service.</summary>
+    internal static ServiceConnectionLostException BeforeSending(Exception? cause) => new(
+        "Couldn't reach the service, so nothing was changed. Close the app and open it again, then try once more.",
+        mayHaveChanged: false, cause);
+
+    /// <summary>The command was sent and its reply never came.</summary>
+    internal static ServiceConnectionLostException PartWay(Exception? cause) => new(
+        "The connection to the service was lost part-way through, so the app can't tell whether anything was changed. " +
+        "Close the app and open it again to see where things stand.",
+        mayHaveChanged: true, cause);
+}
 
 /// <summary>
 /// The service won't serve this Windows account, because it isn't an administrator account (ADR 0007). Nothing was

@@ -380,7 +380,12 @@ public static class EngineProtocol
         _ => new(Error: $"Unknown command {request.GetType().Name}."),
     };
 
-    /// <summary>Whether the command can run for minutes, so it runs in its own lane and must not hold up other commands.</summary>
+    /// <summary>
+    /// Whether the command is a long job: it can run for minutes, so the service runs it in its own lane and the window
+    /// sends it over its long-job connection (<see cref="EnginePipeClient"/>), and neither holds up other commands. Each
+    /// long job this round adds (the driver latency test, Check my connection, the bufferbloat test, spot test runs)
+    /// goes on this list.
+    /// </summary>
     public static bool IsLongRunning(EngineRequest request) =>
         request is RunRepairRequest or InstallDriverRequest or ScanCleanupRequest or CleanRequest
             or InstallPawnIoRequest or UninstallPawnIoRequest or CleanDriversRequest or RestoreDriversRequest

@@ -174,7 +174,8 @@ public sealed class GpuItemViewModel(InstalledGpu gpu, Func<EnginePipeClient?> c
         catch (Exception ex)
         {
             Log.Error(ex, "Driver command for {Gpu} failed", gpu.Name);
-            Message = $"The service couldn't do this: {ex.Message}";
+            // A lost connection already says, in full, whether anything was changed.
+            Message = ex is ServiceConnectionLostException ? ex.Message : $"The service couldn't do this: {ex.Message}";
         }
         finally
         {

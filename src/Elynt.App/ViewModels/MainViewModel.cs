@@ -33,9 +33,8 @@ public sealed class MainViewModel(
     public const string UndoHistory = "Undo history";
     public const string Settings = "Settings";
 
+    // Long jobs (repairs, cleanup, driver installs…) go over the client's own long-job connection, so switches keep working meanwhile.
     private EnginePipeClient? _client;
-    // Repairs hold their connection for minutes, so they get their own and switches keep working meanwhile.
-    private EnginePipeClient? _repairClient;
     private IReadOnlyList<TweakItemViewModel> _allTweaks = [];
     private IReadOnlyList<RepairToolItemViewModel> _allRepairTools = [];
     private RepairToolItemViewModel? _selectedRepairTool;
@@ -143,8 +142,10 @@ public sealed class MainViewModel(
 
     public bool IsRepairPage => SelectedPage == Sections.Repair;
 
+    private CleanupPageViewModel? _cleanup;
+
     /// <summary>The Cleanup page's scan and clean, shown above its tweaks (the hibernation file).</summary>
-    public CleanupPageViewModel Cleanup { get; } = new();
+    public CleanupPageViewModel Cleanup => _cleanup ??= new CleanupPageViewModel(() => IsConnected ? _client : null);
 
     public bool IsCleanupPage => SelectedPage == Sections.Cleanup && IsConnected;
 
@@ -618,10 +619,6 @@ public sealed class MainViewModel(
         _client = null;
         if (client is not null)
             await client.DisposeAsync();
-        var repairClient = _repairClient;
-        _repairClient = null;
-        if (repairClient is not null)
-            await repairClient.DisposeAsync();
     }
 
     /// <summary>Undoes one change from the history. A refusal (e.g. something else changed it since) shows on that row.</summary>
@@ -931,26 +928,22 @@ public sealed class MainViewModel(
     /// <param name="confirmed">The user confirmed the tool's opt-in warning.</param>
     public async Task RunRepairAsync(RepairToolItemViewModel item, string toolId, bool confirmed)
     {
-        if (_client is null || item.IsRunning)
+        if (_client is not { } client || item.IsRunning)
             return;
 
         item.Start();
         try
         {
-            _repairClient ??= await EnginePipeClient.ConnectAsync(timeout: TimeSpan.FromSeconds(3));
             // Progress<T> posts back to the window's thread.
-            var result = await _repairClient.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
+            var result = await client.RunRepairAsync(toolId, confirmed, new Progress<RepairProgress>(item.Report));
             Log.Information("Repair {Tool}: {Succeeded} {Summary} (log: {Log})", toolId, result.Succeeded, result.Summary, result.LogLocation);
             item.Finish(result);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Running repair {Tool} failed", toolId);
-            var repairClient = _repairClient;
-            _repairClient = null;
-            if (repairClient is not null)
-                await repairClient.DisposeAsync();
-            item.Finish(new RepairResult(toolId, false, $"Couldn't run this through the service: {ex.Message}", false, null, null, ""));
+            var summary = ex is ServiceConnectionLostException ? ex.Message : $"Couldn't run this through the service: {ex.Message}";
+            item.Finish(new RepairResult(toolId, false, summary, false, null, null, ""));
         }
     }
 
