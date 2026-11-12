@@ -35,6 +35,18 @@ public sealed record TweakDefinition(
     IReadOnlyList<TweakStep> Steps,
     SessionRefresh Refresh = SessionRefresh.None)
 {
+    /// <summary>
+    /// One plain sentence shown under the name on the tweak's row, so the row says what it does without being
+    /// selected. Every catalogue tweak has one (a catalogue test checks).
+    /// </summary>
+    public string? Summary { get; init; }
+
+    /// <summary>
+    /// The header the tweak's row sits under on its page (e.g. "Telemetry" on Debloat &amp; Privacy), or null for the
+    /// page's ungrouped rows. Groups show in the order the catalogue first lists them.
+    /// </summary>
+    public string? Group { get; init; }
+
     /// <summary>What undo can and cannot do. Destructive tweaks need an explicit confirmation to apply.</summary>
     public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
 

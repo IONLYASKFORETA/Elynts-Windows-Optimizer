@@ -34,6 +34,7 @@ public static class CleanupTweaks
                 RegistryValue.DWord(0)),
         ])
     {
+        Summary = "Frees disk space by deleting the hibernation file, which also turns off Fast Startup.",
         Risks = RiskFlags.NeedsReboot,
     };
 

@@ -750,8 +750,8 @@ public sealed class MainViewModel(
             _ = Profiles.LoadAsync();
 
         Tweaks.Clear();
-        // The possible-placebo group goes last; within each group, tweaks that fit this PC come first.
-        foreach (var tweak in _allTweaks.Where(t => t.View.Section == SelectedPage).OrderBy(t => t.IsPlacebo).ThenBy(t => t.IsNotApplicable))
+        // Plain rows, then each header's rows, then the possible-placebo fold; tweaks that fit this PC first in each.
+        foreach (var tweak in TweakItemViewModel.InPageOrder(_allTweaks.Where(t => t.View.Section == SelectedPage)))
             Tweaks.Add(tweak);
         SelectedTweak = Tweaks.FirstOrDefault();
 

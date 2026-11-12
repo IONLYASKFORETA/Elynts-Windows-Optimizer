@@ -812,6 +812,8 @@ public sealed class PipeContractTests : IAsyncLifetime
             [new Source("A source", "https://example.com")], EvidenceTier.Situational,
             [@"Set HKCU\Some\Value to ""1"" (REG_SZ)"], "Puts it back.", SessionRefresh.MouseSettings, TweakState.On, CanUndo: true)
         {
+            Summary = "Does a thing in one line.",
+            Group = "Telemetry",
             Reversibility = Reversibility.Destructive,
             DestructiveWarning = "Gone for good.",
             Risks = RiskFlags.SecurityRisk | RiskFlags.NeedsReboot,

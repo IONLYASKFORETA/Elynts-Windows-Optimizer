@@ -25,6 +25,9 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public string Name => View.Name;
 
+    /// <summary>One plain sentence under the name, so the row says what it does without being selected.</summary>
+    public string? Summary => View.Summary;
+
     public string TierText => View.Tier switch
     {
         EvidenceTier.Proven => "Proven",
@@ -32,13 +35,34 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
         _ => "Possible placebo",
     };
 
+    /// <summary>The page's rows with no header of their own, listed first.</summary>
     public const string MainGroup = "Tweaks";
     public const string PlaceboGroup = "Possible placebo";
 
     /// <summary>Possible-placebo tweaks are listed in their own group, folded at the bottom of the page.</summary>
     public bool IsPlacebo => View.Tier == EvidenceTier.PossiblePlacebo;
 
-    public string Group => IsPlacebo ? PlaceboGroup : MainGroup;
+    /// <summary>
+    /// The group the list puts the row in: the placebo fold, else the header the catalogue gives the tweak (such as
+    /// "Telemetry"), else the page's plain rows.
+    /// </summary>
+    public string Group => IsPlacebo ? PlaceboGroup : View.Group ?? MainGroup;
+
+    /// <summary>
+    /// A page's rows in the order the list shows them: the plain rows, then each header's rows in the order the
+    /// catalogue first lists that header, then the placebo fold. A grouped list shows its groups in the order of their
+    /// first row, so this is what puts the headers in order. Within each group, rows that fit this PC come first.
+    /// </summary>
+    public static IReadOnlyList<TweakItemViewModel> InPageOrder(IEnumerable<TweakItemViewModel> rows)
+    {
+        var listed = rows.ToList();
+        var groups = listed.Select(row => row.Group).Distinct().ToList();
+        return listed
+            .OrderBy(row => row.IsPlacebo)
+            .ThenBy(row => row.Group == MainGroup ? -1 : groups.IndexOf(row.Group))
+            .ThenBy(row => row.IsNotApplicable)
+            .ToList();
+    }
 
     public string ReversibilityText => View.Reversibility switch
     {
@@ -87,9 +111,21 @@ public sealed class TweakItemViewModel(TweakView view, Func<TweakItemViewModel, 
 
     public bool HasSwitch => !View.PerGame;
 
+    /// <summary>The state beside the detail pane's switch: "On", "Off", "Per game", "Not applicable".</summary>
     public string StateText => View.PerGame ? "Per game" : !View.Applicable && View.State == TweakState.Off
         ? "Not applicable"
         : (View.State == TweakState.On ? "On" : "Off") + (View.PendingReboot ? " · pending reboot" : "");
+
+    /// <summary>
+    /// What the row says beside its labels, or null for nothing. Its switch already shows on or off, so only what the
+    /// switch can't say.
+    /// </summary>
+    public string? RowStateText => View.PerGame ? "Per game"
+        : !View.Applicable && View.State == TweakState.Off ? "Not applicable"
+        : View.PendingReboot ? "Pending reboot"
+        : null;
+
+    public bool HasRowStateText => RowStateText is not null;
 
     public bool PendingReboot => View.PendingReboot;
 
