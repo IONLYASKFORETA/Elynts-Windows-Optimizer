@@ -189,7 +189,7 @@ public sealed class MainViewModel(
         Sections.Repair => "Windows' own repair tools, each saying up front whether it needs a restart.",
         Sections.Drivers => "Your GPU and chipset drivers, the latest from each vendor, and a silent install.",
         Sections.Overclocking => "GPU and CPU tuning, temperatures, and your BIOS settings with guides for this PC.",
-        PerGameProfiles => "Instant changes made while a game runs, and the games found on this PC.",
+        PerGameProfiles => "Pick a game to set what changes while it runs.",
         UndoHistory => "Every change the app made, newest first, with undo for each one.",
         // Settings opens with its own line.
         _ => "",
@@ -239,21 +239,38 @@ public sealed class MainViewModel(
 
     public bool HasSelection => IsTweakPage && SelectedTweak is not null;
 
-    /// <summary>Shows the right-hand detail pane: only a tweak or repair tool has details, so other pages get the width.</summary>
-    public bool HasDetail => HasSelection || HasRepairSelection;
+    /// <summary>
+    /// Shows the right-hand detail pane: only a tweak, a repair tool or a game's profile has details, so other pages
+    /// get the width.
+    /// </summary>
+    public bool HasDetail => HasSelection || HasRepairSelection || HasGameSelection;
+
+    /// <summary>A game is selected on Per-game profiles, so the detail pane shows its profile editor.</summary>
+    public bool HasGameSelection => IsGamesPage && Profiles.HasGame;
 
     /// <summary>Shows the "nothing here yet" note: a tweak page with no tweaks, or a panel page whose panel isn't available.</summary>
     public bool IsEmpty =>
         (IsTweakPage && Tweaks.Count == 0) ||
         (IsPanelPage && !IsOverclockingPage && !IsDriversPage && !IsGamesPage);
 
-    /// <summary>Installed games, shown on the per-game profiles page.</summary>
-    public GamesPageViewModel Games { get; } = new();
-
     private ProfilesPageViewModel? _profiles;
 
-    /// <summary>The per-game profile editor on the Per-game profiles page.</summary>
-    public ProfilesPageViewModel Profiles => _profiles ??= new ProfilesPageViewModel(() => IsConnected ? _client : null);
+    /// <summary>The Per-game profiles page: the games found, and the selected game's profile editor.</summary>
+    public ProfilesPageViewModel Profiles => _profiles ??= NewProfiles();
+
+    private ProfilesPageViewModel NewProfiles()
+    {
+        var profiles = new ProfilesPageViewModel(() => IsConnected ? _client : null);
+        profiles.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProfilesPageViewModel.HasGame))
+            {
+                OnPropertyChanged(nameof(HasGameSelection));
+                OnPropertyChanged(nameof(HasDetail));
+            }
+        };
+        return profiles;
+    }
 
     public bool IsGamesPage => IsConnected && SelectedPage == PerGameProfiles;
 
@@ -349,6 +366,8 @@ public sealed class MainViewModel(
                 OnPropertyChanged(nameof(IsDisconnected));
                 OnPropertyChanged(nameof(CanRetry));
                 OnPropertyChanged(nameof(IsGamesPage));
+                OnPropertyChanged(nameof(HasGameSelection));
+                OnPropertyChanged(nameof(HasDetail));
                 OnPropertyChanged(nameof(IsWindowsUpdatePage));
                 OnPropertyChanged(nameof(CanRestoreEverything));
                 OnPropertyChanged(nameof(CanInstall));
@@ -471,7 +490,6 @@ public sealed class MainViewModel(
             if (ServicesPage is not null)
                 await ServicesPage.LoadAsync();
             Drivers = await LoadDriversAsync(_client);
-            Games.Show(await _client.ListGamesAsync());
             Gpu = await LoadGpuAsync(_client);
             Sensors = await LoadSensorsAsync(_client);
             Cpu = await LoadCpuAsync(_client);
@@ -763,6 +781,7 @@ public sealed class MainViewModel(
         OnPropertyChanged(nameof(IsTweakPage));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasRepairSelection));
+        OnPropertyChanged(nameof(HasGameSelection));
         OnPropertyChanged(nameof(HasDetail));
         OnPropertyChanged(nameof(IsBiosPage));
         OnPropertyChanged(nameof(IsWindowsUpdatePage));
@@ -780,10 +799,14 @@ public sealed class MainViewModel(
 
     public Task AddGameAsync(string exePath) => ChangeGamesAsync(client => client.AddGameAsync(exePath));
 
-    public Task RemoveGameAsync(GamesPageViewModel.GameItem item) =>
-        ChangeGamesAsync(client => client.RemoveGameAsync(item.Game.ExePath ?? item.Game.InstallPath));
+    public Task RemoveGameAsync(ProfilesPageViewModel.GameRow row) => row.Game is { } game
+        ? ChangeGamesAsync(client => client.RemoveGameAsync(game.ExePath ?? game.InstallPath))
+        : Task.CompletedTask;
 
-    /// <summary>Adds or removes a game, then refreshes the games and every tweak's warning, which names them.</summary>
+    /// <summary>
+    /// Adds or removes a game, then refreshes the games (selecting one just added) and every tweak's warning, which
+    /// names them.
+    /// </summary>
     private async Task ChangeGamesAsync(Func<EnginePipeClient, Task<Elynt.Core.Games.GameCommandResult>> change)
     {
         if (_client is null)
@@ -791,8 +814,8 @@ public sealed class MainViewModel(
         try
         {
             var result = await change(_client);
-            Games.Message = result.Message;
-            Games.Show(await _client.ListGamesAsync());
+            await Profiles.LoadAsync(select: result.Game);
+            Profiles.GamesMessage = result.Message;
             var views = (await _client.ListTweaksAsync()).ToDictionary(v => v.Id);
             foreach (var item in _allTweaks)
                 item.ShowLatest(views);
@@ -800,12 +823,12 @@ public sealed class MainViewModel(
         catch (EngineServiceException ex)
         {
             Log.Error(ex, "The service couldn't change the game list");
-            Games.Message = $"The service couldn't do this: {ex.Message}";
+            Profiles.GamesMessage = $"The service couldn't do this: {ex.Message}";
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Changing the game list failed");
-            Games.Message = $"Couldn't reach the service: {ex.Message}";
+            Profiles.GamesMessage = $"Couldn't reach the service: {ex.Message}";
             await DisconnectAsync();
             Status = "Lost the connection to the service. Press Retry.";
         }

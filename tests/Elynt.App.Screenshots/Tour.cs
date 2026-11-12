@@ -111,6 +111,14 @@ internal static partial class Tour
                 await SettleAsync();
                 Shoot(window, folder, $"{name}-pick-one", screen);
             }
+            // A game its launcher gave no .exe for (Steam), so the editor draws its "Choose its .exe…" state too.
+            if (model.HasGameSelection)
+            {
+                model.Profiles.SelectedGame = model.Profiles.Games.FirstOrDefault(g => g.ExePath is null)
+                    ?? throw new InvalidOperationException("The sample PC has no game without an .exe.");
+                await SettleAsync();
+                Shoot(window, folder, $"{name}-game-without-exe", screen);
+            }
             if (model.HasRepairSelection && model.RepairTools.Count > 1)
             {
                 model.SelectedRepairTool = model.RepairTools.MaxBy(t => t.View.WhatItDoes.Length + t.View.ExactCommands.Sum(c => c.Length));
@@ -151,7 +159,7 @@ internal static partial class Tour
                 await SettleAsync();
                 break;
             case MainViewModel.PerGameProfiles:
-                // The game with a profile, so the editor shows its apps to close and its settings.
+                // The game with a profile, so the detail pane's editor shows its power plan, apps to close and settings.
                 model.Profiles.SelectedGame = model.Profiles.Games.FirstOrDefault(g => g.HasProfile)
                     ?? throw new InvalidOperationException("The sample PC's game profile didn't load.");
                 await SettleAsync();

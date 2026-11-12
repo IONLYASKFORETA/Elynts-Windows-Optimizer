@@ -46,7 +46,8 @@ rather than to the page's resources (CI fails on a colour outside `Theme/`).
 - **Controls:** `Switch` (a CheckBox as an on/off switch; give a locked one `theme:Switch.IsLocked="{Binding IsLocked}"`
   so it shows a lock rather than fading like a busy one), `Segmented` + `Segment` (a pick-one row's choice: an
   ItemsControl of Buttons, the chosen one in the button wave), `Button.Primary` (button wave), `Button.Destructive`
-  (red), and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next
+  (red), `Button.Icon` (a quiet glyph button on a row, such as the "×" that takes an app off a profile; give it an
+  `AutomationProperties.Name`, which is also its tooltip), and a plain Button as the secondary form. One strong button (primary or red) per screen at most, for the next
   step: a rare action, or one guarded by its own confirmation (Scan, Delete, Restore everything), stays plain.
   `SearchBox` (a TextBox with a search glyph) for every search and filter: its `AutomationProperties.Name` is also the
   hint text shown while it's empty, so give it one, and put the result count just under it ("12 apps"). `Meter` (thin

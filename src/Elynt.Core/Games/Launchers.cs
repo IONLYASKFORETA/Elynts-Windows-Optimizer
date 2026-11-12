@@ -200,6 +200,10 @@ internal static class WinPath
 
     public static string FileName(string path) => path.Replace('/', '\\').TrimEnd('\\').Split('\\')[^1];
 
+    /// <summary>Whether the path is somewhere under the folder (not the folder itself).</summary>
+    public static bool IsInside(string path, string folder) =>
+        path.Replace('/', '\\').StartsWith(folder.Replace('/', '\\').TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+
     public static string Parent(string path)
     {
         var trimmed = path.Replace('/', '\\').TrimEnd('\\');

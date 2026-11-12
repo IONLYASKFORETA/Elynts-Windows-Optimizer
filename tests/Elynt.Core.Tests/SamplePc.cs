@@ -154,6 +154,8 @@ public static class SamplePc
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)
         {
+            // A power plan, so the editor's pick-one choice shows one chosen.
+            TweakIds = [GamingTweaks.HighPerformancePlan.Id, GamingTweaks.GameModeOn.Id],
             AppsToClose = [Discord, Steam],
             Priority = GamePriority.High,
             RaiseTimerResolution = true,
