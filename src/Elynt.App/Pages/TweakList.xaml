@@ -65,7 +65,7 @@
 
     <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
     <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource TweaksByGroup}}"
-             SelectedItem="{Binding SelectedTweak}" ScrollViewer.CanContentScroll="False">
+             SelectedItem="{Binding SelectedTweak}" ScrollViewer.CanContentScroll="False" SelectionChanged="ShowSelected">
         <!-- The page's plain tweaks are listed first with no header, then each catalogue group under its small-caps
              header (TELEMETRY on Debloat & Privacy); the possible-placebo group is folded away underneath. -->
         <ListBox.GroupStyle>

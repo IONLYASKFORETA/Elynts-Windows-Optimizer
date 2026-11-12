@@ -61,7 +61,7 @@
     </UserControl.Resources>
 
     <!-- Transparent so the app rows read as cards on the page, as on every other page. -->
-    <TabControl Background="Transparent">
+    <TabControl x:Name="Tabs" Background="Transparent">
         <TabItem Header="Catalogue" DataContext="{Binding Catalogue}">
             <DockPanel Margin="0,16,0,0">
                 <!-- The filter, and how many apps it shows just under it. -->
@@ -95,8 +95,8 @@
                     </StackPanel>
                 </Border>
                 <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
-                <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
-                         ScrollViewer.CanContentScroll="False">
+                <ListBox x:Name="CatalogueList" Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource AppsByGroup}}"
+                         SelectedItem="{Binding Selected}" IsSynchronizedWithCurrentItem="False" ScrollViewer.CanContentScroll="False">
                     <ListBox.GroupStyle>
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>

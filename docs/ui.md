@@ -12,6 +12,10 @@ only. Spec: issue #60. Read this before changing anything under `src/Elynt.App/`
   3. `Theme/Theme.xaml`: every colour token and named style. The single source of truth for the look.
 - `MainWindow.xaml` hosts every page: a sidebar, the page, and the detail pane on the right (layout A). Pages are
   UserControls under `Pages/`, each with the window's `MainViewModel` as DataContext (code-behind reads it as `Model`).
+- `ViewModels/Sidebar.cs` lists the sidebar's pages in their groups (PLAY, WINDOWS, TOOLS) and the pinned footer: a
+  new page joins its group with one line there, and gets an icon in `Theme/PageIcon.cs`. The search box at the top
+  of the sidebar opens a page with a row selected through `MainViewModel.Open(PageTarget)`, which a link from one
+  page to a tweak, repair tool or app on another can use too.
 - `Theme/AccentWave.cs` moves the wave; `Theme/TitleBar.cs` paints the title bar.
 - `Assets/elynt.ico` is the app's red "E" icon (the window, taskbar, tray and Start menu). `build/gen_icon.py` draws it
   (usage in its header). Redraw it there; never edit the .ico by hand.

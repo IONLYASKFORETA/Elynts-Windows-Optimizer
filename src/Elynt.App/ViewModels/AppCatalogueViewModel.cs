@@ -12,6 +12,7 @@ public sealed class AppCatalogueViewModel : ObservableObject
 {
     private string _filter = "";
     private bool _installAllRuntimes;
+    private AppItemViewModel? _selected;
 
     /// <summary>Every catalogue app, in group order.</summary>
     public ObservableCollection<AppItemViewModel> Apps { get; } = [];
@@ -28,6 +29,30 @@ public sealed class AppCatalogueViewModel : ObservableObject
             if (Set(ref _filter, value))
                 ShowMatches();
         }
+    }
+
+    /// <summary>The selected row: the one the sidebar's search opened, or the last one clicked.</summary>
+    public AppItemViewModel? Selected
+    {
+        get => _selected;
+        set => Set(ref _selected, value);
+    }
+
+    /// <summary>
+    /// Selects an app's row, as the sidebar's search opens it. A filter that hides the row is cleared so the row shows;
+    /// one that shows it stays. An app the catalogue doesn't have changes nothing.
+    /// </summary>
+    public void Select(string appId)
+    {
+        if (Apps.FirstOrDefault(a => string.Equals(a.View.Id, appId, StringComparison.OrdinalIgnoreCase)) is not { } app)
+            return;
+        if (!Shown.Contains(app))
+            Filter = "";
+        if (Selected == app)
+            // Said again, so the page brings the row back into view even though it was already selected.
+            OnPropertyChanged(nameof(Selected));
+        else
+            Selected = app;
     }
 
     /// <summary>How many apps the filter shows, under the search box: "12 apps", or why there are none.</summary>
