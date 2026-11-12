@@ -478,6 +478,21 @@ public sealed class PipeContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Choose_arrives_unchanged_for_an_option_and_for_the_default()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var options = new ApplyOptions(ConfirmWarning: true);
+
+        var chosen = await _client.ChooseAsync("gaming.power-plan", "gaming.ultimate-performance-plan", options, ct);
+        Assert.Equal("Choose gaming.power-plan gaming.ultimate-performance-plan", _engine.LastCall);
+        Assert.Equal(options, _engine.LastOptions);
+        AssertSameJson(_engine.Choose("gaming.power-plan", "gaming.ultimate-performance-plan"), chosen);
+
+        await _client.ChooseAsync("gaming.power-plan", null, cancellation: ct);
+        Assert.Equal("Choose gaming.power-plan default", _engine.LastCall);
+    }
+
+    [Fact]
     public async Task GetBiosReport_arrives_unchanged()
     {
         var report = await _client.GetBiosReportAsync(TestContext.Current.CancellationToken);
@@ -824,9 +839,18 @@ public sealed class PipeContractTests : IAsyncLifetime
             NotApplicableReason = "Needs an AMD CPU.",
             AlreadySet = true,
             ProfileEligible = true,
+            Choice = new ChoiceGroup("some.choice", "Some choice", "Picks one thing.", "Windows default",
+                [new ChoiceOption("some.tweak", "This one"), new ChoiceOption("other.tweak", "That one")]),
         };
 
         public IReadOnlyList<TweakView> ListTweaks() => [View];
+
+        public ChoiceResult Choose(string choiceId, string? tweakId, ApplyOptions? options = null)
+        {
+            LastCall = $"Choose {choiceId} {tweakId ?? "default"}";
+            LastOptions = options;
+            return new ChoiceResult(true, "Switched to That one.", [View with { State = TweakState.Off }, View with { Id = "other.tweak" }]);
+        }
 
         private static readonly ServiceView Service = new(
             "Spooler", "Print Spooler", "Queues print jobs.", ServiceKind.Service, ServiceStart.Automatic, DelayedAutoStart: true,

@@ -32,6 +32,23 @@ internal sealed record ChangeWording(
         "Nothing to undo: this was already set before the app changed anything.",
         "Switch the tweak on again");
 
+    /// <summary>
+    /// One option of a pick-one choice (the power plan), named by its label on the row: the option chosen, or the
+    /// choice's default for a null <paramref name="tweakId"/>.
+    /// </summary>
+    public static ChangeWording Choice(Tweaks.ChoiceGroup choice, string? tweakId)
+    {
+        var label = choice.LabelOf(tweakId);
+        return new(
+            $"Switched to {label}.",
+            $"{label} is already on. Nothing was changed.",
+            $"Couldn't switch to {label}",
+            $"choose {choice.DefaultLabel} to undo it",
+            $"Switched to {label}. The settings from before the app's change are back.",
+            $"Nothing to undo: the app hasn't changed the {choice.Name.ToLowerInvariant()}.",
+            null);
+    }
+
     /// <summary>A startup item's switch. The Startup page says which way it went, so it sets <see cref="Done"/> each time.</summary>
     public static ChangeWording StartupSwitch { get; } = new(
         "Switched.",

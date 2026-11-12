@@ -79,6 +79,14 @@ public static class WindowsUpdateTweaks
 
     public static TweakDefinition DeferQuality30 { get; } = DeferQuality(30);
 
+    /// <summary>Both delays write the same policy, so they are one pick-one row.</summary>
+    public static ChoiceGroup UpdateDelayChoice { get; } = new(
+        Id: "update.quality-delay",
+        Name: "Monthly update delay",
+        Summary: "How long Windows waits before installing each monthly update, so a bad patch is usually fixed first.",
+        DefaultLabel: "Windows default",
+        Options: [new(DeferQuality7.Id, "7 days"), new(DeferQuality30.Id, "30 days")]);
+
     public static TweakDefinition ExcludeDrivers { get; } = new(
         Id: "update.exclude-drivers",
         Section: Sections.WindowsUpdate,
