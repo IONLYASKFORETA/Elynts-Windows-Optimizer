@@ -135,6 +135,8 @@ public static class SamplePc
         foreach (var step in Catalogue.Default.Get(SetByWindows).Steps.OfType<RegistryListItemStep>())
             registry.SetValue(step.Location, RegistryValue.String("SwapEffectUpgradeEnable=1;AutoHDREnable=1;"));
 
+        // A service the app changed, so its row on the Services tab shows Undo.
+        Check(engine.SetServiceStart("SysMain", ServiceStart.Manual).Succeeded, "setting SysMain to Manual");
         Check(engine.AddGame(Valorant).Succeeded, "adding VALORANT by its .exe");
         Check(engine.SaveProfile(new GameProfile(Fortnite)
         {

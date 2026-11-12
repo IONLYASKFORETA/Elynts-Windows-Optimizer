@@ -131,6 +131,12 @@ internal static partial class Tour
     {
         switch (page)
         {
+            case Sections.Apps:
+                // Two apps ticked, so the install button says how many it installs rather than sitting greyed.
+                foreach (var app in model.Catalogue.Apps.Take(2))
+                    app.IsTicked = true;
+                await SettleAsync();
+                break;
             case Sections.StartupAndServices:
                 // Advanced on, so the Services tab also lists the advanced-only services, the drivers and the
                 // protected services that stay locked.
