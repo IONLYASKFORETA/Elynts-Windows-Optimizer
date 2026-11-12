@@ -42,7 +42,8 @@
                     </GroupStyle.HeaderTemplate>
                 </GroupStyle>
             </ListBox.GroupStyle>
-            <!-- A row: the name, its publisher and where it starts from, with Delete and the switch on the right. -->
+            <!-- A row: the name, its publisher and where it starts from, with Delete and the switch on the right. Delete is
+                 a plain button, so a page of them doesn't shout; its confirmation guards it. -->
             <ListBox.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:StartupItemViewModel}">
                     <Grid ToolTip="{Binding Command}">
@@ -59,7 +60,7 @@
                             <TextBlock Text="{Binding Message}" Style="{StaticResource Text.Message}" FontSize="12.5" LineHeight="18" Margin="0,6,0,0" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                            <Button Content="Delete…" Style="{StaticResource Button.Destructive}" Padding="12,5" Margin="0,0,14,0" Click="Delete"
+                            <Button Content="Delete…" Padding="12,5" Margin="0,0,14,0" Click="Delete"
                                     IsEnabled="{Binding CanDelete}"
                                     AutomationProperties.Name="{Binding Name, StringFormat='Delete {0}'}" />
                             <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"

@@ -72,7 +72,7 @@
                                     <!-- The badge as a pill, then the start type (under it when the line is full). -->
                                     <WrapPanel Margin="0,6,0,-6">
                                         <Border Style="{StaticResource Pill}">
-                                            <TextBlock Text="{Binding Badge}" FontSize="11" Foreground="{StaticResource Theme.TextDim}" />
+                                            <TextBlock Text="{Binding Badge}" Foreground="{StaticResource Theme.TextDim}" />
                                         </Border>
                                         <TextBlock Text="{Binding StartText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="2,0,0,6" />
                                     </WrapPanel>

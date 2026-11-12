@@ -4,6 +4,7 @@
         xmlns:vm="clr-namespace:Elynt.App.ViewModels"
         xmlns:pages="clr-namespace:Elynt.App.Pages"
         Title="Elynt's Windows Optimizer"
+        Icon="/ElyntOptimizer;component/Assets/elynt.ico"
         Width="1600" Height="1000" MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Theme.Bg}">
@@ -50,7 +51,8 @@
         <Border Grid.Row="1" Background="{StaticResource Theme.Surface}" BorderBrush="{StaticResource Theme.Stroke}" BorderThickness="0,0,1,0">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="21,22,0,18">
-                    <Border Width="30" Height="30" CornerRadius="8" Background="{DynamicResource Theme.AccentWave}">
+                    <!-- The app's mark, as on its icon. -->
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource Theme.Red}">
                         <TextBlock Text="E" FontWeight="Bold" FontSize="15" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Margin="11,0,0,0" VerticalAlignment="Center" Style="{StaticResource WideOnly}">

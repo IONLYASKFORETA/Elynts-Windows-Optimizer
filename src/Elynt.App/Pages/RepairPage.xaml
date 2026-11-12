@@ -36,7 +36,7 @@
                                 <TextBlock Style="{StaticResource RestartPillText}" Text="{Binding RestartBadge}" />
                             </Border>
                             <Border Style="{StaticResource Pill.Warning}" Visibility="{Binding IsOptIn, Converter={StaticResource Visible}}">
-                                <TextBlock Text="Opt-in" FontSize="11" Foreground="{StaticResource Theme.Orange}" />
+                                <TextBlock Text="Opt-in" />
                             </Border>
                         </WrapPanel>
                         <TextBlock Text="{Binding View.NotAvailableReason}" Margin="0,8,0,0">
