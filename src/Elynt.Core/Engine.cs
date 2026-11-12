@@ -39,6 +39,12 @@ public sealed record TweakView(
     TweakState State,
     bool CanUndo)
 {
+    /// <summary>One plain sentence for the tweak's row, under its name.</summary>
+    public string? Summary { get; init; }
+
+    /// <summary>The header the tweak's row sits under on its page, or null for the page's ungrouped rows.</summary>
+    public string? Group { get; init; }
+
     public Reversibility Reversibility { get; init; } = Reversibility.Reversible;
 
     /// <summary>For a destructive tweak: what cannot be undone, shown in the confirmation.</summary>
@@ -677,6 +683,8 @@ public sealed partial class Engine(
     {
         // Read from the journal, not from CanUndo: what matters is whether the app made a change of its own here.
         AlreadySet = state == TweakState.On && change is null,
+        Summary = tweak.Summary,
+        Group = tweak.Group,
         Reversibility = tweak.Reversibility,
         DestructiveWarning = tweak.DestructiveWarning,
         ApplyWarning = tweak.ApplyWarning,

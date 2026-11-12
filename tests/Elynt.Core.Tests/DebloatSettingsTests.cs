@@ -30,10 +30,10 @@ public class DebloatSettingsTests
                 "debloat.explorer-promos-off",
                 "debloat.bing-in-start-search-off",
                 "debloat.widgets-off",
-                "privacy.recall-off",
-                "debloat.edge-background-off",
                 "debloat.edge-nags-off",
+                "debloat.edge-background-off",
                 "debloat.game-dvr-background-capture-off",
+                "privacy.recall-off",
             ],
             Section().Select(t => t.Id));
     }

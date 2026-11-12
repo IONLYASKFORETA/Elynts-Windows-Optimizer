@@ -66,7 +66,8 @@
     <!-- Pixel scrolling: with groups, item scrolling would jump a whole group at a time. -->
     <ListBox Style="{StaticResource CardList}" ItemsSource="{Binding Source={StaticResource TweaksByGroup}}"
              SelectedItem="{Binding SelectedTweak}" ScrollViewer.CanContentScroll="False">
-        <!-- The main tweaks are listed plainly; the possible-placebo group is folded away underneath. -->
+        <!-- The page's plain tweaks are listed first with no header, then each catalogue group under its small-caps
+             header (TELEMETRY on Debloat & Privacy); the possible-placebo group is folded away underneath. -->
         <ListBox.GroupStyle>
             <GroupStyle>
                 <GroupStyle.ContainerStyle>
@@ -74,11 +75,23 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="GroupItem">
-                                    <ItemsPresenter />
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource Text.Label}" Text="{Binding Name, Converter={StaticResource Caps}}" />
+                                        <ItemsPresenter />
+                                    </StackPanel>
                                 </ControlTemplate>
                             </Setter.Value>
                         </Setter>
                         <Style.Triggers>
+                            <DataTrigger Binding="{Binding Name}" Value="{x:Static vm:TweakItemViewModel.MainGroup}">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="GroupItem">
+                                            <ItemsPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding Name}" Value="Possible placebo">
                                 <Setter Property="Template">
                                     <Setter.Value>
@@ -105,9 +118,10 @@
                 </GroupStyle.ContainerStyle>
             </GroupStyle>
         </ListBox.GroupStyle>
-        <!-- A row: the name, then the labels as pills (the last says why the switch is locked, when it is) and the state,
-             with the switch on the right. The state sits with
-             the labels rather than beside the switch, so the switch stays in view at the narrowest window. -->
+        <!-- A row: the name, its one-line summary, then the labels as pills (the last says why the switch is locked, when
+             it is) and what the switch can't show (per game, not applicable, pending reboot), with the switch on the
+             right. That sits with the labels rather than beside the switch, so the switch stays in view at the
+             narrowest window. -->
         <ListBox.ItemTemplate>
             <DataTemplate DataType="{x:Type vm:TweakItemViewModel}">
                 <Grid>
@@ -129,6 +143,8 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                        <!-- Wraps rather than clips, down to the 900×520 window. -->
+                        <TextBlock Text="{Binding Summary}" Style="{StaticResource Text.Dim}" Margin="0,2,0,0" />
                         <WrapPanel Margin="0,8,0,-6">
                             <Border Style="{StaticResource Pill}">
                                 <TextBlock Text="{Binding TierText}" TextWrapping="Wrap" Foreground="{StaticResource Theme.Text}" />
@@ -154,7 +170,8 @@
                             <Border Style="{StaticResource LockPill}" Visibility="{Binding IsLocked, Converter={StaticResource Visible}}">
                                 <TextBlock Text="{Binding LockText}" TextWrapping="Wrap" />
                             </Border>
-                            <TextBlock Text="{Binding StateText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="4,0,0,6" />
+                            <TextBlock Text="{Binding RowStateText}" Style="{StaticResource Text.Dim}" VerticalAlignment="Center" Margin="4,0,0,6"
+                                       Visibility="{Binding HasRowStateText, Converter={StaticResource Visible}}" />
                         </WrapPanel>
                         <!-- Under the labels rather than on the right, where it would squeeze the name at the narrowest window. -->
                         <Button Content="Choose a game…" Click="ApplyForGame" Padding="12,4" Margin="0,10,0,0" HorizontalAlignment="Left"
